@@ -14,11 +14,10 @@
       projectile-project-search-path '("~/src"))
 
 ;;; themes and styles related configs
-(setq doom-theme 'doom-sourcerer)
+;(setq doom-theme 'doom-one)
 (setq doom-font (font-spec :family "Fantasque Sans Mono" :size 20)
       doom-big-font (font-spec :family "Fantasque Sans Mono" :size 30)
       font-lock-comment-face 'italic)
 (setq display-line-numbers-type 'relative)
 (setq treemacs-directory-face 'bold
       treemacs-file-face 'default)
-
