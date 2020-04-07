@@ -34,6 +34,7 @@
 (setq deft-directory "~/Zettels")
 (setq deft-recursive t)
 (global-set-key [f12] 'deft)
+(setq zetteldeft-title-prefix nil)
 
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
