@@ -6,8 +6,8 @@
 
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
 ;; clients, file templates and snippets.
-(setq user-full-name "John Doe"
-      user-mail-address "john@doe.com")
+;; (setq user-full-name "John Doe"
+;;      user-mail-address "john@doe.com")
 
 ;; Doom exposes five (optional) variables for controlling fonts in Doom. Here
 ;; are the three important ones:
@@ -19,8 +19,8 @@
 ;;
 ;; They all accept either a font-spec, font string ("Input Mono-12"), or xlfd
 ;; font string. You generally only need these two:
-(setq doom-font (font-spec :family "Fantasque Sans Mono" :size 18))
-;; (setq doom-font (font-spec :family "monospace" :size 14))
+(setq doom-font (font-spec :family "Fantasque Sans Mono" :size 15))
+;; (setq doom-font (font-spec :family "monospace" :size 13))
 
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
@@ -29,6 +29,8 @@
 
 ;; If you use `org' and don't want your org files in the default location below,
 ;; change `org-directory'. It must be set before org loads!
+;;
+;; Org- and zettel- related configuration
 (setq org-directory "~/org/")
 (setq deft-extensions '("org" "md" "txt"))
 (setq deft-directory "~/Zettels")
@@ -36,11 +38,15 @@
 (global-set-key [f12] 'deft)
 (setq zetteldeft-title-prefix nil)
 
+(use-package zetteldeft
+  :after deft
+  :init)
+(require 'zetteldeft)
+
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
 (setq display-line-numbers-type t)
-
 
 ;; Here are some additional functions/macros that could help you configure Doom:
 ;;
@@ -66,42 +72,15 @@
 (setq org-fontify-whole-heading-line t
       org-fontify-done-headline t
       org-fontify-quote-and-verse-blocks t)
-(defun org-pretty-symbols-mode ()
-  (push '("#+title: "        . "") prettify-symbols-alist)
-  (push '("#+subtitle: "     . "") prettify-symbols-alist)
-  (push '("* "               . "") prettify-symbols-alist)
-  (push '("** "              . "") prettify-symbols-alist)
-  (push '("*** "             . "") prettify-symbols-alist)
-  (push '("**** "            . "") prettify-symbols-alist)
-  (push '("***** "           . "") prettify-symbols-alist)
-  (push '("#+author: "       . "- ") prettify-symbols-alist)
-  (push '(":properties:"     . ":") prettify-symbols-alist)
-  (push '("#+begin_src"      . "λ") prettify-symbols-alist)
-  (push '("#+end_src"        . "⋱") prettify-symbols-alist)
-  (push '("#+results:"       . "»") prettify-symbols-alist)
-  (push '(":end:"            . "⋱") prettify-symbols-alist)
-  (push '(":results:"        . "⋰") prettify-symbols-alist)
-  (push '("#+name:"          . "-") prettify-symbols-alist)
-  (push '("[ ]" .  "☐") prettify-symbols-alist)
-  (push '("[X]" . "☑" ) prettify-symbols-alist)
-  (push '("[-]" . "❍" ) prettify-symbols-alist)
-  (push '("#+BEGIN_SRC" . "↦" ) prettify-symbols-alist)
-  (push '("#+END_SRC" . "⇤" ) prettify-symbols-alist)
-  (push '("#+BEGIN_EXAMPLE" . "↦" ) prettify-symbols-alist)
-  (push '("#+END_EXAMPLE" . "⇤" ) prettify-symbols-alist)
-  (push '("#+BEGIN_QUOTE" . "↦" ) prettify-symbols-alist)
-  (push '("#+END_QUOTE" . "⇤" ) prettify-symbols-alist)
-  (push '("#+begin_quote" . "↦" ) prettify-symbols-alist)
-  (push '("#+end_quote" . "⇤" ) prettify-symbols-alist)
-  (push '("#+begin_example" . "↦" ) prettify-symbols-alist)
-  (push '("#+end_example" . "⇤" ) prettify-symbols-alist)
-  (push '("#+begin_src" . "↦" ) prettify-symbols-alist)
-  (push '("#+end_src" . "⇤" ) prettify-symbols-alist)
-  (push '("\\\\"             . "↩") prettify-symbols-alist)
-  (prettify-symbols-mode t))
-(require 'zetteldeft)
-(map! :leader (:prefix-map ("z" "Zettels")
-                :desc "New Zettel" "z" 'zetteldeft-new-file
+
+(setq org-startup-folded "showall")
+
+(setq-default prettify-symbols-alist
+              '(("#+BEGIN_SRC"     . "λ")
+                ("#+END_SRC"       . "λ")))
+
+(map! :leader (:prefix-map ("d" . "Zettels")
+                :desc "New Zettel" "d" 'zetteldeft-new-file
                 :desc "Link Zettel" "l" 'zetteldeft-find-file-full-title-insert
                 :desc "Branch Zettel" "b" 'zetteldeft-new-file-and-link
                 :desc "Search At Cursor" "c" 'zetteldeft-search-at-point
@@ -113,4 +92,10 @@
                 :desc "Build graph from note" "g" 'zetteldeft-org-graph-note
                 :desc "Link Tagged Zettels" "L" 'zetteldeft-insert-list-links
                 :desc "Open File In Other Window" "O" 'deft-open-file-other-window
+                :desc "Count number of words" "x" 'zetteldeft-count-words
+                :desc "Rename Zettel" "r" 'zetteldeft-file-rename
                 ))
+
+;; TAB should work both for line indent and autocompletion
+(setq-default c-basic-offset tab-width)
+(setq tab-always-indent 'complete)
