@@ -1,5 +1,9 @@
 ;;; custom.el -*- lexical-binding: t; -*-
 (custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
  '(org-block (nil :foreground nil :inherit 'fixed-pitch))
  '(org-checkbox (nil :inherit 'fixed-pitch))
  '(org-code (nil :inherit '(shadow fixed-pitch)))
@@ -17,3 +21,11 @@
  '(org-special-keyword (nil :inherit '(font-lock-comment-face fixed-pitch)))
  '(org-table (nil :inherit '(shadow fixed-pitch)))
  '(org-verbatim (nil :inherit '(shadow fixed-pitch))))
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages
+   '(flycheck-status-emoji aggressive-indent flycheck-clj-kondo))
+ '(reverse-im-input-methods '("ukrainian-computer")))
