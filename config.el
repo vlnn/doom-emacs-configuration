@@ -203,9 +203,9 @@
   (evil-make-intercept-map cider--debug-mode-map 'normal)) ;; don't mess evil-mode with cider debug
 
 ;; Let's try computer to be agressive while indenting clojure
-(use-package! aggressive-indent
+(use-package aggressive-indent
   :hook
-  (clojure-mode  aggressive-indent-mode))
+  (clojure-mode . aggressive-indent-mode))
 
 ;; Smart parens are great to move around in lisp modes
 (use-package! smartparens
