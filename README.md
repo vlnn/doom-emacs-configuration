@@ -1,4 +1,4 @@
-# emacs-doom
+# doom-emacs-configuration
 Custom configuration for doom-emacs
 
 ## Installation
@@ -7,7 +7,7 @@ Custom configuration for doom-emacs
 
 ```sh
 mv ~/.doom.d ~./.doom.d.backup # backup if needed
-git clone https://github.com/vlnn/emacs-doom/ ~/.doom.d
+git clone https://github.com/vlnn/doom-emacs-configuration/ ~/.doom.d
 ~/.emacs.d/bin/doom sync
 ```
 
@@ -23,7 +23,7 @@ Some features you may expect to be working:
 1. Different size and styles mapped to different levels of org outlines.
 1. Automatic saving of the buffer when you leave the focus out of emacs. It sounds scary, but it's *very* useful (and twice so in tiling windows manager).
 1. Statistics of your keypresses shown with `M-x keyfreq-show`. Now I know that I'm using `evil-forward-char` and `right-char` in around `1/5` of all keypresses, which is quite crazy!
-1. Internal support of Ukrainian language.
+1. Internal support of Ukrainian language (press <C-\> to toggle between English and Ukrainian inputs).
 1. Read rss and atom feeds using elfeed (and storing feed configuration in `~/org/elfeed.org` file).
 1. Use emacs to read epub books.
 
