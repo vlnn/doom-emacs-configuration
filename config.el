@@ -288,3 +288,6 @@
    `((,zetteldeft-id-regex  . font-lock-warning-face)
      (,zetteldeft-tag-regex . font-lock-warning-face))))
 ;;}}}
+
+
+(add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode))
