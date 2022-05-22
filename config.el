@@ -27,7 +27,7 @@
 (setq ispell-program-name (executable-find "hunspell"))
 
 ;; Flyspell should not put all red into "wrong language"
-(use-package guess-language         ; Automatically detect language for Flyspell
+(use-package! guess-language         ; Automatically detect language for Flyspell
   :defer t
   :init (add-hook 'text-mode-hook #'guess-language-mode)
   :config
@@ -120,7 +120,7 @@
 
 ;; This is *so good* I recommend you use it for every "unusual" movement around the visible part of emacs
 ;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than SPACE-g-s-/
-(use-package avy
+(use-package! avy
   :bind* (("C-j" . avy-goto-char-timer)))
 
 ;; every windows should be avy'ed
@@ -187,7 +187,7 @@
 (org-clock-persistence-insinuate)
 
 ;; try verb package to serve REST/HTTP requests
-(use-package org
+(use-package! org
   :mode ("\\.org\\'" . org-mode)
   :config (define-key org-mode-map (kbd "C-c C-r") verb-command-map))
 ;; }}}
@@ -298,9 +298,9 @@
   (blamer-min-offset 70)
   :custom-face
   (blamer-face ((t :foreground "#7a88cf"
-                    :background nil
-                    :height 140
-                    :italic t)))
+                   :background nil
+                   :height 140
+                   :italic t)))
   :config
   (setq blamer-type 'both)
   )
