@@ -38,13 +38,11 @@
   :diminish guess-language-mode)
 
 ;; Show me where the cursor is... Star Trek style!
-(use-package! beacon)
-(after! beacon
-  (beacon-mode 1)
-  (setq beacon-blink-when-focused t                    ;; beam me if I move to another window
-        beacon-blink-when-point-moves-vertically 3     ;; beam me if I jump more than 2 lines away
-        beacon-blink-when-point-moves-horizontally nil ;; but not if I move cursor around))
-        ))
+(beacon-mode 1)
+(setq beacon-blink-when-focused t                    ;; beam me if I move to another window
+      beacon-blink-when-point-moves-vertically 3     ;; beam me if I jump more than 2 lines away
+      beacon-blink-when-point-moves-horizontally nil ;; but not if I move cursor around
+      )
 
 ;; default undo settings are too aggregative to my likings -- undoing these!
 ;; NB: This is important! Do not delete or modify or another year of hellish ux is coming
@@ -55,7 +53,6 @@
 
 ;; To kill trailing whitespaces... but being sane killer not removing whitespace I just typed in
 (use-package! ws-butler
-  :hook (doom-first-buffer . ws-butler-global-mode)
   :config
   (setq ws-butler-keep-whitespace-before-point t))
 
@@ -187,9 +184,8 @@
 (org-clock-persistence-insinuate)
 
 ;; try verb package to serve REST/HTTP requests
-(use-package! org
-  :mode ("\\.org\\'" . org-mode)
-  :config (define-key org-mode-map (kbd "C-c C-r") verb-command-map))
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c C-r") verb-command-map))
 ;; }}}
 
 ;;{{{ Prog languages modes preferences
@@ -209,7 +205,7 @@
 ;; Let's try computer to be agressive while indenting clojure
 (use-package! aggressive-indent
   :hook
-  (clojure-mode . aggressive-indent-mode))
+  (clojure-mode  aggressive-indent-mode))
 
 ;; Smart parens are great to move around in lisp modes
 (use-package! smartparens
@@ -252,7 +248,7 @@
   (deft-default-extension "org")
   (deft-use-filename-as-t title))
 
-(use-package! zetteldeft
+(use-package zetteldeft
   :init
   (map! :leader
         :prefix "d"
@@ -305,4 +301,11 @@
   (setq blamer-type 'both)
   )
 (global-blamer-mode 1)
+;; and I really want to see saved but not committed things in all the files
+(diff-hl-mode)
 ;;;;}}}
+
+;; Local Variables:
+;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
+;; byte-compile-warnings: (not free-vars)
+;; End:
