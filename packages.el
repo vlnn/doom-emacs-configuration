@@ -72,3 +72,6 @@
 
 ;; (re)try zetteldeft
 (package! zetteldeft)
+
+;; try blamer
+(package! blamer :recipe (:host github :repo "artawower/blamer.el"))

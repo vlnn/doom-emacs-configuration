@@ -244,7 +244,7 @@
 ;;}}}
 
 ;;{{{ Zetteldeft: return of emacsian Luhmann
-(use-package deft
+(use-package! deft
   :custom
   (deft-extensions '("org" "md" txt))
   (deft-text-mode 'org-mode)
@@ -289,5 +289,20 @@
      (,zetteldeft-tag-regex . font-lock-warning-face))))
 ;;}}}
 
-
-(add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode))
+;;{{{ Better git blame
+(use-package! blamer
+  :bind (("M-i" . blamer-show-commit-info))
+  :defer 20
+  :custom
+  (blamer-idle-time 0.3)
+  (blamer-min-offset 70)
+  :custom-face
+  (blamer-face ((t :foreground "#7a88cf"
+                    :background nil
+                    :height 140
+                    :italic t)))
+  :config
+  (setq blamer-type 'both)
+  )
+(global-blamer-mode 1)
+;;;;}}}
