@@ -50,7 +50,7 @@
 ;(unpin! t)
 
 
-(package! super-save)
+(package! super-save) ;; save every time you change the focus out of emacs
 (package! format-all)
 (package! json-mode)
 (package! keyfreq)
@@ -58,10 +58,17 @@
 (package! guess-language)
 (package! beacon)
 (package! aggressive-indent)
-(package! evil-cleverparens)
+(package! evil-smartparens)
+(package! keycast)   ;; show commands in modeline
 
 ;; hack over :rest lang that is not working with https :(
 (package! restclient)
 (package! company-restclient)
 (package! know-your-http-well)
 (package! ob-restclient)
+
+;; try verb
+(package! verb)
+
+;; (re)try zetteldeft
+(package! zetteldeft)

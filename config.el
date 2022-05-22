@@ -1,85 +1,146 @@
 ;;; $DOOMDIR/config.el -*- lexical-binding: t; -*-
+;; TODO each {{{ block }}} below should be perhaps moved to it's own file,
+;; but I like to think about it more than to do it
 
-;; Place your private configuration here! Remember, you do not need to run 'doom
-;; sync' after modifying this file!
+;; {{{ Common editor configuration shared between all the modes
+;; Fantasque is great font, so let's use it where possible for text.
+(setq font-family "Fantasque Sans Mono")
+(setq doom-font (font-spec :family font-family :size 17)
+      doom-unicode-font (font-spec :family font-family :size 17)
+      doom-variable-pitch-font (font-spec :family "DejaVu Math TeX Gyre" :size 17)
+      doom-big-font (font-spec :family font-family :size 20))
 
+;; Ugly HACK to make Ukrainian and English fonts really the same
+(add-hook 'text-mode-hook (lambda () (doom/reload-font)))
 
-;; Some functionality uses this to identify you, e.g. GPG configuration, email
-;; clients, file templates and snippets. It is optional.
-(setq user-full-name "John Doe"
-      user-mail-address "john@doe.com")
-
-;; Doom exposes five (optional) variables for controlling fonts in Doom:
-;;
-;; - `doom-font' -- the primary font to use
-;; - `doom-variable-pitch-font' -- a non-monospace font (where applicable)
-;; - `doom-big-font' -- used for `doom-big-font-mode'; use this for
-;;   presentations or streaming.
-;; - `doom-unicode-font' -- for unicode glyphs
-;; - `doom-serif-font' -- for the `fixed-pitch-serif' face
-;;
-;; See 'C-h v doom-font' for documentation and more examples of what they
-;; accept. For example:
-;;
-;;(setq doom-font (font-spec :family "Fira Code" :size 12 :weight 'semi-light)
-;;      doom-variable-pitch-font (font-spec :family "Fira Sans" :size 13))
-;;
-;; If you or Emacs can't find your font, use 'M-x describe-font' to look them
-;; up, `M-x eval-region' to execute elisp code, and 'M-x doom/reload-font' to
-;; refresh your font settings. If Emacs still can't find your font, it likely
-;; wasn't installed correctly. Font issues are rarely Doom issues!
-
-;; Fantasque is great font, so let's use it where possible
-(setq doom-font (font-spec :family "Fantasque Sans Mono" :size 15))
-
-;; There are two ways to load a theme. Both assume the theme is installed and
-;; available. You can either set `doom-theme' or manually load a theme with the
-;; `load-theme' function. This is the default:
+;; best clean light theme I've found yet
 (setq doom-theme 'doom-homage-white)
 
-;; This determines the style of line numbers in effect. If set to `nil', line
-;; numbers are disabled. For relative line numbers, set this to `relative'.
+;; I like absolute line numbers. For relative line numbers, set this to `relative'.
 (setq display-line-numbers-type t)
 
-;; If you use `org' and don't want your org files in the default location below,
-;; change `org-directory'. It must be set before org loads!
-(setq org-directory "~/org/")
+;; I need to be able to toggle between english and ukrainian inputs
+(set-input-method "ukrainian-computer")
 
+;; HACK tool below should be installed (manually -- or rather somewhere else, not in emacs)
+(setq langtool-language-tool-jar "~/bin/LanguageTool-5.6-stable/languagetool-commandline.jar")
+(setq ispell-program-name (executable-find "hunspell"))
 
-;; Whenever you reconfigure a package, make sure to wrap your config in an
-;; `after!' block, otherwise Doom's defaults may override your settings. E.g.
-;;
-;;   (after! PACKAGE
-;;     (setq x y))
-;;
-;; The exceptions to this rule:
-;;
-;;   - Setting file/directory variables (like `org-directory')
-;;   - Setting variables which explicitly tell you to set them before their
-;;     package is loaded (see 'C-h v VARIABLE' to look up their documentation).
-;;   - Setting doom variables (which start with 'doom-' or '+').
-;;
-;; Here are some additional functions/macros that will help you configure Doom.
-;;
-;; - `load!' for loading external *.el files relative to this one
-;; - `use-package!' for configuring packages
-;; - `after!' for running code after a package has loaded
-;; - `add-load-path!' for adding directories to the `load-path', relative to
-;;   this file. Emacs searches the `load-path' when you load packages with
-;;   `require' or `use-package'.
-;; - `map!' for binding new keys
-;;
-;; To get information about any of these functions/macros, move the cursor over
-;; the highlighted symbol at press 'K' (non-evil users must press 'C-c c k').
-;; This will open documentation for it, including demos of how they are used.
-;; Alternatively, use `C-h o' to look up a symbol (functions, variables, faces,
-;; etc).
-;;
-;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
-;; they are implemented.
+;; Flyspell should not put all red into "wrong language"
+(use-package guess-language         ; Automatically detect language for Flyspell
+  :defer t
+  :init (add-hook 'text-mode-hook #'guess-language-mode)
+  :config
+  (setq guess-language-langcodes '((en . ("en_GB" "English"))
+                                   (uk . ("uk_UA" "Ukrainian")))
+        guess-language-languages '(en uk)
+        guess-language-min-paragraph-length 45)
+  :diminish guess-language-mode)
 
+;; Show me where the cursor is... Star Trek style!
+(use-package! beacon)
+(after! beacon
+  (beacon-mode 1)
+  (setq beacon-blink-when-focused t                    ;; beam me if I move to another window
+        beacon-blink-when-point-moves-vertically 3     ;; beam me if I jump more than 2 lines away
+        beacon-blink-when-point-moves-horizontally nil ;; but not if I move cursor around))
+        ))
+
+;; default undo settings are too aggregative to my likings -- undoing these!
+;; NB: This is important! Do not delete or modify or another year of hellish ux is coming
+(setq evil-want-fine-undo t)
+
+;; To see trailing whitespaces
+(setq-default show-trailing-whitespace t)
+
+;; To kill trailing whitespaces... but being sane killer not removing whitespace I just typed in
+(use-package! ws-butler
+  :hook (doom-first-buffer . ws-butler-global-mode)
+  :config
+  (setq ws-butler-keep-whitespace-before-point t))
+
+;; Save buffers automatically
+;; If you focus out of emacs it will save your work. How cool is that!
+(use-package! super-save)
+(after! super-save
+  (super-save-mode +1)
+  (add-to-list 'super-save-triggers 'ace-window)
+  (add-to-list 'super-save-hook-triggers 'find-file-hook))
+;; Mappings for things I've added instead of finding how to do it correctly:
+;; First change evil-repeat keys...
+(setq evil-snipe-override-evil-repeat-keys nil)
+;; ...and then use jkl; instead of hjkl. It's stupid how hard it is to re-map ;!
+(with-eval-after-load 'evil-maps
+  (define-key evil-motion-state-map "j" 'evil-backward-char)
+  (define-key evil-motion-state-map ";" 'evil-forward-char)
+  (define-key evil-motion-state-map "k" 'evil-next-line)
+  (define-key evil-motion-state-map "l" 'evil-previous-line))
+
+;; use similar layout for window controls
+(map! :map evil-window-map
+      "SPC" #'rotate-layout
+      ;; Navigation using jkl; not hjkl
+      "j"     #'evil-window-left
+      "k"     #'evil-window-down
+      "l"       #'evil-window-up
+      ";"    #'evil-window-right
+      ;; Swapping windows using jkl; not hjkl
+      "C-h"       #'+evil/window-move-left
+      "C-k"       #'+evil/window-move-down
+      "C-;"      #'+evil/window-move-right)
+
+;; gather some stats on keypresses
+(require 'keyfreq)
+(keyfreq-mode 1)
+(keyfreq-autosave-mode 1)
+(setq keyfreq-excluded-commands
+      '(self-insert-command
+        forward-char
+        backward-char
+        previous-line
+        next-line))
+
+;; TABs should never be inserted at all
+;; (I might need to change it for python or YAML -- but hopefully I don't need them)
+(setq-default indent-tabs-mode nil)
+
+;; TAB should work both for line indent and autocompletion
+(setq-default c-basic-offset tab-width)
+(setq tab-always-indent 'complete)
+
+;; try to enable project-search over TRAMP
+(after! projectile
+  (setq projectile-mode-line "Projectile")
+  (setq projectile-enable-caching t)
+  (setq projectile-project-search-path '("~/tmp/"  ("~/src" . 1)))
+  (advice-remove #'projectile-locate-dominating-file #'doom*projectile-locate-dominating-file))
+
+;; map hippie-expand to the shorcut
+(map! :i "M-/" #'hippie-expand)
+
+;; This is *so good* I recommend you use it for every "unusual" movement around the visible part of emacs
+;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than SPACE-g-s-/
+(use-package avy
+  :bind* (("C-j" . avy-goto-char-timer)))
+
+;; every windows should be avy'ed
+(setq avy-all-windows t)
+
+;; Keycast should show every key/command at the mode line
+(after! keycast
+  (define-minor-mode keycast-mode
+    "Show current command and its key binding in the mode line."
+    :global t
+    (if keycast-mode
+        (add-hook 'pre-command-hook 'keycast--update t)
+      (remove-hook 'pre-command-hook 'keycast--update))))
+(add-to-list 'global-mode-string '("" keycast-mode-line))
+(keycast-mode) ;; or run keycast-mode by demand
+;;}}}
+
+;; {{{ Org-mode stuff
 (after! org
-(setq org-capture-templates
+  (setq org-capture-templates
         (quote (("t" "todo" entry (file "~/org/refile.org")
                  "* TODO %?\n%U\n%a\n" :clock-in t :clock-resume t)
                 ("r" "respond" entry (file "~/org/refile.org")
@@ -97,8 +158,8 @@
                 ("h" "Habit" entry (file "~/org/refile.org")
                  "* NEXT %?\n%U\n%a\nSCHEDULED: %(format-time-string \"%<<%Y-%m-%d %a .+1d/3d>>\")\n:PROPERTIES:\n:STYLE: habit\n:REPEAT_TO_STATE: NEXT\n:END:\n"))))
 
-(setq org-todo-keywords
-      (quote ((sequence "TODO(t)" "NEXT(n)" "|" "DONE(d)")
+  (setq org-todo-keywords
+        (quote ((sequence "TODO(t)" "NEXT(n)" "|" "DONE(d)")
                 (sequence "WAITING(w@/!)" "HOLD(h@/!)" "|" "CANCELLED(c@/!)" "PHONE" "MEETING"))))
 
   (setq org-todo-keyword-faces
@@ -109,124 +170,121 @@
                 ("HOLD" :foreground "magenta" :weight bold)
                 ("CANCELLED" :foreground "forest green" :weight bold)
                 ("MEETING" :foreground "forest green" :weight bold)
-                ("PHONE" :foreground "forest green" :weight bold)))))
+                ("PHONE" :foreground "forest green" :weight bold))))
 
+  (setq +org-capture-frame-parameters '((name . "doom-capture")
+                                        (width . 170)
+                                        (height . 110)
+                                        (transient . t)
+                                        (menu-bar-lines . 1)))
 
-;; Cider should be able to connect to remote hosts using ssh
-(after! cider
-        (setq nrepl-use-ssh-fallback-for-remote-hosts t)
-         (map! :after clojure-mode :map clojure-mode-map :localleader
-        ("f" #'consult-flycheck)
-        ("m" #'cider-selector)
-        ("T" #'projectile-toggle-between-implementation-and-test)))
-
-;; To know where the cursor is 
-(use-package! beacon)
-(after! beacon
- (beacon-mode 1))
-
-;; Save buffers automatically
-(use-package! super-save)
-(after! super-save
-        (super-save-mode +1)
-        (add-to-list 'super-save-triggers 'ace-window)
-        (add-to-list 'super-save-hook-triggers 'find-file-hook)
-        (setq auto-save-default nil)) ;; no need anymore
-
-;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than SPACE-g-s-/
-(use-package avy
-  :bind* (("C-j" . avy-goto-char-timer)))
-
-;; all windows should be avy'ed
-(setq avy-all-windows t)
+  (map! :leader
+        :desc "Org capture" "X" #'+org-capture/open-frame))
 
 ;; I would like org clock to store info between emacs restarts
 (require 'org-clock)
 (setq org-clock-persist t)
 (org-clock-persistence-insinuate)
 
-;; Every file should have at least one new line in the end
-(setq require-final-newline t)
+;; try verb package to serve REST/HTTP requests
+(use-package org
+  :mode ("\\.org\\'" . org-mode)
+  :config (define-key org-mode-map (kbd "C-c C-r") verb-command-map))
+;; }}}
+
+;;{{{ Prog languages modes preferences
+
+;; Clojure
+(after! cider
+  (setq nrepl-use-ssh-fallback-for-remote-hosts t) ;; Cider should be able to connect to remote hosts using ssh
+  (setq cider-default-repl-command "lein")
+  (map! :after clojure-mode :map clojure-mode-map :localleader ;; faster simpler workflow shortcuts
+        ("f" #'consult-flycheck)
+        ("m" #'cider-selector)
+        ("T" #'projectile-toggle-between-implementation-and-test))
+  (add-hook 'cider-repl-mode-hook #'evil-smartparens-mode)
+  (add-hook 'cider-popup-buffer-mode-hook #'evil-smartparens-mode)
+  (evil-make-intercept-map cider--debug-mode-map 'normal)) ;; don't mess evil-mode with cider debug
 
 ;; Let's try computer to be agressive while indenting clojure
 (use-package! aggressive-indent
   :hook
   (clojure-mode . aggressive-indent-mode))
 
-;; Every file should have at least one new line in the end
-(setq require-final-newline t)
+;; Smart parens are great to move around in lisp modes
+(use-package! smartparens
+  :init
+  (map! :map smartparens-mode-map
+        "C-M-f" #'sp-forward-sexp
+        "C-M-b" #'sp-backward-sexp
+        "C-M-u" #'sp-backward-up-sexp
+        "C-M-d" #'sp-down-sexp
+        "C-M-p" #'sp-backward-down-sexp
+        "C-M-n" #'sp-up-sexp
+        "C-M-s" #'sp-splice-sexp
+        "C-M-}" #'sp-forward-slurp-sexp
+        "C-M-{" #'sp-forward-barf-sexp
+        "C-M-[" #'sp-backward-slurp-sexp
+        "C-M-]" #'sp-backward-barf-sexp)
 
-(setq langtool-language-tool-jar "~/bin/LanguageTool-5.6-stable/languagetool-commandline.jar")
+  ;; e.g. > slurps forwards, < barfs backwards,  M-[({ or M-})] surrounds form in [{( or )}] etc
+  (add-hook 'smartparens-enabled-hook #'evil-smartparens-mode)
+  (add-hook 'lisp-mode-hook #'enable-paredit-mode)
+  (add-hook 'lisp-mode-hook #'evil-smartparens-mode)
+  (add-hook 'clojure-mode-hook #'evil-smartparens-mode)
+  (add-hook 'clojure-mode-hook #'enable-paredit-mode)
+  )
+;;}}}
 
-(setq ispell-program-name (executable-find "hunspell"))
 
-(use-package guess-language         ; Automatically detect language for Flyspell
-  :ensure t
-  :defer t
-  :init (add-hook 'text-mode-hook #'guess-language-mode)
-  :config
-  (setq guess-language-langcodes '((en . ("en_GB" "English"))
-                                   (uk . ("uk_UA" "Ukrainian")))
-        guess-language-languages '(en uk)
-        guess-language-min-paragraph-length 45)
-  :diminish guess-language-mode)
-
+;;; {{{ Block of custom functions and their bindings
 (load! "abbrev.el")
+(load! "custom.el")
+(global-set-key (kbd "C-M-;") #'comment-or-uncomment-sexp)
+;;}}}
 
+;;{{{ Zetteldeft: return of emacsian Luhmann
+(use-package deft
+  :custom
+  (deft-extensions '("org" "md" txt))
+  (deft-text-mode 'org-mode)
+  (deft-directory "~/Private/Zettels")
+  (deft-default-extension "org")
+  (deft-use-filename-as-t title))
 
-;; Mappings for things I've added instead of finding how to do it correctly
-;; First change evil-repeat keys...
-(setq evil-snipe-override-evil-repeat-keys nil)
+(use-package! zetteldeft
+  :init
+  (map! :leader
+        :prefix "d"
+        :desc "deft" "d" #'deft
+        :desc "deft-refresh" "R" #'deft-refresh
+        :desc "zetteldeft-deft-new-search" "D" #'zetteldeft-deft-new-search
+        :desc "zetteldeft-search-at-point" "s" #'zetteldeft-search-at-point
+        :desc "zetteldeft-search-current-id" "c" #'zetteldeft-search-current-id
+        :desc "zetteldeft-follow-link" "g" #'zetteldeft-follow-link
+        :desc "zetteldeft-avy-file-search-ace-window" "F" #'zetteldeft-avy-file-search-ace-window
+        :desc "zetteldeft-avy-link-search" "l" #'zetteldeft-avy-link-search
+        :desc "zetteldeft-avy-tag-search" "t" #'zetteldeft-avy-tag-search
+        :desc "zetteldeft-tag-buffer" "T" #'zetteldeft-tag-buffer
+        :desc "zetteldeft-find-file-id-insert" "i" #'zetteldeft-find-file-id-insert
+        :desc "zetteldeft-find-file-full-title-insert" "I" #'zetteldeft-find-file-full-title-insert
+        :desc "zetteldeft-find-file" "f" #'zetteldeft-find-file
+        :desc "zetteldeft-new-file" "n" #'zetteldeft-new-file
+        :desc "zetteldeft-new-file-and-backlink" "N" #'zetteldeft-new-file-and-backlink
+        :desc "edun/deft-open-preview" "p" #'edun/deft-open-preview
+        :desc "edun/deft-open-other" "v" #'edun/deft-open-other
+        :desc "zetteldeft-file-rename" "r" #'zetteldeft-file-rename
+        :desc "zetteldeft-count-words" "x" #'zetteldeft-count-words)
+  :config
+  (defun edun/deft-open-preview ()
+    (interactive)
+    (deft-open-file-other-window))
+  (defun edun/deft-open-other ()
+    (interactive)
+    (deft-open-file-other-window t))
 
-;; ...and then use jkl; instead of hjkl. It's stupid how hard it is to re-map ;!
-(with-eval-after-load 'evil-maps
-  (define-key evil-motion-state-map "j" 'evil-backward-char)
-  (define-key evil-motion-state-map ";" 'evil-forward-char)
-  (define-key evil-motion-state-map "k" 'evil-next-line)
-  (define-key evil-motion-state-map "l" 'evil-previous-line))
-
-;; use similar layout for window controls
-(map! :map evil-window-map
-      "SPC" #'rotate-layout
-      ;; Navigation
-      "h"     #'evil-window-left
-      "k"     #'evil-window-down
-      "l"       #'evil-window-up
-      ";"    #'evil-window-right
-      ;; Swapping windows
-      "C-h"       #'+evil/window-move-left
-      "C-k"       #'+evil/window-move-down
-
-      "C-;"      #'+evil/window-move-right)
-
-;; cleverparens mode is super-awesome lisp-like-code-editing-mode
-;; e.g. > slurps forwards, < barfs backwards,  M-[({ or M-})] surrounds form in [{( or )}] etc
-(add-hook 'lisp-mode-hook #'evil-cleverparens-mode)
-(add-hook 'clojure-mode-hook #'evil-cleverparens-mode)
-(add-hook 'cider-repl-mode-hook #'evil-cleverparens-mode)
-(add-hook 'cider-popup-buffer-mode-hook #'evil-cleverparens-mode)
-
-
-;; gather some stats on keypresses
-(require 'keyfreq)
-(keyfreq-mode 1)
-(keyfreq-autosave-mode 1)
-(setq keyfreq-excluded-commands
-      '(self-insert-command
-        forward-char
-        backward-char
-        previous-line
-        next-line))
-
-;; home should not be default root for all the projects as it seems to be very slow
-(after! projectile
-  (setq projectile-project-root-files-bottom-up
-        (remove ".git" projectile-project-root-files-bottom-up)))
-
-;; TABs should never be inserted at all
-;; (I might need to change it for python or YAML -- but hopefully I don't need them)
-(setq-default indent-tabs-mode nil)
-
-;; TAB should work both for line indent and autocompletion
-(setq-default c-basic-offset tab-width)
-(setq tab-always-indent 'complete)
+  (font-lock-add-keywords
+   'org-mode
+   `((,zetteldeft-id-regex  . font-lock-warning-face)
+     (,zetteldeft-tag-regex . font-lock-warning-face))))
+;;}}}
