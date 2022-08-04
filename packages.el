@@ -52,14 +52,15 @@
 
 (package! super-save) ;; save every time you change the focus out of emacs
 (package! format-all)
-(package! json-mode)
 (package! keyfreq)
-(package! json-mode)
 (package! guess-language)
-(package! beacon)
 (package! aggressive-indent)
 (package! evil-smartparens)
+(package! nov :recipe
+  (:host nil :repo "https://depp.brause.cc/nov.el.git"))
 (package! keycast)   ;; show commands in modeline
+(package! fancy-dabbrev)
+(package! org-super-agenda) ;; groups of different things inside your agenda
 
 ;; hack over :rest lang that is not working with https :(
 (package! restclient)
@@ -73,5 +74,10 @@
 ;; (re)try zetteldeft
 (package! zetteldeft)
 
-;; try blamer
+;; blamer is actually your git lense
 (package! blamer :recipe (:host github :repo "artawower/blamer.el"))
+
+;; topsy shows "sticky" definitions at the very top of the screen if function is too big
+(package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
+
+(package! deadgrep)
