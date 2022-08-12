@@ -7,7 +7,6 @@
 (setq font-family "Fantasque Sans Mono")
 (setq doom-font (font-spec :family font-family :size 17)
       doom-unicode-font (font-spec :family font-family :size 17)
-      doom-variable-pitch-font (font-spec :family "DejaVu Math TeX Gyre" :size 17)
       doom-big-font (font-spec :family font-family :size 20))
 
 ;; Ugly HACK to make Ukrainian and English fonts really the same
@@ -369,7 +368,6 @@
 
 ;; to see saved but not committed things in all the files
 (global-blamer-mode 1)
-(diff-hl-mode 1)
 ;;;;}}}
 
 ;;;{{{ Modeline optional stuff (can live without it)
