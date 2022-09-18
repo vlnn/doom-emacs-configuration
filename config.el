@@ -12,6 +12,10 @@
 ;; Ugly HACK to make Ukrainian and English fonts really the same
 (add-hook 'text-mode-hook (lambda () (doom/reload-font)))
 
+;; Using Macbook is hard.
+(when (eq system-type 'darwin)
+  (setq mac-right-option-modifier 'control))
+
 ;; best clean light theme I've found yet
 (setq doom-theme 'doom-homage-white)
 
@@ -117,37 +121,28 @@
   (setq projectile-mode-line "Projectile")
   (setq projectile-enable-caching t)
   (setq projectile-project-search-path '("~/tmp/"  ("~/src" . 1)))
-  (advice-remove #'projectile-locate-dominating-file #'doom*projectile-locate-dominating-file))
+  ;; (advice-remove #'projectile-locate-dominating-file #'doom*projectile-locate-dominating-file)
+  )
 
 ;; map hippie-expand to the shorcut
 (map! :i "M-/" #'hippie-expand)
 
 ;; This is *so good* I recommend you use it for every "unusual" movement around the visible part of emacs
 ;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than SPACE-g-s-/
-(use-package! avy
-  :bind* (("C-j" . avy-goto-char-timer)))
-
 ;; every windows should be avy'ed
-(setq avy-all-windows t)
-
-;; Keycast should show every key/command at the mode line
-(after! keycast
-  (define-minor-mode keycast-mode
-    "Show current command and its key binding in the mode line."
-    :global t
-    (if keycast-mode
-        (add-hook 'pre-command-hook 'keycast--update t)
-      (remove-hook 'pre-command-hook 'keycast--update))))
-(add-to-list 'global-mode-string '("" keycast-mode-line))
-(keycast-mode) ;; or run keycast-mode by demand
+(key-chord-mode 1)
+(after! key-chord
+  (setq avy-all-windows t)
+  (key-chord-define-global "jk" 'avy-goto-char-timer)
+  )
 ;;}}}
 
 (use-package! anki-editor
   :commands (anki-editor-mode)
   :init
   (map! :leader
-      :desc "Anki Push tree"
-      "m a p" #'anki-editor-push-tree)
+        :desc "Anki Push tree"
+        "m a p" #'anki-editor-push-tree)
   :hook (org-capture-after-finalize . anki-editor-reset-cloze-number) ; Reset cloze-number after each capture.
   :config
   (setq anki-editor-create-decks t ;; Allow anki-editor to create a new deck if it doesn't exist
@@ -248,10 +243,10 @@
   (setq org-clock-persist t)
   (org-clock-persistence-insinuate)
 
-  (use-package! org-super-agenda
-    :after org-agenda
-    :config
-    (org-super-agenda-mode))
+  ;; (use-package! org-super-agenda
+  ;;   :after org-agenda
+  ;;   :config
+  ;;   (org-super-agenda-mode))
 
   ;; try verb package to serve REST/HTTP requests
   (with-eval-after-load 'org
@@ -259,6 +254,10 @@
 ;; }}}
 
 ;;{{{ Prog languages modes preferences
+
+;; Common mapping
+(map! :leader
+      :desc "Consult flycheck" "F" #'consult-flycheck)
 
 ;; Clojure
 (after! cider
@@ -301,17 +300,16 @@
 (load! "custom.el")
 ;; bindings for custom.el
 (global-set-key (kbd "C-M-;") #'comment-or-uncomment-sexp)
-(global-set-key (kbd "M-SPC") #'hydra-smartparens/body)
 ;;}}}
 
 ;;{{{ Zetteldeft: return of emacsian Luhmann
 (use-package! deft
   :custom
-  (deft-extensions '("org" "md" txt))
+  (deft-extensions '("org" "md" "txt"))
   (deft-text-mode 'org-mode)
-  (deft-directory "~/Private/Zettels")
+  (deft-directory "~/org/zetteln")
   (deft-default-extension "org")
-  (deft-use-filename-as-t title))
+  (deft-use-filename-as-title t))
 
 (use-package zetteldeft
   :init
@@ -405,6 +403,8 @@
           additional-insert))
   :config
   (lispyville-set-key-theme))
+
+(keycast-tab-bar-mode)
 
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)

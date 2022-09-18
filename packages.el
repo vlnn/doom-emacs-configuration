@@ -56,11 +56,8 @@
 (package! guess-language)
 (package! aggressive-indent)
 (package! evil-smartparens)
-(package! nov :recipe
-  (:host nil :repo "https://depp.brause.cc/nov.el.git"))
-(package! keycast)   ;; show commands in modeline
 (package! fancy-dabbrev)
-(package! org-super-agenda) ;; groups of different things inside your agenda
+;; (package! org-super-agenda) ;; groups of different things inside your agenda
 
 ;; hack over :rest lang that is not working with https :(
 (package! restclient)
@@ -81,3 +78,5 @@
 (package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
 
 (package! deadgrep)
+(package! key-chord)
+(package! keycast)
