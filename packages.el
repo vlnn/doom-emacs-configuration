@@ -65,7 +65,7 @@
 (package! know-your-http-well)
 (package! ob-restclient)
 
-;; try verb
+;; try verb for making http requests from emacs
 (package! verb)
 
 ;; (re)try zetteldeft
