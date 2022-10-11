@@ -9,6 +9,10 @@
       doom-unicode-font (font-spec :family font-family :size 17)
       doom-big-font (font-spec :family font-family :size 20))
 
+;; My name is?
+(setq user-full-name "Volodymyr Anokhin"
+      user-mail-address "vlnn-github@proton.me")
+
 ;; Ugly HACK to make Ukrainian and English fonts really the same
 (add-hook 'text-mode-hook (lambda () (doom/reload-font)))
 
