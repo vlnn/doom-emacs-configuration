@@ -80,3 +80,6 @@
 (package! deadgrep)
 (package! key-chord)
 (package! keycast)
+
+;; this is solely for vlnn.dev generation
+(package! org-static-blog)

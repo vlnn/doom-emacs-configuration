@@ -278,6 +278,7 @@
 (load! "custom.el")
 ;; bindings for custom.el
 (global-set-key (kbd "C-M-;") #'comment-or-uncomment-sexp)
+(load! "blog.el")
 ;;}}}
 
 ;;{{{ Zetteldeft: return of emacsian Luhmann
