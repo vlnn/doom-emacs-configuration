@@ -219,6 +219,16 @@
   ;; try verb package to serve REST/HTTP requests
   (with-eval-after-load 'org
     (define-key org-mode-map (kbd "C-c C-r") verb-command-map)))
+
+(use-package org
+  :config
+  (require 'ob-clojure)
+  (setq org-babel-clojure-backend 'cider)
+  )
+(defun ob-clojure-cider-do-not-find-ns ()
+  "Fix the issue that `cider-current-ns' try to invoke `clojure-find-ns' to extract ns from buffer."
+  (setq-local cider-buffer-ns "user"))
+(add-hook 'org-mode-hook #'ob-clojure-cider-do-not-find-ns)
 ;; }}}
 
 ;;{{{ Prog languages modes preferences
@@ -231,7 +241,6 @@
 (after! cider
   (add-to-list 'exec-path "/home/va/.asdf/shims")
   (setq nrepl-use-ssh-fallback-for-remote-hosts t) ;; Cider should be able to connect to remote hosts using ssh
-  (setq cider-default-repl-command "lein")
   (setq cider-eldoc-display-context-dependent-info t)
   (setq clojure-align-forms-automatically t)
   (map! :after clojure-mode :map clojure-mode-map :localleader ;; faster simpler workflow shortcuts
@@ -239,12 +248,13 @@
         ("m" #'cider-selector)
         ("T" #'projectile-toggle-between-implementation-and-test))
   (evil-make-intercept-map cider--debug-mode-map 'normal) ;; don't mess evil-mode with cider debug
-  (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
+  (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps)
+  )
 
 ;; Let's try computer to be agressive while indenting clojure
-(use-package aggressive-indent
-  :hook
-  (clojure-mode . aggressive-indent-mode))
+;; (use-package aggressive-indent
+;;   :hook
+;;   (clojure-mode . aggressive-indent-mode))
 
 ;; Prettify clojure code
 (defvar personal/clojure-prettify-alist '())
