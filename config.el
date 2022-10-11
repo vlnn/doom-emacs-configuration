@@ -368,7 +368,7 @@
 (evil-set-initial-state 'deadgrep-mode 'emacs)
 
 (use-package! lispyville
-  :when (featurep! :editor evil)
+  :when (modulep! :editor evil)
   :hook (lispy-mode . lispyville-mode)
   :init
   (setq lispyville-key-theme
