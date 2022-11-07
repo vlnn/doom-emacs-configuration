@@ -5,8 +5,9 @@
 ;; {{{ Common editor configuration shared between all the modes
 ;; Fantasque is great font, so let's use it where possible for text.
 (setq font-family "Fantasque Sans Mono")
-(setq doom-font (font-spec :family font-family :size 17)
-      doom-unicode-font (font-spec :family font-family :size 17)
+(setq doom-font (font-spec :family font-family :size 15)
+      doom-variable-pitch-font (font-spec :family font-family)
+      doom-unicode-font (font-spec :family font-family)
       doom-big-font (font-spec :family font-family :size 20))
 
 ;; My name is?
@@ -19,6 +20,9 @@
 ;; Using Macbook is hard.
 (when (eq system-type 'darwin)
   (setq mac-right-option-modifier 'control))
+
+;; bigger the better
+(add-to-list 'initial-frame-alist '(fullscreen . maximized))
 
 ;; best clean light theme I've found yet
 (setq doom-theme 'doom-homage-white)
@@ -36,6 +40,10 @@
 (global-auto-revert-mode 1)
 ;; Also for dired (e.g. we added or removed a file from open directory
 (setq global-auto-revert-non-file-buffers t)
+
+;; C-l should not move my cursor to the very top, but rather to somewhere a bit furtherier
+;; see https://www.jefftk.com/p/emacs-recentering-with-context
+(setq recenter-positions '(0.15 0.5 0.9))
 
 ;; HACK tool below should be installed (manually -- or rather somewhere else, not in emacs)
 (setq langtool-language-tool-jar "~/bin/LanguageTool/languagetool-commandline.jar")
@@ -90,7 +98,6 @@
 
 ;; use similar layout for window controls
 (map! :map evil-window-map
-      "SPC" #'rotate-layout
       ;; Navigation using jkl; not hjkl
       "j"     #'evil-window-left
       "k"     #'evil-window-down
@@ -161,6 +168,7 @@
         org-habit-following-days 2
         org-use-property-inheritance t
         )
+
   (setq org-capture-templates
         (quote (("t" "todo" entry (file "~/Sync/inbox.org")
                  "* TODO %?\n%U\n%aSCHEDULED: %t\n" :clock-in t :clock-resume t :prepend t)
@@ -210,11 +218,10 @@
   (require 'org-clock)
   (setq org-clock-persist t)
   (org-clock-persistence-insinuate)
-
-  ;; (use-package! org-super-agenda
-  ;;   :after org-agenda
-  ;;   :config
-  ;;   (org-super-agenda-mode))
+  (use-package! org-super-agenda
+    :after org-agenda
+    :config
+    (org-super-agenda-mode))
 
   ;; try verb package to serve REST/HTTP requests
   (with-eval-after-load 'org
@@ -226,7 +233,8 @@
   (setq org-babel-clojure-backend 'cider)
   )
 (defun ob-clojure-cider-do-not-find-ns ()
-  "Fix the issue that `cider-current-ns' try to invoke `clojure-find-ns' to extract ns from buffer."
+  "Fix the issue that `cider-current-ns' try to invoke `clojure-find-ns'
+to extract ns from buffer."
   (setq-local cider-buffer-ns "user"))
 (add-hook 'org-mode-hook #'ob-clojure-cider-do-not-find-ns)
 ;; }}}
@@ -384,6 +392,41 @@
   (lispyville-set-key-theme))
 
 (keycast-tab-bar-mode)
+
+;; macos-specific org capture setup
+(defun timu-func-make-capture-frame ()
+  "Create a new frame and run `org-capture'."
+  (interactive)
+  (make-frame '((name . "capture")
+                (top . 300)
+                (left . 700)
+                (width . 80)
+                (height . 25)))
+  (select-frame-by-name "capture")
+  (delete-other-windows)
+(org-capture))
+
+(defadvice org-capture-finalize
+    (after delete-capture-frame activate)
+  "Advise capture-finalize to close the frame."
+  (if (equal "capture" (frame-parameter nil 'name))
+      (delete-frame)))
+
+(defadvice org-capture-destroy
+    (after delete-capture-frame activate)
+  "Advise capture-destroy to close the frame."
+  (if (equal "capture" (frame-parameter nil 'name))
+      (delete-frame)))
+
+(defun make-orgcapture-frame ()
+  "Create a new frame and run org-capture."
+  (interactive)
+  (make-frame '((name . "remember") (width . 80) (height . 16)
+                (top . 400) (left . 300)
+                (font . "-apple-Monaco-medium-normal-normal-*-13-*-*-*-m-0-iso10646-1")
+                ))
+  (select-frame-by-name "remember")
+  (org-capture))
 
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)

@@ -57,7 +57,7 @@
 (package! aggressive-indent)
 (package! evil-smartparens)
 (package! fancy-dabbrev)
-;; (package! org-super-agenda) ;; groups of different things inside your agenda
+(package! org-super-agenda) ;; groups of different things inside your agenda
 
 ;; hack over :rest lang that is not working with https :(
 (package! restclient)
@@ -83,3 +83,5 @@
 
 ;; this is solely for vlnn.dev generation
 (package! org-static-blog)
+
+(package! noflet)
