@@ -11,7 +11,7 @@
 
 ;; To install a package directly from a remote git repo, you must specify a
 ;; `:recipe'. You'll find documentation on what `:recipe' accepts here:
-;; https://github.com/raxod502/straight.el#the-recipe-format
+;; https://github.com/radian-software/straight.el#the-recipe-format
 ;(package! another-package
 ;  :recipe (:host github :repo "username/repo"))
 
@@ -34,7 +34,7 @@
 
 ;; Specify a `:branch' to install a package from a particular branch or tag.
 ;; This is required for some packages whose default branch isn't 'master' (which
-;; our package manager can't deal with; see raxod502/straight.el#279)
+;; our package manager can't deal with; see radian-software/straight.el#279)
 ;(package! builtin-package :recipe (:branch "develop"))
 
 ;; Use `:pin' to specify a particular commit to install.
@@ -49,27 +49,10 @@
 ;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
 ;(unpin! t)
 
-
-(package! super-save) ;; save every time you change the focus out of emacs
-(package! format-all)
 (package! keyfreq)
-(package! guess-language)
-(package! aggressive-indent)
-(package! evil-smartparens)
-(package! fancy-dabbrev)
-(package! org-super-agenda) ;; groups of different things inside your agenda
-
-;; hack over :rest lang that is not working with https :(
-(package! restclient)
-(package! company-restclient)
-(package! know-your-http-well)
-(package! ob-restclient)
-
-;; try verb for making http requests from emacs
-(package! verb)
-
-;; (re)try zetteldeft
-(package! zetteldeft)
+(package! keycast)
+(package! key-chord)
+(package! deadgrep)
 
 ;; blamer is actually your git lense
 (package! blamer :recipe (:host github :repo "artawower/blamer.el"))
@@ -77,11 +60,5 @@
 ;; topsy shows "sticky" definitions at the very top of the screen if function is too big
 (package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
 
-(package! deadgrep)
-(package! key-chord)
-(package! keycast)
-
-;; this is solely for vlnn.dev generation
-(package! org-static-blog)
-
-(package! noflet)
+;; try one-window approach
+(package! current-window-only :recipe (:host github :repo "FrostyX/current-window-only"))
