@@ -9,7 +9,7 @@ Custom configuration for Doom Emacs
 
 ```sh
 mv ~/.doom.d ~./.doom.d.backup # backup if needed
-git clone https://github.com/vlnn/doom-emacs-configuration/ ~/.doom.d
+git clone git@github.com:vlnn/doom-emacs-configuration/ ~/.doom.d
 ~/.emacs.d/bin/doom sync
 ```
 
