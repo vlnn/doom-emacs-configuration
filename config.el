@@ -5,9 +5,9 @@
 ;; Common editor configuration shared between all the modes
 ;; Fantasque is great font, so let's use it where possible for text.
 (setq font-family "Fantasque Sans Mono")
-(setq doom-font (font-spec :family font-family :size 15)
-      doom-unicode-font (font-spec :family font-family :size 15)
-      doom-big-font (font-spec :family font-family :size 20))
+(setq doom-font (font-spec :family font-family :size 13)
+      doom-unicode-font (font-spec :family font-family :size 13)
+      doom-big-font (font-spec :family font-family :size 15))
 
 ;; Using Macbook is hard. But we'll manage
 (when (eq system-type 'darwin)
@@ -18,6 +18,9 @@
 
 ;; I like absolute line numbers. For relative line numbers, set this to `relative'.
 (setq display-line-numbers-type t)
+
+;; I don't like how word-wrap is working
+(setq word-wrap nil)
 
 ;; default undo settings are too aggregative to my likings -- undoing these!
 ;; NB: This is important! Do not delete or modify or another year of hellish ux is coming
@@ -65,9 +68,6 @@
   (setq avy-all-windows t)
   (key-chord-define-global "jk" 'avy-goto-char-timer))
 
-;; Use simplier window setup
-(current-window-only-mode)
-
 ;; Clojure (and cider)
 (after! cider
   (add-to-list 'exec-path "/home/va/.asdf/shims")
@@ -78,6 +78,7 @@
         ("f" #'consult-flycheck)
         ("m" #'cider-selector)
         ("\;" #'cider-pprint-eval-last-sexp-to-comment)
+        ("N" #'cider-test-run-ns-tests)
         ("T" #'projectile-toggle-between-implementation-and-test))
   (evil-make-intercept-map cider--debug-mode-map 'normal) ;; don't mess evil-mode with cider debug
   (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
@@ -118,3 +119,153 @@
 
 ;; to see saved but not committed things in all the files
 (global-blamer-mode 1)
+
+
+(after! magit
+ (setq ediff-window-setup-function 'ediff-setup-windows-plain)
+
+
+;; magit difftastic setup
+
+ (defun th/magit--with-difftastic (buffer command)
+   "Run COMMAND with GIT_EXTERNAL_DIFF=difft then show result in BUFFER."
+   (let ((process-environment
+          (cons (concat "GIT_EXTERNAL_DIFF=difft --width="
+                        (number-to-string (frame-width)))
+                process-environment)))
+     ;; Clear the result buffer (we might regenerate a diff, e.g., for
+     ;; the current changes in our working directory).
+     (with-current-buffer buffer
+       (setq buffer-read-only nil)
+       (erase-buffer))
+     ;; Now spawn a process calling the git COMMAND.
+     (make-process
+      :name (buffer-name buffer)
+      :buffer buffer
+      :command command
+      ;; Don't query for running processes when emacs is quit.
+      :noquery t
+      ;; Show the result buffer once the process has finished.
+      :sentinel (lambda (proc event)
+                  (when (eq (process-status proc) 'exit)
+                    (with-current-buffer (process-buffer proc)
+                      (goto-char (point-min))
+                      (ansi-color-apply-on-region (point-min) (point-max))
+                      (setq buffer-read-only t)
+                      (view-mode)
+                      (end-of-line)
+                      ;; difftastic diffs are usually 2-column side-by-side,
+                      ;; so ensure our window is wide enough.
+                      (let ((width (current-column)))
+                        (while (zerop (forward-line 1))
+                          (end-of-line)
+                          (setq width (max (current-column) width)))
+                        ;; Add column size of fringes
+                        (setq width (+ width
+                                       (fringe-columns 'left)
+                                       (fringe-columns 'right)))
+                        (goto-char (point-min))
+                        (pop-to-buffer
+                         (current-buffer)
+                         `(;; If the buffer is that wide that splitting the frame in
+                           ;; two side-by-side windows would result in less than
+                           ;; 80 columns left, ensure it's shown at the bottom.
+                           ,(when (> 80 (- (frame-width) width))
+                              #'display-buffer-at-bottom)
+                           (window-width
+                            . ,(min width (frame-width))))))))))))
+
+
+ (defun th/magit-show-with-difftastic (rev)
+   "Show the result of \"git show REV\" with GIT_EXTERNAL_DIFF=difft."
+   (interactive
+    (list (or
+           ;; If REV is given, just use it.
+           (when (boundp 'rev) rev)
+           ;; If not invoked with prefix arg, try to guess the REV from
+           ;; point's position.
+           (and (not current-prefix-arg)
+                (or (magit-thing-at-point 'git-revision t)
+                    (magit-branch-or-commit-at-point)))
+           ;; Otherwise, query the user.
+           (magit-read-branch-or-commit "Revision"))))
+   (if (not rev)
+       (error "No revision specified")
+     (th/magit--with-difftastic
+      (get-buffer-create (concat "*git show difftastic " rev "*"))
+      (list "git" "--no-pager" "show" "--ext-diff" rev))))
+
+
+ (defun th/magit-diff-with-difftastic (arg)
+   "Show the result of \"git diff ARG\" with GIT_EXTERNAL_DIFF=difft."
+   (interactive
+    (list (or
+           ;; If RANGE is given, just use it.
+           (when (boundp 'range) range)
+           ;; If prefix arg is given, query the user.
+           (and current-prefix-arg
+                (magit-diff-read-range-or-commit "Range"))
+           ;; Otherwise, auto-guess based on position of point, e.g., based on
+           ;; if we are in the Staged or Unstaged section.
+           (pcase (magit-diff--dwim)
+             ('unmerged (error "unmerged is not yet implemented"))
+             ('unstaged nil)
+             ('staged "--cached")
+             (`(stash . ,value) (error "stash is not yet implemented"))
+             (`(commit . ,value) (format "%s^..%s" value value))
+             ((and range (pred stringp)) range)
+             (_ (magit-diff-read-range-or-commit "Range/Commit"))))))
+   (let ((name (concat "*git diff difftastic"
+                       (if arg (concat " " arg) "")
+                       "*")))
+     (th/magit--with-difftastic
+      (get-buffer-create name)
+      `("git" "--no-pager" "diff" "--ext-diff" ,@(when arg (list arg))))))
+
+ (transient-define-prefix th/magit-aux-commands ()
+  "My personal auxiliary magit commands."
+  ["Auxiliary commands"
+   ("d" "Difftastic Diff (dwim)" th/magit-diff-with-difftastic)
+   ("s" "Difftastic Show" th/magit-show-with-difftastic)]
+
+  (transient-append-suffix 'magit-dispatch "!"
+    '("#" "My Magit Cmds" th/magit-aux-commands))
+
+  (define-key magit-status-mode-map (kbd "#") #'th/magit-aux-commands)))
+
+
+(after! org
+  (add-to-list 'org-modules 'org-habit)
+  (setq org-agenda-files (list "~/org" "~/Sync")
+        org-tags-column -80
+        cfw:org-overwrite-default-keybinding t)
+
+  (setq org-log-into-drawer "LOGBOOK") ;; This is due to Orgzly doing habits logging into LOGBOOK drawer
+  (setq org-agenda-span 5
+        org-agenda-start-day "-2d"
+        org-agenda-start-with-clockreport-mode nil ; this by some reason doesn't work in doom... yet. See https://github.com/doomemacs/doomemacs/issues/
+        org-agenda-start-with-log-mode t
+        org-agenda-start-with-follow-mode t
+        org-agenda-include-diary t
+        org-habit-show-all-today t
+        org-habit-show-done-always-green t
+        org-habit-preceding-days 7
+        org-habit-following-days 2
+        org-use-property-inheritance t))
+
+
+(defun make-orgcapture-frame ()
+  "Create a new frame and run org-capture."
+  (interactive)
+  (make-frame '((name . "remember") (width . 80) (height . 16)
+                (top . 400) (left . 300)
+                (font . "-apple-Monaco-medium-normal-normal-*-13-*-*-*-m-0-iso10646-1")))
+
+  (select-frame-by-name "remember")
+  (org-capture))
+
+;;; In ~/.doom.d/config.el
+;; To enable jsonian to work with flycheck
+(after! (jsonian flycheck) (jsonian-enable-flycheck))
+;; To diasable so-long mode overrides
+(after! (jsonian so-long) (jsonian-no-so-long-mode))

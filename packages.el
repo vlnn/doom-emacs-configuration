@@ -62,3 +62,14 @@
 
 ;; try one-window approach
 (package! current-window-only :recipe (:host github :repo "FrostyX/current-window-only"))
+
+(package! clojure-essential-ref-nov)
+
+(package! jsonian :recipe (:host github :repo "iwahbe/jsonian"))
+(package! json-mode :disable t)
+
+; (package! aggressive-indent)
+
+(unpin! clj-refactor)
+(package! impatient-mode)
+(package! coverlay :recipe (:host github :repo "vlnn/coverlay.el"))
