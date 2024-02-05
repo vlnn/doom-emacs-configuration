@@ -55,7 +55,7 @@
 (package! deadgrep)
 
 ;; blamer is actually your git lense
-(package! blamer :recipe (:host github :repo "artawower/blamer.el"))
+;(package! blamer :recipe (:host github :repo "artawower/blamer.el"))
 
 ;; topsy shows "sticky" definitions at the very top of the screen if function is too big
 (package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
@@ -73,3 +73,4 @@
 (unpin! clj-refactor)
 (package! impatient-mode)
 (package! coverlay :recipe (:host github :repo "vlnn/coverlay.el"))
+(package! git-link)

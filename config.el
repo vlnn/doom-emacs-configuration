@@ -5,9 +5,9 @@
 ;; Common editor configuration shared between all the modes
 ;; Fantasque is great font, so let's use it where possible for text.
 (setq font-family "Fantasque Sans Mono")
-(setq doom-font (font-spec :family font-family :size 13)
-      doom-unicode-font (font-spec :family font-family :size 13)
-      doom-big-font (font-spec :family font-family :size 15))
+(setq doom-font (font-spec :family font-family :size 15)
+      doom-symbol-font (font-spec :family font-family :size 15)
+      doom-big-font (font-spec :family font-family :size 19))
 
 ;; Using Macbook is hard. But we'll manage
 (when (eq system-type 'darwin)
@@ -49,13 +49,27 @@
       "C-k"       #'+evil/window-move-down
       "C-\;"      #'+evil/window-move-right)
 
+(after! winum
+  (setq winum-scope 'visible
+        winum-auto-setup-mode-line t))
+
+
+
 ;; Prog languages modes preferences
 ;; Common mapping
 (map! :leader
       :desc "Consult flycheck" "F" #'consult-flycheck)
 
+
 ;; configure (custom-built) parinfer
 (setq parinfer-rust-library "/Users/va/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib")
+
+; (map! :after parinfer-rust-mode
+      ; :map parinfer-rust-mode-map
+      ; :localleader
+      ; ("p" nil)
+      ; ("P" nil)
+      ; ("o" #'parinfer-run-switch-mode))
 
 ;; smartparens is BAD if you have parinfer (e.g. it autocompletes (|)() instead of (|())
 (remove-hook 'doom-first-buffer-hook #'smartparens-global-mode)
@@ -77,6 +91,7 @@
   (map! :after clojure-mode :map clojure-mode-map :localleader ;; faster simpler workflow shortcuts
         ("f" #'consult-flycheck)
         ("m" #'cider-selector)
+        ("P" nil)
         ("\;" #'cider-pprint-eval-last-sexp-to-comment)
         ("N" #'cider-test-run-ns-tests)
         ("T" #'projectile-toggle-between-implementation-and-test))
@@ -96,35 +111,7 @@
 (setq-default c-basic-offset tab-width)
 (setq tab-always-indent 'complete)
 
-;; try to enable project-search over TRAMP
-(after! projectile
-  (setq projectile-mode-line "Projectile")
-  (setq projectile-enable-caching t)
-  (setq projectile-project-search-path '("~/tmp/"  ("~/src" . 1))))
-
-;; Better git blame
-(use-package! blamer
-  :bind (("M-i" . blamer-show-commit-info))
-  :defer 20
-  :custom
-  (blamer-idle-time 0.3)
-  (blamer-min-offset 70)
-  :custom-face
-  (blamer-face ((t :foreground "#7a88cf"
-                   :background nil
-                   :height 110 ;; I don't know how to set "smaller than normal" height here, so just hardcoded for now
-                   :italic t)))
-  :config
-  (setq blamer-type 'both))
-
-;; to see saved but not committed things in all the files
-(global-blamer-mode 1)
-
-
 (after! magit
- (setq ediff-window-setup-function 'ediff-setup-windows-plain)
-
-
 ;; magit difftastic setup
 
  (defun th/magit--with-difftastic (buffer command)
@@ -267,5 +254,9 @@
 ;;; In ~/.doom.d/config.el
 ;; To enable jsonian to work with flycheck
 (after! (jsonian flycheck) (jsonian-enable-flycheck))
-;; To diasable so-long mode overrides
+;; To disable so-long mode overrides
 (after! (jsonian so-long) (jsonian-no-so-long-mode))
+
+(setq-default abbrev-mode 1)
+(setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
+(setq save-abbrevs 'silently)
