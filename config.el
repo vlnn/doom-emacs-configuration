@@ -4,7 +4,7 @@
 
 ;; Common editor configuration shared between all the modes
 ;; Fantasque is great font, so let's use it where possible for text.
-(setq font-family "Fantasque Sans Mono")
+(setq font-family "Iosevka Term")
 (setq doom-font (font-spec :family font-family :size 15)
       doom-symbol-font (font-spec :family font-family :size 15)
       doom-big-font (font-spec :family font-family :size 19))
@@ -13,8 +13,14 @@
 (when (eq system-type 'darwin)
   (setq mac-right-option-modifier 'control))
 
+(add-to-list 'default-frame-alist '(fullscreen . maximized))
+
 ;; The best clean light theme I've found yet
-(setq doom-theme 'doom-homage-white)
+(use-package! stimmung-themes
+  ;; :straight (stimmung-themes :host github :repo "motform/stimmung-themes") ; if you are a straight shooter
+  :demand t
+  :ensure t
+  :config (stimmung-themes-load-light)) ; or (stimmung-themes-load-dark)
 
 ;; I like absolute line numbers. For relative line numbers, set this to `relative'.
 (setq display-line-numbers-type t)
@@ -25,6 +31,13 @@
 ;; default undo settings are too aggregative to my likings -- undoing these!
 ;; NB: This is important! Do not delete or modify or another year of hellish ux is coming
 (setq evil-want-fine-undo t)
+
+;; how many times did you SPC m e e
+;; just to see result of some internal sexp evaluation?
+;; Too many, not anymore!
+(setq evil-move-beyond-eol t)
+(setq evil-move-cursor-back nil)
+(setq evil-highlight-closing-paren-at-point-states nil)
 
 ;; Movements schema change, unusual for many
 ;; Move cursor with 'jkl;', not default evil 'hjkl'
@@ -260,3 +273,13 @@
 (setq-default abbrev-mode 1)
 (setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
 (setq save-abbrevs 'silently)
+
+(keyfreq-mode 1)
+(keyfreq-autosave-mode 1)
+(setq keyfreq-excluded-commands
+      '(self-insert-command
+        evil-forward-char
+        evil-backward-char
+        evil-previous-line
+        evil-delete-backward-char-and-join
+        next-line))
