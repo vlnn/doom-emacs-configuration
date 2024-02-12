@@ -13,7 +13,11 @@
 (when (eq system-type 'darwin)
   (setq mac-right-option-modifier 'control))
 
+;; Start as big as possible
 (add-to-list 'default-frame-alist '(fullscreen . maximized))
+
+;; No bell, just blinks
+;(set visible-bell t)
 
 ;; The best clean light theme I've found yet
 (use-package! stimmung-themes
@@ -38,6 +42,14 @@
 (setq evil-move-beyond-eol t)
 (setq evil-move-cursor-back nil)
 (setq evil-highlight-closing-paren-at-point-states nil)
+
+;; Colors and blinks setup
+(blink-cursor-mode 1)
+(set-cursor-color "dark green")
+(use-package! hl-line
+  :custom-face
+  (hl-line ((t (:background "#d5f7d5")))))
+(mouse-avoidance-mode 'cat-and-mouse)
 
 ;; Movements schema change, unusual for many
 ;; Move cursor with 'jkl;', not default evil 'hjkl'
@@ -66,13 +78,13 @@
   (setq winum-scope 'visible
         winum-auto-setup-mode-line t))
 
-
-
-;; Prog languages modes preferences
+;; General preferences
 ;; Common mapping
 (map! :leader
+      :desc "Query replace" "#" #'query-replace-regexp
+      :desc "Query replace" "%" #'query-replace
+      :desc "Undo abbrev"   "U" #'unexpand-abbrev
       :desc "Consult flycheck" "F" #'consult-flycheck)
-
 
 ;; configure (custom-built) parinfer
 (setq parinfer-rust-library "/Users/va/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib")
@@ -283,3 +295,65 @@
         evil-previous-line
         evil-delete-backward-char-and-join
         next-line))
+
+;; we recommend using use-package to organize your init.el
+(use-package! codeium
+    ;; if you use straight
+    ;; :straight '(:type git :host github :repo "Exafunction/codeium.el")
+    ;; otherwise, make sure that the codeium.el file is on load-path
+
+    :init
+    ;; use globally
+    (add-to-list 'completion-at-point-functions #'codeium-completion-at-point)
+    ;; or on a hook
+    ;; (add-hook 'python-mode-hook
+    ;;     (lambda ()
+    ;;         (setq-local completion-at-point-functions '(codeium-completion-at-point))))
+
+    ;; if you want multiple completion backends, use cape (https://github.com/minad/cape):
+    ;; (add-hook 'python-mode-hook
+    ;;     (lambda ()
+    ;;         (setq-local completion-at-point-functions
+    ;;             (list (cape-super-capf #'codeium-completion-at-point #'lsp-completion-at-point)))))
+    ;; an async company-backend is coming soon!
+
+    ;; codeium-completion-at-point is autoloaded, but you can
+    ;; optionally set a timer, which might speed up things as the
+    ;; codeium local language server takes ~0.2s to start up
+    ;; (add-hook 'emacs-startup-hook
+    ;;  (lambda () (run-with-timer 0.1 nil #'codeium-init)))
+
+    ;; :defer t ;; lazy loading, if you want
+    :config
+    (setq use-dialog-box nil) ;; do not use popup boxes
+
+    ;; if you don't want to use customize to save the api-key
+    ;; (setq codeium/metadata/api_key "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+
+    ;; get codeium status in the modeline
+    (setq codeium-mode-line-enable
+        (lambda (api) (not (memq api '(CancelRequest Heartbeat AcceptCompletion)))))
+    (add-to-list 'mode-line-format '(:eval (car-safe codeium-mode-line)) t)
+    ;; alternatively for a more extensive mode-line
+    ;; (add-to-list 'mode-line-format '(-50 "" codeium-mode-line) t)
+
+    ;; use M-x codeium-diagnose to see apis/fields that would be sent to the local language server
+    (setq codeium-api-enabled
+        (lambda (api)
+            (memq api '(GetCompletions Heartbeat CancelRequest GetAuthToken RegisterUser auth-redirect AcceptCompletion))))
+    ;; you can also set a config for a single buffer like this:
+    ;; (add-hook 'python-mode-hook
+    ;;     (lambda ()
+    ;;         (setq-local codeium/editor_options/tab_size 4)))
+
+    ;; You can overwrite all the codeium configs!
+    ;; for example, we recommend limiting the string sent to codeium for better performance
+    (defun my-codeium/document/text ()
+        (buffer-substring-no-properties (max (- (point) 3000) (point-min)) (min (+ (point) 1000) (point-max))))
+    ;; if you change the text, you should also change the cursor_offset
+    ;; warning: this is measured by UTF-8 encoded bytes
+    (defun my-codeium/document/cursor_offset ()
+        (codeium-utf8-byte-length
+            (buffer-substring-no-properties (max (- (point) 3000) (point-min)) (point))))
+    (setq codeium/document/text 'my-codeium/document/text)
+    (setq codeium/document/cursor_offset 'my-codeium/document/cursor_offset))

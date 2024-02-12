@@ -75,3 +75,4 @@
 (package! coverlay :recipe (:host github :repo "vlnn/coverlay.el"))
 (package! git-link)
 (package! stimmung-themes)
+(package! codeium :recipe (:host github :repo "Exafunction/codeium.el"))
