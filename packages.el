@@ -54,25 +54,14 @@
 (package! key-chord)
 (package! deadgrep)
 
-;; blamer is actually your git lense
-;(package! blamer :recipe (:host github :repo "artawower/blamer.el"))
-
 ;; topsy shows "sticky" definitions at the very top of the screen if function is too big
 (package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
-
-;; try one-window approach
-(package! current-window-only :recipe (:host github :repo "FrostyX/current-window-only"))
 
 (package! clojure-essential-ref-nov)
 
 (package! jsonian :recipe (:host github :repo "iwahbe/jsonian"))
 (package! json-mode :disable t)
 
-; (package! aggressive-indent)
-
-(unpin! clj-refactor)
-(package! impatient-mode)
-(package! coverlay :recipe (:host github :repo "vlnn/coverlay.el"))
 (package! git-link)
 (package! stimmung-themes)
 (package! cape)
