@@ -23,7 +23,6 @@
 (use-package! stimmung-themes
   ;; :straight (stimmung-themes :host github :repo "motform/stimmung-themes") ; if you are a straight shooter
   :demand t
-  :ensure t
   :config (stimmung-themes-load-light)) ; or (stimmung-themes-load-dark)
 
 ;; I like absolute line numbers. For relative line numbers, set this to `relative'.
@@ -310,3 +309,12 @@
 (use-package! codeium
   :config
   (add-hook! prog-mode (add-hook 'completion-at-point-functions #'codeium-completion-at-point 100 t)))
+
+(use-package! why-this
+  :hook (prog-mode . why-this-mode)
+  :config
+  (setq why-this-annotate-author-length 10)
+  (setq why-this-annotate-width 50)
+  (set-face-background 'why-this-annotate-heat-map-cold "#0de3f4")
+  (set-face-background 'why-this-face "#f3fff4")
+  (set-face-foreground 'why-this-face "#7d8d9d"))
