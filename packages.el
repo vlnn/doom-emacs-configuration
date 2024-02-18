@@ -78,3 +78,6 @@
 (package! stimmung-themes)
 (package! cape)
 (package! codeium :recipe (:host github :repo "Exafunction/codeium.el"))
+
+(package! annotate)
+(package! beacon)

@@ -314,3 +314,17 @@
   (set-face-background 'why-this-annotate-heat-map-cold "#0de3f4")
   (set-face-background 'why-this-face "#f3fff4")
   (set-face-foreground 'why-this-face "#7d8d9d"))
+
+(use-package! annotate
+  :hook (prog-mode . annotate-mode)
+  :defer t
+  :config
+  (setq annotate-database-confirm-deletion t
+        annotate-annotation-position-policy :margin))
+
+(use-package! beacon
+  :config
+  (setq beacon-size 80
+        beacon-blink-delay 0.1
+        beacon-blink-when-focused 't
+        beacon-blink-when-point-moves-vertically 3))
