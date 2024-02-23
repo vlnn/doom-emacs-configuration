@@ -45,7 +45,7 @@
 (use-package! hl-line
   :custom-face
   (hl-line ((t (:background "#d5f7d5")))))
-(mouse-avoidance-mode 'cat-and-mouse)
+(mouse-avoidance-mode 'nil)
 
 ;; Movements schema change, unusual for many
 ;; Move cursor with 'jkl;', not default evil 'hjkl'
