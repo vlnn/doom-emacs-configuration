@@ -255,8 +255,9 @@
 
 
 (after! org
-  (add-to-list 'org-modules 'org-habit)
-  (setq org-agenda-files (list "~/org" "~/Sync")
+  (setq org-directory "~/Documents/org"
+        org-agenda-files (list "~/Documents/org")
+        +org-capture-journal-file "~/Documents/org/journal.org"
         org-tags-column -80
         cfw:org-overwrite-default-keybinding t)
 
