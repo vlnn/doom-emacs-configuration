@@ -259,58 +259,54 @@
         org-agenda-files (list "~/Documents/org")
         +org-capture-journal-file "~/Documents/org/journal.org"
         org-tags-column -80
-        cfw:org-overwrite-default-keybinding t)
+        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "LOOP(r)" "STRT(s)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)")
+                            (sequence "[ ](T)" "[-](S)" "[?](W)" "|" "[X](D)")
+                            (sequence "|" "OKAY(o)" "YES(y)" "NO(n)"))
+       cfw:org-overwrite-default-keybinding t)
 
-  (setq org-capture-templates
-        '(("a" "Work todo" entry
-           (file+headline +org-capture-todo-file "Inbox")
-           "* TODO %?\n%i\n%a" :prepend t)
-          ("t" "Personal todo" entry
-           (file+headline "work-tasks" "Work Tasks")
-           "* TODO %?\n%i\n%a" :prepend t)
-          ("n" "Personal notes" entry
-           (file+headline +org-capture-notes-file "Inbox")
-           "* %u %?\n%i\n%a" :prepend t)
-          ("j" "Journal" entry
-           (file+olp+datetree +org-capture-journal-file)
-           "* %U %?\n%i\n%a" :prepend t)
-          ("p" "Templates for projects")
-          ("pt" "Project-local todo" entry
-           (file+headline +org-capture-project-todo-file "Inbox")
-           "* TODO %?\n%i\n%a" :prepend t)
-          ("pn" "Project-local notes" entry
-           (file+headline +org-capture-project-notes-file "Inbox")
-           "* %U %?\n%i\n%a" :prepend t)
-          ("pc" "Project-local changelog" entry
-           (file+headline +org-capture-project-changelog-file "Unreleased")
-           "* %U %?\n%i\n%a" :prepend t)
-          ("o" "Centralized templates for projects")
-          ("ot" "Project todo" entry #'+org-capture-central-project-todo-file "* TODO %?\n %i\n %a" :heading "Tasks" :prepend nil)
-          ("on" "Project notes" entry #'+org-capture-central-project-notes-file "* %U %?\n %i\n %a" :heading "Notes" :prepend t)
-          ("oc" "Project changelog" entry #'+org-capture-central-project-changelog-file "* %U %?\n %i\n %a" :heading "Changelog" :prepend t)))
+ (setq org-capture-templates
+       '(("a" "Work todo" entry
+          (file+headline "paid-tasks.org" "Work tasks")
+          "* TODO @paid %?\n%i\n%a" :prepend t)
+         ("t" "Personal todo" entry
+          (file+headline +org-capture-todo-file "Personal")
+          "* TODO %?\n%i\n%a" :prepend t)
+         ("n" "Personal notes" entry
+          (file+headline +org-capture-notes-file "Inbox")
+          "* %u %?\n%i\n%a" :prepend t)
+         ("j" "Journal" entry
+          (file+olp+datetree +org-capture-journal-file)
+          "* %U %?\n%i\n%a" :prepend t)
+         ("P" "Research project" entry (file "~/Org/inbox.org")
+          "* TODO %^{Project title} :%^G:\n:PROPERTIES:\n:CREATED: %U\n:END:\n%^{Project description}\n** TODO Literature review\n** TODO %?\n** TODO Summary\n** TODO Reports\n** Ideas\n" :clock-in t :clock-resume t)
+         ("p" "Templates for projects")
+         ("pt" "Project-local todo" entry
+          (file+headline +org-capture-project-todo-file "Inbox")
+          "* TODO %?\n%i\n%a" :prepend t)
+         ("pn" "Project-local notes" entry
+          (file+headline +org-capture-project-notes-file "Inbox")
+          "* %U %?\n%i\n%a" :prepend t)
+         ("pc" "Project-local changelog" entry
+          (file+headline +org-capture-project-changelog-file "Unreleased")
+          "* %U %?\n%i\n%a" :prepend t)
+         ("o" "Centralized templates for projects")
+         ("ot" "Project todo" entry #'+org-capture-central-project-todo-file "* TODO %?\n %i\n %a" :heading "Tasks" :prepend nil)
+         ("on" "Project notes" entry #'+org-capture-central-project-notes-file "* %U %?\n %i\n %a" :heading "Notes" :prepend t)
+         ("oc" "Project changelog" entry #'+org-capture-central-project-changelog-file "* %U %?\n %i\n %a" :heading "Changelog" :prepend t)))
 
-  (setq org-log-into-drawer "LOGBOOK") ;; This is due to Orgzly doing habits logging into LOGBOOK drawer
-  (setq org-agenda-span 5
-        org-agenda-start-day "-2d"
-        org-agenda-start-with-clockreport-mode nil ; this by some reason doesn't work in doom... yet. See https://github.com/doomemacs/doomemacs/issues/
-        org-agenda-start-with-log-mode t
-        org-agenda-start-with-follow-mode t
-        org-agenda-include-diary t
-        org-habit-show-all-today t
-        org-habit-show-done-always-green t
-        org-habit-preceding-days 7
-        org-habit-following-days 2
-        org-use-property-inheritance t))
+ (setq org-log-into-drawer "LOGBOOK") ;; This is due to Orgzly doing habits logging into LOGBOOK drawer
+ (setq org-agenda-span 5
+       org-agenda-start-day "-2d"
+       org-agenda-start-with-clockreport-mode nil ; this by some reason doesn't work in doom... yet. See https://github.com/doomemacs/doomemacs/issues/
+       org-agenda-start-with-log-mode t
+       org-agenda-start-with-follow-mode t
+       org-agenda-include-diary t
+       org-habit-show-all-today t
+       org-habit-show-done-always-green t
+       org-habit-preceding-days 7
+       org-habit-following-days 2
+       org-use-property-inheritance t))
 
-(defun make-orgcapture-frame ()
-  "Create a new frame and run org-capture."
-  (interactive)
-  (make-frame '((name . "remember") (width . 80) (height . 16)
-                (top . 400) (left . 300)
-                (font . "-apple-Monaco-medium-normal-normal-*-13-*-*-*-m-0-iso10646-1")))
-
-  (select-frame-by-name "remember")
-  (org-capture))
 
 ;;; In ~/.doom.d/config.el
 ;; To enable jsonian to work with flycheck
