@@ -47,6 +47,52 @@
   (hl-line ((t (:background "#d5f7d5")))))
 (mouse-avoidance-mode 'nil)
 
+(setq completion-ignored-extensions
+      '(".a"
+        ".aux"
+        ".bbl"
+        ".bin"
+        ".blg"
+        ".class"
+        ".cp"
+        ".cps"
+        ".elc"
+        ".fmt"
+        ".fn"
+        ".fns"
+        ".git/"
+        ".glo"
+        ".glob"
+        ".gmo"
+        ".hg/"
+        ".idx"
+        ".ky"
+        ".kys"
+        ".la"
+        ".lib"
+        ".ln"
+        ".lo"
+        ".lof"
+        ".lot"
+        ".mem"
+        ".mo"
+        ".o"
+        ".pg"
+        ".pgs"
+        ".pyc"
+        ".pyo"
+        ".so"
+        ".tfm"
+        ".toc"
+        ".tp"
+        ".tps"
+        ".v.d"
+        ".vio"
+        ".vo" ".vok" ".vos"
+        ".vr"
+        ".vrs"
+        "~"))
+
 ;; Movements schema change, unusual for many
 ;; Move cursor with 'jkl;', not default evil 'hjkl'
 ;; Change evil-repeat keys...
@@ -296,8 +342,10 @@
 (after! (jsonian so-long) (jsonian-no-so-long-mode))
 
 (setq-default abbrev-mode 1)
-(setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
-(setq save-abbrevs 'silently)
+(use-package! abbrev
+  :diminish
+  (setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
+  (setq save-abbrevs 'silently))
 
 (keyfreq-mode 1)
 (keyfreq-autosave-mode 1)
