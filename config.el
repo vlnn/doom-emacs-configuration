@@ -341,11 +341,11 @@
 ;; To disable so-long mode overrides
 (after! (jsonian so-long) (jsonian-no-so-long-mode))
 
-(setq-default abbrev-mode 1)
 (use-package! abbrev
-  :diminish
+  :config
   (setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
   (setq save-abbrevs 'silently))
+(setq-default abbrev-mode 1)
 
 (keyfreq-mode 1)
 (keyfreq-autosave-mode 1)
