@@ -260,7 +260,6 @@
         +org-capture-journal-file "~/Documents/org/journal.org"
         org-tags-column -80
         org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "LOOP(r)" "STRT(s)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)")
-                            (sequence "[ ](T)" "[-](S)" "[?](W)" "|" "[X](D)")
                             (sequence "|" "OKAY(o)" "YES(y)" "NO(n)"))
        cfw:org-overwrite-default-keybinding t)
 
@@ -277,8 +276,6 @@
          ("j" "Journal" entry
           (file+olp+datetree +org-capture-journal-file)
           "* %U %?\n%i\n%a" :prepend t)
-         ("P" "Research project" entry (file "~/Org/inbox.org")
-          "* TODO %^{Project title} :%^G:\n:PROPERTIES:\n:CREATED: %U\n:END:\n%^{Project description}\n** TODO Literature review\n** TODO %?\n** TODO Summary\n** TODO Reports\n** Ideas\n" :clock-in t :clock-resume t)
          ("p" "Templates for projects")
          ("pt" "Project-local todo" entry
           (file+headline +org-capture-project-todo-file "Inbox")
