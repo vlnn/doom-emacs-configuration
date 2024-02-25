@@ -45,7 +45,8 @@
 (use-package! hl-line
   :custom-face
   (hl-line ((t (:background "#d5f7d5")))))
-(mouse-avoidance-mode 'nil)
+(mouse-avoidance-mode 'animate)
+(setq mouse-avoidance-threshold 0.5)
 
 (setq completion-ignored-extensions
       '(".a"
@@ -375,8 +376,8 @@
 (use-package! why-this
   :hook (prog-mode . why-this-mode)
   :config
-  (setq why-this-annotate-author-length 10
-        why-this-annotate-width 50)
+  (setq why-this-annotate-author-length 1
+        why-this-annotate-width 5)
   (set-face-background 'why-this-annotate-heat-map-cold "#0de3f4")
   (set-face-background 'why-this-face "#f3fff4")
   (set-face-foreground 'why-this-face "#7d8d9d"))
