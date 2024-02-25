@@ -121,6 +121,9 @@
   (setq winum-scope 'visible
         winum-auto-setup-mode-line t))
 
+(after! flycheck
+  (setq flycheck-check-syntax-automatically '(save mode-enable)))
+
 ;; General preferences
 ;; Common mapping
 (map! :leader
