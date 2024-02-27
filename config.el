@@ -296,48 +296,66 @@
 
 (after! org
   :config
-  (setq org-directory "~/Documents/org"
+  (setq org-directory "~/Documents/org/"
         org-default-notes-file "~/Documents/org/notes.org"
-        org-agenda-files (list "~/Documents/org/"))
-  (setq org-tags-column -80
-        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "LOOP(r)" "STRT(s)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)")
-                            (sequence "|" "OKAY(o)" "YES(y)" "NO(n)"))
+        org-agenda-files (list "paid-tasks.org" "todo.org" "activities.org" "projects.org"))
+  (setq org-tags-column 80
+        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "LOOP(l)" "ACT(a)" "STRT(s)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)")
+                            (sequence "ACT(a)" "|" "PROGRESS(p)" "KILL(k)")
+                            (sequence "|" "OKAY(o)" "YES(y)" "NO(n)")
+                            (sequence "TOREAD(t)" "READING(r)" "|" "KILL(k)" "DONE(d)"))
        cfw:org-overwrite-default-keybinding t)
 
- (setq org-capture-templates
-       '(("a" "Work todo" entry
-          (file+headline "paid-tasks.org" "Work tasks")
-          "* TODO @paid %?\n%i\n%a" :prepend t)
-         ("t" "Personal todo" entry
-          (file+headline "todo.org" "Personal")
-          "* TODO %?\n%i\n%a" :prepend t)
-         ("n" "Personal notes" entry
-          (file+headline "inbox.org" "Inbox")
-          "* %u %?\n%i\n%a" :prepend t)
-         ("j" "Journal" entry
-          (file+olp+datetree "journal.org")
-          "* %U %?\n%i\n%a" :prepend t)
-         ("p" "Templates for projects")
-         ("pt" "Project-local todo" entry
-          (file+headline "projects.org" "Inbox")
-          "* TODO %?\n%i\n%a" :prepend t)
-         ("pn" "Project-local notes" entry
-          (file+headline "notes.org" "Inbox")
-          "* %U %?\n%i\n%a" :prepend t)))
+  (setq org-capture-templates
+        '(("a" "Activities" entry (file+headline "activities.org" "Activities") "* ACT %? @recur" :prepend t)
+          ("t" "Personal todo" entry (file+headline "todo.org" "Personal") "* TODO %? @personal" :prepend t)
+          ("w" "Work todo" entry (file+headline "paid-tasks.org" "Work tasks") "* TODO %? @paid\n%i\n%a" :prepend t)
+          ("r" "Reading" entry (file+headline "reading.org" "Reading") "* TOREAD %? @reading" :prepend t)
+          ("p" "Templates for projects") ; I guess I got it now -- this is project TODO list inside the project folder. Smart!
+          ("pt" "Project-local todo" entry  ; {project-root}/todo.org
+           (file+headline +org-capture-project-todo-file "Inbox")
+           "* TODO %?\n%i\n%a" :prepend t)
+          ("pn" "Project-local notes" entry  ; {project-root}/notes.org
+           (file+headline +org-capture-project-notes-file "Inbox")
+           "* %U %?\n%i\n%a" :prepend t)
+          ("pc" "Project-local changelog" entry  ; {project-root}/changelog.org
+           (file+headline +org-capture-project-changelog-file "Unreleased")
+           "* %U %?\n%i\n%a" :prepend t)))
 
  (setq org-agenda-span 5
        org-agenda-start-day "-2d"
-       org-agenda-start-with-clockreport-mode t
-       org-agenda-clockreport-parameter-plist '(:stepskip0 t :link t :maxlevel 2 :fileskip0 t) ; no empty records in the agenda
+       org-agenda-start-with-clockreport-mode nil
+       org-agenda-clockreport-parameter-plist '(:stepskip0 t :link t :maxlevel 2 :fileskip0 t :step day) ; no empty records in the agenda
        org-agenda-start-with-log-mode t
        org-agenda-start-with-follow-mode t
        org-agenda-include-diary t
+       org-agenda-compact-blocks t
        org-habit-show-all-today t
        org-habit-show-done-always-green t
        org-habit-preceding-days 7
        org-habit-following-days 2
        org-use-property-inheritance t))
 
+(use-package! org-agenda
+  :custom
+   (org-agenda-custom-commands
+    '(("A" "Priority #A tasks" agenda ""
+       ((org-agenda-ndays 1)
+        (org-agenda-skip-function
+         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#A\\]"))))
+      ("B" "Priority #B tasks" agenda ""
+       ((org-agenda-ndays 1)
+        (org-agenda-skip-function
+         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#B\\]"))))
+      ("C" "Priority #C tasks" agenda ""
+       ((org-agenda-ndays 1)
+        (org-agenda-skip-function
+         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#C\\]"))))
+      ("c" "aCtivities" todo "ACT")
+      ("t" "To do" todo "TODO")
+      ("i" "In progress" todo "PROGRESS|WAIT")
+      ("h" "On hold" todo "HOLD")
+      ("d" "Done" todo "DONE|KILL"))))
 
 ;;; In ~/.doom.d/config.el
 ;; To enable jsonian to work with flycheck
@@ -398,3 +416,6 @@
         beacon-blink-delay 0.1
         beacon-blink-when-focused 't
         beacon-blink-when-point-moves-vertically 3))
+
+(use-package! org-shortcut)
+(load! "secrets.el")

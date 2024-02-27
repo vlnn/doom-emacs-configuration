@@ -102,6 +102,8 @@
    ("affraid" "afraid" nil 0)
    ("afterthe" "after the" nil 0)
    ("aganist" "against" nil 0)
+   ("agenad" "agenda" nil 0)
+   ("agenada" "agenda" nil 0)
    ("aggresive" "aggressive" nil 0)
    ("agian" "again" nil 0)
    ("agreemeent" "agreement" nil 0)
