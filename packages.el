@@ -81,3 +81,7 @@
 
 (package! annotate)
 (package! beacon)
+
+(package! org-shortcut
+  :recipe (:host github
+           :repo "glittershark/org-clubhouse"))

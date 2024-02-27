@@ -45,7 +45,54 @@
 (use-package! hl-line
   :custom-face
   (hl-line ((t (:background "#d5f7d5")))))
-(mouse-avoidance-mode 'nil)
+(mouse-avoidance-mode 'animate)
+(setq mouse-avoidance-threshold 0.5)
+
+(setq completion-ignored-extensions
+      '(".a"
+        ".aux"
+        ".bbl"
+        ".bin"
+        ".blg"
+        ".class"
+        ".cp"
+        ".cps"
+        ".elc"
+        ".fmt"
+        ".fn"
+        ".fns"
+        ".git/"
+        ".glo"
+        ".glob"
+        ".gmo"
+        ".hg/"
+        ".idx"
+        ".ky"
+        ".kys"
+        ".la"
+        ".lib"
+        ".ln"
+        ".lo"
+        ".lof"
+        ".lot"
+        ".mem"
+        ".mo"
+        ".o"
+        ".pg"
+        ".pgs"
+        ".pyc"
+        ".pyo"
+        ".so"
+        ".tfm"
+        ".toc"
+        ".tp"
+        ".tps"
+        ".v.d"
+        ".vio"
+        ".vo" ".vok" ".vos"
+        ".vr"
+        ".vrs"
+        "~"))
 
 ;; Movements schema change, unusual for many
 ;; Move cursor with 'jkl;', not default evil 'hjkl'
@@ -74,6 +121,9 @@
   (setq winum-scope 'visible
         winum-auto-setup-mode-line t))
 
+(after! flycheck
+  (setq flycheck-check-syntax-automatically '(save mode-enable)))
+
 ;; General preferences
 ;; Common mapping
 (map! :leader
@@ -81,16 +131,6 @@
       :desc "Query replace" "%" #'query-replace
       :desc "Undo abbrev"   "U" #'unexpand-abbrev
       :desc "Consult flycheck" "F" #'consult-flycheck)
-
-;; configure (custom-built) parinfer
-(setq parinfer-rust-library "/Users/va/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib")
-
-                                        ; (map! :after parinfer-rust-mode
-                                        ; :map parinfer-rust-mode-map
-                                        ; :localleader
-                                        ; ("p" nil)
-                                        ; ("P" nil)
-                                        ; ("o" #'parinfer-run-switch-mode))
 
 ;; smartparens is BAD if you have parinfer (e.g. it autocompletes (|)() instead of (|())
 (remove-hook 'doom-first-buffer-hook #'smartparens-global-mode)
@@ -119,10 +159,11 @@
         ("T" #'projectile-toggle-between-implementation-and-test))
   (setq cider-print-options '(("length" 20) ("right-margin" 70)))
   (evil-make-intercept-map cider--debug-mode-map 'normal) ;; don't mess evil-mode with cider debug
-  (add-hook 'cider-repl-mode-hook '(lambda () (setq scroll-conservatively 101)))
   (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
 
 (use-package! parinfer-rust-mode
+  :init
+  (setq parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
   :config
   (map! :map parinfer-rust-mode-map
         :localleader
@@ -166,7 +207,7 @@
        ;; Don't query for running processes when emacs is quit.
        :noquery t
        ;; Show the result buffer once the process has finished.
-       :sentinel (lambda (proc event)
+       :sentinel (lambda (proc _)
                    (when (eq (process-status proc) 'exit)
                      (with-current-buffer (process-buffer proc)
                        (goto-char (point-min))
@@ -201,7 +242,7 @@
     (interactive
      (list (or
             ;; If REV is given, just use it.
-            (when (boundp 'rev) rev)
+            ;(when (boundp 'rev) rev)
             ;; If not invoked with prefix arg, try to guess the REV from
             ;; point's position.
             (and (not current-prefix-arg)
@@ -221,7 +262,7 @@
     (interactive
      (list (or
             ;; If RANGE is given, just use it.
-            (when (boundp 'range) range)
+            ;(when (boundp 'range) range)
             ;; If prefix arg is given, query the user.
             (and current-prefix-arg
                  (magit-diff-read-range-or-commit "Range"))
@@ -231,7 +272,6 @@
               ('unmerged (error "unmerged is not yet implemented"))
               ('unstaged nil)
               ('staged "--cached")
-              (`(stash . ,value) (error "stash is not yet implemented"))
               (`(commit . ,value) (format "%s^..%s" value value))
               ((and range (pred stringp)) range)
               (_ (magit-diff-read-range-or-commit "Range/Commit"))))))
@@ -255,34 +295,67 @@
 
 
 (after! org
-  (setq org-directory "~/Documents/org"
-        org-agenda-files (list "~/Documents/org")
-        +org-capture-journal-file "~/Documents/org/journal.org"
-        org-tags-column -80
-        cfw:org-overwrite-default-keybinding t)
+  :config
+  (setq org-directory "~/Documents/org/"
+        org-default-notes-file "~/Documents/org/notes.org"
+        org-agenda-files (list "paid-tasks.org" "todo.org" "activities.org" "projects.org"))
+  (setq org-tags-column 80
+        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "LOOP(l)" "ACT(a)" "STRT(s)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)")
+                            (sequence "ACT(a)" "|" "PROGRESS(p)" "KILL(k)")
+                            (sequence "|" "OKAY(o)" "YES(y)" "NO(n)")
+                            (sequence "TOREAD(t)" "READING(r)" "|" "KILL(k)" "DONE(d)"))
+       cfw:org-overwrite-default-keybinding t)
 
-  (setq org-log-into-drawer "LOGBOOK") ;; This is due to Orgzly doing habits logging into LOGBOOK drawer
-  (setq org-agenda-span 5
-        org-agenda-start-day "-2d"
-        org-agenda-start-with-clockreport-mode nil ; this by some reason doesn't work in doom... yet. See https://github.com/doomemacs/doomemacs/issues/
-        org-agenda-start-with-log-mode t
-        org-agenda-start-with-follow-mode t
-        org-agenda-include-diary t
-        org-habit-show-all-today t
-        org-habit-show-done-always-green t
-        org-habit-preceding-days 7
-        org-habit-following-days 2
-        org-use-property-inheritance t))
+  (setq org-capture-templates
+        '(("a" "Activities" entry (file+headline "activities.org" "Activities") "* ACT %? @recur" :prepend t)
+          ("t" "Personal todo" entry (file+headline "todo.org" "Personal") "* TODO %? @personal" :prepend t)
+          ("w" "Work todo" entry (file+headline "paid-tasks.org" "Work tasks") "* TODO %? @paid\n%i\n%a" :prepend t)
+          ("r" "Reading" entry (file+headline "reading.org" "Reading") "* TOREAD %? @reading" :prepend t)
+          ("p" "Templates for projects") ; I guess I got it now -- this is project TODO list inside the project folder. Smart!
+          ("pt" "Project-local todo" entry  ; {project-root}/todo.org
+           (file+headline +org-capture-project-todo-file "Inbox")
+           "* TODO %?\n%i\n%a" :prepend t)
+          ("pn" "Project-local notes" entry  ; {project-root}/notes.org
+           (file+headline +org-capture-project-notes-file "Inbox")
+           "* %U %?\n%i\n%a" :prepend t)
+          ("pc" "Project-local changelog" entry  ; {project-root}/changelog.org
+           (file+headline +org-capture-project-changelog-file "Unreleased")
+           "* %U %?\n%i\n%a" :prepend t)))
 
-(defun make-orgcapture-frame ()
-  "Create a new frame and run org-capture."
-  (interactive)
-  (make-frame '((name . "remember") (width . 80) (height . 16)
-                (top . 400) (left . 300)
-                (font . "-apple-Monaco-medium-normal-normal-*-13-*-*-*-m-0-iso10646-1")))
+ (setq org-agenda-span 5
+       org-agenda-start-day "-2d"
+       org-agenda-start-with-clockreport-mode nil
+       org-agenda-clockreport-parameter-plist '(:stepskip0 t :link t :maxlevel 2 :fileskip0 t :step day) ; no empty records in the agenda
+       org-agenda-start-with-log-mode t
+       org-agenda-start-with-follow-mode t
+       org-agenda-include-diary t
+       org-agenda-compact-blocks t
+       org-habit-show-all-today t
+       org-habit-show-done-always-green t
+       org-habit-preceding-days 7
+       org-habit-following-days 2
+       org-use-property-inheritance t))
 
-  (select-frame-by-name "remember")
-  (org-capture))
+(use-package! org-agenda
+  :custom
+   (org-agenda-custom-commands
+    '(("A" "Priority #A tasks" agenda ""
+       ((org-agenda-ndays 1)
+        (org-agenda-skip-function
+         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#A\\]"))))
+      ("B" "Priority #B tasks" agenda ""
+       ((org-agenda-ndays 1)
+        (org-agenda-skip-function
+         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#B\\]"))))
+      ("C" "Priority #C tasks" agenda ""
+       ((org-agenda-ndays 1)
+        (org-agenda-skip-function
+         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#C\\]"))))
+      ("c" "aCtivities" todo "ACT")
+      ("t" "To do" todo "TODO")
+      ("i" "In progress" todo "PROGRESS|WAIT")
+      ("h" "On hold" todo "HOLD")
+      ("d" "Done" todo "DONE|KILL"))))
 
 ;;; In ~/.doom.d/config.el
 ;; To enable jsonian to work with flycheck
@@ -290,9 +363,11 @@
 ;; To disable so-long mode overrides
 (after! (jsonian so-long) (jsonian-no-so-long-mode))
 
+(use-package! abbrev
+  :config
+  (setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
+  (setq save-abbrevs 'silently))
 (setq-default abbrev-mode 1)
-(setq abbrev-file-name (concat doom-user-dir "abbrev_defs"))
-(setq save-abbrevs 'silently)
 
 (keyfreq-mode 1)
 (keyfreq-autosave-mode 1)
@@ -322,8 +397,8 @@
 (use-package! why-this
   :hook (prog-mode . why-this-mode)
   :config
-  (setq why-this-annotate-author-length 10
-        why-this-annotate-width 50)
+  (setq why-this-annotate-author-length 1
+        why-this-annotate-width 5)
   (set-face-background 'why-this-annotate-heat-map-cold "#0de3f4")
   (set-face-background 'why-this-face "#f3fff4")
   (set-face-foreground 'why-this-face "#7d8d9d"))
@@ -341,3 +416,6 @@
         beacon-blink-delay 0.1
         beacon-blink-when-focused 't
         beacon-blink-when-point-moves-vertically 3))
+
+(use-package! org-shortcut)
+(load! "secrets.el")
