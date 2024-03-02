@@ -85,3 +85,5 @@
 (package! org-shortcut
   :recipe (:host github
            :repo "glittershark/org-clubhouse"))
+
+(package! super-save)
