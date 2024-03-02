@@ -43,6 +43,7 @@
 ;; Colors and blinks setup
 (blink-cursor-mode 1)
 (set-cursor-color "dark green")
+(setq-default line-spacing 1)
 (use-package! hl-line
   :custom-face
   (hl-line ((t (:background "#d5f7d5")))))
@@ -457,5 +458,13 @@
         beacon-blink-when-focused 't
         beacon-blink-when-point-moves-vertically 3))
 
+(use-package! lsp
+  :config
+  (setq font-lock-maximum-decoration 1))
+
 (use-package! org-shortcut)
 (load! "secrets.el")
+
+(after! org
+  (super-save-mode +1)
+  (setq super-save-auto-save-when-idle t))
