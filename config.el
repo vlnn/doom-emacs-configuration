@@ -11,7 +11,8 @@
 
 ;; Using Macbook is hard. But we'll manage
 (when (eq system-type 'darwin)
-  (setq mac-right-option-modifier 'control))
+  (setq mac-right-option-modifier 'control
+        dired-use-ls-dired nil))
 
 ;; Start as big as possible
 (add-to-list 'default-frame-alist '(fullscreen . maximized))
