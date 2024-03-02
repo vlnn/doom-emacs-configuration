@@ -300,11 +300,32 @@
   (setq org-directory "~/Documents/org/"
         org-default-notes-file "~/Documents/org/notes.org"
         org-agenda-files (list "paid-tasks.org" "todo.org" "activities.org" "projects.org"))
+  (setq org-log-done 'time
+        org-log-reschedule 'time
+        org-log-into-drawer t
+        org-startup-indented t
+        org-startup-truncated nil
+        org-id-track-globally t)
+  (add-to-list 'org-global-properties
+         '("Effort_ALL". "0:05 0:15 0:30 1:00 2:00 1d 2d 1w 2w 1m"))
   (setq org-tags-column 80
-        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "LOOP(l)" "ACT(a)" "STRT(s)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)")
+        org-todo-keyword-faces
+         '(("TODO" . "khaki4")
+           ("NOW" . "orange")
+           ("LATER" . "khaki2")
+           ("PROJ" . "green")
+           ("ACT" . "tan3")
+           ("TOREAD" . "tan2")
+           ("QUESTION" . "tan1")
+           ("ANSWER" . "dark green")
+           ("IDEA" . "blue")
+           ("DONE" . "green4")
+           ("KILL" . "green3"))
+        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "REPEAT(r)" "NOW(n)" "LATER(l)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)" "NOPE(n)")
                             (sequence "ACT(a)" "|" "PROGRESS(p)" "KILL(k)")
+                            (sequence "QUESTION(Q)" "|" "ANSWER(a)" "KILL(k)")
                             (sequence "|" "OKAY(o)" "YES(y)" "NO(n)")
-                            (sequence "TOREAD(t)" "READING(r)" "|" "KILL(k)" "DONE(d)"))
+                            (sequence "TOREAD(t)" "READING(r)" "|" "KILL(k)" "FINISHED(d)"))
        cfw:org-overwrite-default-keybinding t)
 
   (setq org-capture-templates
@@ -312,6 +333,7 @@
           ("t" "Personal todo" entry (file+headline "todo.org" "Personal") "* TODO %? @personal" :prepend t)
           ("w" "Work todo" entry (file+headline "paid-tasks.org" "Work tasks") "* TODO %? @paid\n%i\n%a" :prepend t)
           ("r" "Reading" entry (file+headline "reading.org" "Reading") "* TOREAD %? @reading" :prepend t)
+          ("Q" "I have a Question!" entry (file+headline "questions.org" "Questions") "* QUESTION %? @non-aswered" :prepend t)
           ("p" "Templates for projects") ; I guess I got it now -- this is project TODO list inside the project folder. Smart!
           ("pt" "Project-local todo" entry  ; {project-root}/todo.org
            (file+headline +org-capture-project-todo-file "Inbox")
@@ -323,14 +345,23 @@
            (file+headline +org-capture-project-changelog-file "Unreleased")
            "* %U %?\n%i\n%a" :prepend t)))
 
+ (defun org-summary-todo (n-done n-not-done)
+   "Switch entry to DONE when all subentries are done, to TODO otherwise."
+   (let (org-log-done org-todo-log-states)   ; turn off logging
+     (org-todo (if (= n-not-done 0) "DONE" "TODO"))))
+
+ (add-hook 'org-after-todo-statistics-hook #'org-summary-todo)
+ (add-hook 'auto-save-hook 'org-save-all-org-buffers)
+
  (setq org-agenda-span 5
-       org-agenda-start-day "-2d"
-       org-agenda-start-with-clockreport-mode nil
+       org-agenda-start-day "-1d"
+       org-agenda-start-with-clockreport-mode t
        org-agenda-clockreport-parameter-plist '(:stepskip0 t :link t :maxlevel 2 :fileskip0 t :step day) ; no empty records in the agenda
        org-agenda-start-with-log-mode t
        org-agenda-start-with-follow-mode t
        org-agenda-include-diary t
        org-agenda-compact-blocks t
+       org-agenda-show-future-repeats nil
        org-habit-show-all-today t
        org-habit-show-done-always-green t
        org-habit-preceding-days 7
@@ -352,8 +383,16 @@
        ((org-agenda-ndays 1)
         (org-agenda-skip-function
          '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#C\\]"))))
+      ("S" "Super view"
+           ((agenda "" ((org-agenda-overriding-header "")
+                        (org-super-agenda-groups
+                         '((:name "Today"
+                                  :time-grid t
+                                  :date today
+                                  :order 1)))))))
       ("c" "aCtivities" todo "ACT")
       ("t" "To do" todo "TODO")
+      ("T" "To do #A" todo "TODO [#A]|HOLD [#A]|WAIT [#A]")
       ("i" "In progress" todo "PROGRESS|WAIT")
       ("h" "On hold" todo "HOLD")
       ("d" "Done" todo "DONE|KILL"))))
