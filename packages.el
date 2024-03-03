@@ -79,7 +79,6 @@
 (package! cape)
 (package! codeium :recipe (:host github :repo "Exafunction/codeium.el"))
 
-(package! annotate)
 (package! beacon)
 
 (package! org-shortcut
@@ -87,3 +86,6 @@
            :repo "glittershark/org-clubhouse"))
 
 (package! super-save)
+(package! plz.el
+  :recipe (:host github
+           :repo "vlnn/plz.el"))

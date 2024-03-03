@@ -145,34 +145,7 @@
   (setq avy-all-windows t)
   (key-chord-define-global "jk" 'avy-goto-char-timer))
 
-;; Clojure (and cider)
-(after! cider
-  (add-to-list 'exec-path "/home/va/.asdf/shims")
-  (setq nrepl-use-ssh-fallback-for-remote-hosts t) ;; Cider should be able to connect to remote hosts using ssh
-  (setq cider-eldoc-display-context-dependent-info t)
-  ;(setq clojure-align-forms-automatically t)
-  (map! :after clojure-mode :map clojure-mode-map :localleader ;; faster simpler workflow shortcuts
-        ("f" #'consult-flycheck)
-        ("m" #'cider-selector)
-        ("P" nil)
-        ("p" nil)
-        ("\;" #'cider-pprint-eval-last-sexp-to-comment)
-        ("N" #'cider-test-run-ns-tests)
-        ("T" #'projectile-toggle-between-implementation-and-test))
-  (setq cider-print-options '(("length" 20) ("right-margin" 70)))
-  (evil-make-intercept-map cider--debug-mode-map 'normal) ;; don't mess evil-mode with cider debug
-  (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
-
-(use-package! parinfer-rust-mode
-  :init
-  (setq parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
-  :config
-  (map! :map parinfer-rust-mode-map
-        :localleader
-        "p" #'cider-pprint-eval-last-sexp
-        "[" #'parinfer-rust-switch-mode
-        "P" #'cider-pprint-eval-last-sexp-to-comment
-        "{" #'parinfer-rust-toggle-disable))
+(load! "clojure.el")
 
 ;; To kill trailing whitespaces... but being sane killer not removing whitespace I just typed in
 (use-package! ws-butler
@@ -187,222 +160,9 @@
 (setq-default c-basic-offset tab-width)
 (setq tab-always-indent 'complete)
 
-(after! magit
-  ;; magit difftastic setup
-
-  (defun th/magit--with-difftastic (buffer command)
-    "Run COMMAND with GIT_EXTERNAL_DIFF=difft then show result in BUFFER."
-    (let ((process-environment
-           (cons (concat "GIT_EXTERNAL_DIFF=difft --width="
-                         (number-to-string (frame-width)))
-                 process-environment)))
-      ;; Clear the result buffer (we might regenerate a diff, e.g., for
-      ;; the current changes in our working directory).
-      (with-current-buffer buffer
-        (setq buffer-read-only nil)
-        (erase-buffer))
-      ;; Now spawn a process calling the git COMMAND.
-      (make-process
-       :name (buffer-name buffer)
-       :buffer buffer
-       :command command
-       ;; Don't query for running processes when emacs is quit.
-       :noquery t
-       ;; Show the result buffer once the process has finished.
-       :sentinel (lambda (proc _)
-                   (when (eq (process-status proc) 'exit)
-                     (with-current-buffer (process-buffer proc)
-                       (goto-char (point-min))
-                       (ansi-color-apply-on-region (point-min) (point-max))
-                       (setq buffer-read-only t)
-                       (view-mode)
-                       (end-of-line)
-                       ;; difftastic diffs are usually 2-column side-by-side,
-                       ;; so ensure our window is wide enough.
-                       (let ((width (current-column)))
-                         (while (zerop (forward-line 1))
-                           (end-of-line)
-                           (setq width (max (current-column) width)))
-                         ;; Add column size of fringes
-                         (setq width (+ width
-                                        (fringe-columns 'left)
-                                        (fringe-columns 'right)))
-                         (goto-char (point-min))
-                         (pop-to-buffer
-                          (current-buffer)
-                          `(;; If the buffer is that wide that splitting the frame in
-                            ;; two side-by-side windows would result in less than
-                            ;; 80 columns left, ensure it's shown at the bottom.
-                            ,(when (> 80 (- (frame-width) width))
-                               #'display-buffer-at-bottom)
-                            (window-width
-                             . ,(min width (frame-width))))))))))))
-
-
-  (defun th/magit-show-with-difftastic (rev)
-    "Show the result of \"git show REV\" with GIT_EXTERNAL_DIFF=difft."
-    (interactive
-     (list (or
-            ;; If REV is given, just use it.
-            ;(when (boundp 'rev) rev)
-            ;; If not invoked with prefix arg, try to guess the REV from
-            ;; point's position.
-            (and (not current-prefix-arg)
-                 (or (magit-thing-at-point 'git-revision t)
-                     (magit-branch-or-commit-at-point)))
-            ;; Otherwise, query the user.
-            (magit-read-branch-or-commit "Revision"))))
-    (if (not rev)
-        (error "No revision specified")
-      (th/magit--with-difftastic
-       (get-buffer-create (concat "*git show difftastic " rev "*"))
-       (list "git" "--no-pager" "show" "--ext-diff" rev))))
-
-
-  (defun th/magit-diff-with-difftastic (arg)
-    "Show the result of \"git diff ARG\" with GIT_EXTERNAL_DIFF=difft."
-    (interactive
-     (list (or
-            ;; If RANGE is given, just use it.
-            ;(when (boundp 'range) range)
-            ;; If prefix arg is given, query the user.
-            (and current-prefix-arg
-                 (magit-diff-read-range-or-commit "Range"))
-            ;; Otherwise, auto-guess based on position of point, e.g., based on
-            ;; if we are in the Staged or Unstaged section.
-            (pcase (magit-diff--dwim)
-              ('unmerged (error "unmerged is not yet implemented"))
-              ('unstaged nil)
-              ('staged "--cached")
-              (`(commit . ,value) (format "%s^..%s" value value))
-              ((and range (pred stringp)) range)
-              (_ (magit-diff-read-range-or-commit "Range/Commit"))))))
-    (let ((name (concat "*git diff difftastic"
-                        (if arg (concat " " arg) "")
-                        "*")))
-      (th/magit--with-difftastic
-       (get-buffer-create name)
-       `("git" "--no-pager" "diff" "--ext-diff" ,@(when arg (list arg))))))
-
-  (transient-define-prefix th/magit-aux-commands ()
-    "My personal auxiliary magit commands."
-    ["Auxiliary commands"
-     ("d" "Difftastic Diff (dwim)" th/magit-diff-with-difftastic)
-     ("s" "Difftastic Show" th/magit-show-with-difftastic)]
-
-    (transient-append-suffix 'magit-dispatch "!"
-      '("#" "My Magit Cmds" th/magit-aux-commands))
-
-    (define-key magit-status-mode-map (kbd "#") #'th/magit-aux-commands)))
-
-
-(after! org
-  :config
-  (setq org-directory "~/Documents/org/"
-        org-default-notes-file "~/Documents/org/notes.org"
-        org-agenda-files (list "paid-tasks.org" "todo.org" "activities.org" "projects.org"))
-  (setq org-log-done 'time
-        org-log-reschedule 'time
-        org-log-into-drawer t
-        org-startup-indented t
-        org-startup-truncated nil
-        org-id-track-globally t)
-  (add-to-list 'org-global-properties
-         '("Effort_ALL". "0:05 0:15 0:30 1:00 2:00 1d 2d 1w 2w 1m"))
-  (setq org-tags-column 80
-        org-todo-keyword-faces
-         '(("TODO" . "khaki4")
-           ("NOW" . "orange")
-           ("LATER" . "khaki2")
-           ("PROJ" . "green")
-           ("ACT" . "tan3")
-           ("TOREAD" . "tan2")
-           ("QUESTION" . "tan1")
-           ("ANSWER" . "dark green")
-           ("IDEA" . "blue")
-           ("DONE" . "green4")
-           ("KILL" . "green3"))
-        org-todo-keywords '((sequence "TODO(t)" "PROJ(p)" "REPEAT(r)" "NOW(n)" "LATER(l)" "WAIT(w)" "HOLD(h)" "IDEA(i)" "|" "DONE(d)" "KILL(k)" "NOPE(n)")
-                            (sequence "ACT(a)" "|" "PROGRESS(p)" "KILL(k)")
-                            (sequence "QUESTION(Q)" "|" "ANSWER(a)" "KILL(k)")
-                            (sequence "|" "OKAY(o)" "YES(y)" "NO(n)")
-                            (sequence "TOREAD(t)" "READING(r)" "|" "KILL(k)" "FINISHED(d)"))
-       cfw:org-overwrite-default-keybinding t)
-
-  (setq org-capture-templates
-        '(("a" "Activities" entry (file+headline "activities.org" "Activities") "* ACT %? @recur" :prepend t)
-          ("t" "Personal todo" entry (file+headline "todo.org" "Personal") "* TODO %? @personal" :prepend t)
-          ("w" "Work todo" entry (file+headline "paid-tasks.org" "Work tasks") "* TODO %? @paid\n%i\n%a" :prepend t)
-          ("r" "Reading" entry (file+headline "reading.org" "Reading") "* TOREAD %? @reading" :prepend t)
-          ("Q" "I have a Question!" entry (file+headline "questions.org" "Questions") "* QUESTION %? @non-aswered" :prepend t)
-          ("p" "Templates for projects") ; I guess I got it now -- this is project TODO list inside the project folder. Smart!
-          ("pt" "Project-local todo" entry  ; {project-root}/todo.org
-           (file+headline +org-capture-project-todo-file "Inbox")
-           "* TODO %?\n%i\n%a" :prepend t)
-          ("pn" "Project-local notes" entry  ; {project-root}/notes.org
-           (file+headline +org-capture-project-notes-file "Inbox")
-           "* %U %?\n%i\n%a" :prepend t)
-          ("pc" "Project-local changelog" entry  ; {project-root}/changelog.org
-           (file+headline +org-capture-project-changelog-file "Unreleased")
-           "* %U %?\n%i\n%a" :prepend t)))
-
- (defun org-summary-todo (n-done n-not-done)
-   "Switch entry to DONE when all subentries are done, to TODO otherwise."
-   (let (org-log-done org-todo-log-states)   ; turn off logging
-     (org-todo (if (= n-not-done 0) "DONE" "TODO"))))
-
- (add-hook 'org-after-todo-statistics-hook #'org-summary-todo)
- (add-hook 'auto-save-hook 'org-save-all-org-buffers)
-
- (setq org-agenda-span 5
-       org-agenda-start-day "-1d"
-       org-agenda-start-with-clockreport-mode t
-       org-agenda-clockreport-parameter-plist '(:stepskip0 t :link t :maxlevel 2 :fileskip0 t :step day) ; no empty records in the agenda
-       org-agenda-start-with-log-mode t
-       org-agenda-start-with-follow-mode t
-       org-agenda-include-diary t
-       org-agenda-compact-blocks t
-       org-agenda-show-future-repeats nil
-       org-habit-show-all-today t
-       org-habit-show-done-always-green t
-       org-habit-preceding-days 7
-       org-habit-following-days 2
-       org-use-property-inheritance t))
-
-(use-package! org-agenda
-  :custom
-   (org-agenda-custom-commands
-    '(("A" "Priority #A tasks" agenda ""
-       ((org-agenda-ndays 1)
-        (org-agenda-skip-function
-         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#A\\]"))))
-      ("B" "Priority #B tasks" agenda ""
-       ((org-agenda-ndays 1)
-        (org-agenda-skip-function
-         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#B\\]"))))
-      ("C" "Priority #C tasks" agenda ""
-       ((org-agenda-ndays 1)
-        (org-agenda-skip-function
-         '(org-agenda-skip-entry-if 'notregexp "\\=.*\\[#C\\]"))))
-      ("S" "Super view"
-           ((agenda "" ((org-agenda-overriding-header "")
-                        (org-super-agenda-groups
-                         '((:name "Today"
-                                  :time-grid t
-                                  :date today
-                                  :order 1)))))))
-      ("c" "aCtivities" todo "ACT")
-      ("t" "To do" todo "TODO")
-      ("T" "To do #A" todo "TODO [#A]|HOLD [#A]|WAIT [#A]")
-      ("i" "In progress" todo "PROGRESS|WAIT")
-      ("h" "On hold" todo "HOLD")
-      ("d" "Done" todo "DONE|KILL"))))
-
-;;; In ~/.doom.d/config.el
-;; To enable jsonian to work with flycheck
-(after! (jsonian flycheck) (jsonian-enable-flycheck))
-;; To disable so-long mode overrides
-(after! (jsonian so-long) (jsonian-no-so-long-mode))
+(load! "magit.el")
+(load! "org-mode.el")
+(load! "json.el")
 
 (use-package! abbrev
   :config
@@ -420,20 +180,7 @@
         evil-delete-backward-char-and-join
         next-line))
 
-(defun my/cape-codeium (&optional interactive)
-  "Allow codeium capf to be run by itself"
-  (interactive (list t))
-  (when interactive
-    ;; if also testing copilot, clear their overlay before showing capf popup
-    (when (bound-and-true-p copilot-mode) (copilot-clear-overlay))
-    (cape-interactive #'codeium-completion-at-point)))
-(map! :leader
-      :desc "Try AI" "A" #'my/cape-codeium)
-(keymap-global-set "C-c a i" #'my/cape-codeium)
-
-(use-package! codeium
-  :config
-  (add-hook! prog-mode (add-hook 'completion-at-point-functions #'codeium-completion-at-point 100 t)))
+(load! "codeium.el")
 
 (use-package! why-this
   :hook (prog-mode . why-this-mode)
@@ -444,29 +191,18 @@
   (set-face-background 'why-this-face "#f3fff4")
   (set-face-foreground 'why-this-face "#7d8d9d"))
 
-(use-package! annotate
-  :hook (prog-mode . annotate-mode)
-  :defer t
-  :config
-  (setq annotate-database-confirm-deletion t
-        annotate-annotation-position-policy :margin))
-
 (use-package! beacon
-  :config
-  (setq beacon-size 80
-        beacon-blink-delay 0.1
-        beacon-blink-when-focused 't
-        beacon-blink-when-point-moves-vertically 3))
+ :config
+ (setq beacon-size 80
+       beacon-blink-delay 0.1
+       beacon-blink-when-focused 't
+       beacon-blink-when-point-moves-vertically 3))
 
 (use-package! lsp
   :config
+  ; this should make stuff faster... so I've been told.
   (setq font-lock-maximum-decoration 1))
 
 (use-package! org-shortcut)
 (load! "secrets.el")
 
-(after! org
-  (super-save-mode +1)
-  (setq super-save-auto-save-when-idle t
-        auto-save-default nil
-        super-save-all-buffers t))
