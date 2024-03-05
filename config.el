@@ -143,7 +143,8 @@
 (key-chord-mode 1)
 (after! key-chord
   (setq avy-all-windows t)
-  (key-chord-define-global "jk" 'avy-goto-char-timer))
+  (key-chord-define-global "jk" 'avy-goto-char-timer)
+  (key-chord-define-global "j;" 'execute-extended-command))
 
 (load! "clojure.el")
 
