@@ -124,6 +124,13 @@
       "C-k"       #'+evil/window-move-down
       "C-\;"      #'+evil/window-move-right)
 
+;; generalize movements in result of SPC SPC, g D etc.
+(map! :map (minibuffer-mode-map
+            ivy-minibuffer-map
+            vertico-map)
+      :g "C-k" #'next-line
+      :g "C-l" #'previous-line)
+
 (after! winum
   (setq winum-scope 'visible
         winum-auto-setup-mode-line t))
