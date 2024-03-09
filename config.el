@@ -29,6 +29,11 @@
 ;; I don't like how word-wrap is working
 (setq word-wrap nil)
 
+;; I don't like to comment out block of lisp with ;
+(defmacro comment (&rest body)
+  "Comment out one or more s-expressions."
+  nil)
+
 ;; default undo settings are too aggregative to my likings -- undoing these!
 ;; NB: This is important! Do not delete or modify or another year of hellish ux is coming
 (setq evil-want-fine-undo t)
@@ -140,7 +145,7 @@
 (key-chord-mode 1)
 (after! key-chord
   (setq avy-all-windows t
-        avy-single-candidate-jump t)
+        avy-single-candidate-jump nil)
 
   ;; This is *so good* I recommend you use it for every "unusual" movement around the visible part of emacs
   ;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than g-s-/
@@ -157,7 +162,7 @@
   (key-chord-define-global "j;" 'execute-extended-command))     ; same with SPC-shift-; to run emacsy command
 
 (after! avy
-  (setq avy-timeout-seconds 0.3)
+  (setq avy-timeout-seconds 0.7)
   (defun avy-action-kill-whole-line (pt)
     (save-excursion
       (goto-char pt)
@@ -195,22 +200,25 @@
   (defun avy-action-mark-to-char (pt)
     (activate-mark)
     (goto-char pt))
+  :custom
+  (setq avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; don't use home row for mapping avy functions in avy-dispactch-alist!
   :config
   (avy-setup-default)
-  (add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
 
-  (setf (alist-get ?k avy-dispatch-alist) 'avy-action-kill-stay
-        (alist-get ?K avy-dispatch-alist) 'avy-action-kill-whole-line)
+ (add-to-list 'avy-dispatch-alist '(?c . avy-action-exchange))
 
-  (setf (alist-get ?y avy-dispatch-alist) 'avy-action-yank
-        (alist-get ?w avy-dispatch-alist) 'avy-action-copy
-        (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-line
-        (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-line)
-
-  (setf (alist-get ?t avy-dispatch-alist) 'avy-action-teleport
-        (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-line)
-
-  (setf (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char))        
+ (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-stay
+       (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-line
+       (alist-get ?r avy-dispatch-alist) 'avy-action-kill-move
+       (alist-get ?y avy-dispatch-alist) 'avy-action-yank
+       (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-line
+       (alist-get ?w avy-dispatch-alist) 'avy-action-copy
+       (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-line
+       (alist-get ?t avy-dispatch-alist) 'avy-action-teleport
+       (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-line
+       (alist-get ?z avy-dispatch-alist) 'avy-action-zap-to-char
+       (alist-get ?m avy-dispatch-alist) 'avy-action-mark-to-char
+       (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char))
 
 (load! "clojure.el")
 
