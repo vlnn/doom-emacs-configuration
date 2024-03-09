@@ -207,6 +207,23 @@
   (defun avy-action-mark-to-char (pt)
     (activate-mark)
     (goto-char pt))
+
+  (defun avy-action-lookup-documentation (pt)
+   (save-excursion
+     (goto-char pt)
+     (call-interactively '+lookup/documentation))
+   (select-window
+    (cdr (ring-ref avy-ring 0)))
+   t)
+
+  (defun avy-action-lookup-references (pt)
+    (save-excursion
+      (goto-char pt)
+      (call-interactively '+lookup/references))
+    (select-window
+     (cdr (ring-ref avy-ring 0)))
+    t)
+
   :custom
   (setq avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; don't use home row for mapping avy functions in avy-dispactch-alist!
   :config
@@ -225,6 +242,8 @@
        (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-line
        (alist-get ?z avy-dispatch-alist) 'avy-action-zap-to-char
        (alist-get ?m avy-dispatch-alist) 'avy-action-mark-to-char
+       (alist-get ?i avy-dispatch-alist) 'avy-action-lookup-documentation
+       (alist-get ?r avy-dispatch-alist) 'avy-action-lookup-references
        (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char))
 
 (load! "clojure.el")
