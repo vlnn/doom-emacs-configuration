@@ -170,33 +170,36 @@
 
 (after! avy
   (setq avy-timeout-seconds 0.7)
-  (defun avy-action-kill-whole-line (pt)
+
+  (defun avy-action-kill-whole-defun (pt)
     (save-excursion
       (goto-char pt)
-      (kill-whole-line))
+      (cl-destructuring-bind (start . end)
+          (bounds-of-thing-at-point 'defun)
+        (kill-region start end)))
     (select-window
      (cdr
       (ring-ref avy-ring 0)))
     t)
 
-  (defun avy-action-copy-whole-line (pt)
+  (defun avy-action-copy-whole-defun (pt)
     (save-excursion
       (goto-char pt)
       (cl-destructuring-bind (start . end)
-          (bounds-of-thing-at-point 'line)
+          (bounds-of-thing-at-point 'defun)
         (copy-region-as-kill start end)))
     (select-window
      (cdr
       (ring-ref avy-ring 0)))
     t)
 
-  (defun avy-action-yank-whole-line (pt)
-    (avy-action-copy-whole-line pt)
+  (defun avy-action-yank-whole-defun (pt)
+    (avy-action-copy-whole-defun pt)
     (save-excursion (yank))
     t)
 
-  (defun avy-action-teleport-whole-line (pt)
-    (avy-action-kill-whole-line pt)
+  (defun avy-action-teleport-whole-defun (pt)
+    (avy-action-kill-whole-defun pt)
     (save-excursion (yank)) t)
 
   (defun avy-action-exchange (pt)
@@ -231,15 +234,15 @@
 
  (add-to-list 'avy-dispatch-alist '(?c . avy-action-exchange))
 
- (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-stay
-       (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-line
+ (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-sexp
+       (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-defun
        (alist-get ?r avy-dispatch-alist) 'avy-action-kill-move
        (alist-get ?y avy-dispatch-alist) 'avy-action-yank
-       (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-line
+       (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-defun
        (alist-get ?w avy-dispatch-alist) 'avy-action-copy
-       (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-line
+       (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-defun
        (alist-get ?t avy-dispatch-alist) 'avy-action-teleport
-       (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-line
+       (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-defun
        (alist-get ?z avy-dispatch-alist) 'avy-action-zap-to-char
        (alist-get ?m avy-dispatch-alist) 'avy-action-mark-to-char
        (alist-get ?i avy-dispatch-alist) 'avy-action-lookup-documentation
