@@ -123,3 +123,15 @@
 ; deft is being used for fast search across all org files with SPC n d
 (setq deft-directory "~/Documents/org")
 (setq deft-default-extension "org")
+
+(defun org-todo-with-date (&optional arg)
+  (interactive "P")
+  (cl-letf* ((org-read-date-prefer-future nil)
+             (my-current-time (org-read-date t t nil "when:" nil nil nil))
+             ((symbol-function #'current-time)
+              #'(lambda () my-current-time))
+             ((symbol-function #'org-today)
+              #'(lambda () (time-to-days my-current-time)))
+             ((symbol-function #'org-current-effective-time)
+              #'(lambda () my-current-time)))
+    (org-todo arg)))

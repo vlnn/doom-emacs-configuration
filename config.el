@@ -137,14 +137,80 @@
 ;; smartparens is BAD if you have parinfer (e.g. it autocompletes (|)() instead of (|())
 (remove-hook 'doom-first-buffer-hook #'smartparens-global-mode)
 
-;; This is *so good* I recommend you use it for every "unusual" movement around the visible part of emacs
-;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than SPACE-g-s-/
-;; every windows should be avy'ed
 (key-chord-mode 1)
 (after! key-chord
-  (setq avy-all-windows t)
-  (key-chord-define-global "jk" 'avy-goto-char-timer)
-  (key-chord-define-global "j;" 'execute-extended-command))
+  (setq avy-all-windows t
+        avy-single-candidate-jump t)
+
+  ;; This is *so good* I recommend you use it for every "unusual" movement around the visible part of emacs
+  ;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than g-s-/
+  ;; every windows should be avy'ed
+  (key-chord-define-global "jk" 'avy-goto-char-timer)           ; default and most useful movement
+  (key-chord-define-global "ji" 'evil-avy-goto-line)            ; not sure if it's better than the <line number> G or <line number> gg
+  (key-chord-define-global "io" 'evil-end-of-line)              ; shiftless $
+  (key-chord-define-global "ui" 'evil-beginning-of-line)        ; shiftless ^ (even though we have 0)
+  (key-chord-define-global "78" 'sp-beginning-of-previous-sexp) ; get to the beginning of the prev sexp
+  (key-chord-define-global "89" 'sp-beginning-of-sexp)          ; get to the beginning of the sexp
+  (key-chord-define-global "90" 'sp-end-of-sexp)                ; get to the end of the sexp
+  (key-chord-define-global "0-" 'sp-end-of-next-sexp)           ; get to the end of next sexp
+  (key-chord-define-global "sd" 'basic-save-buffer)             ; too much of shift-;-w-q-<ENT> in my life
+  (key-chord-define-global "j;" 'execute-extended-command))     ; same with SPC-shift-; to run emacsy command
+
+(after! avy
+  (setq avy-timeout-seconds 0.3)
+  (defun avy-action-kill-whole-line (pt)
+    (save-excursion
+      (goto-char pt)
+      (kill-whole-line))
+    (select-window
+     (cdr
+      (ring-ref avy-ring 0)))
+    t)
+
+  (defun avy-action-copy-whole-line (pt)
+    (save-excursion
+      (goto-char pt)
+      (cl-destructuring-bind (start . end)
+          (bounds-of-thing-at-point 'line)
+        (copy-region-as-kill start end)))
+    (select-window
+     (cdr
+      (ring-ref avy-ring 0)))
+    t)
+
+  (defun avy-action-yank-whole-line (pt)
+    (avy-action-copy-whole-line pt)
+    (save-excursion (yank))
+    t)
+
+  (defun avy-action-teleport-whole-line (pt)
+    (avy-action-kill-whole-line pt)
+    (save-excursion (yank)) t)
+
+  (defun avy-action-exchange (pt)
+    "Exchange sexp at PT with the one at point."
+    (set-mark pt)
+    (transpose-sexps 0))
+
+  (defun avy-action-mark-to-char (pt)
+    (activate-mark)
+    (goto-char pt))
+  :config
+  (avy-setup-default)
+  (add-to-list 'avy-dispatch-alist '(?e . avy-action-exchange))
+
+  (setf (alist-get ?k avy-dispatch-alist) 'avy-action-kill-stay
+        (alist-get ?K avy-dispatch-alist) 'avy-action-kill-whole-line)
+
+  (setf (alist-get ?y avy-dispatch-alist) 'avy-action-yank
+        (alist-get ?w avy-dispatch-alist) 'avy-action-copy
+        (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-line
+        (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-line)
+
+  (setf (alist-get ?t avy-dispatch-alist) 'avy-action-teleport
+        (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-line)
+
+  (setf (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char))        
 
 (load! "clojure.el")
 
@@ -193,17 +259,48 @@
   (set-face-foreground 'why-this-face "#7d8d9d"))
 
 (use-package! beacon
- :config
- (setq beacon-size 80
-       beacon-blink-delay 0.1
-       beacon-blink-when-focused 't
-       beacon-blink-when-point-moves-vertically 3))
+  :config
+  (setq beacon-size 80
+        beacon-blink-delay 0.1
+        beacon-blink-when-focused 't
+        beacon-blink-when-point-moves-vertically 3))
 
 (use-package! lsp
   :config
-  ; this should make stuff faster... so I've been told.
+                                        ; this should make stuff faster... so I've been told.
   (setq font-lock-maximum-decoration 1))
 
 (use-package! org-shortcut)
 (load! "secrets.el")
 
+(defun make-orgcapture-frame ()
+  "Create a new frame and run org-capture."
+  (interactive)
+  (make-frame '((name . "remember") (width . 80) (height . 16)
+                (top . 400) (left . 300)
+                (font . "-apple-Monaco-medium-normal-normal-*-13-*-*-*-m-0-iso10646-1")))
+  
+  (select-frame-by-name "remember")
+  (org-capture))
+
+(defun try/switch-to-thing ()
+  "Switch to a buffer, open a recent file, jump to a bookmark, or change the theme from a unified interface."
+  (interactive)
+  (let* ((buffers (mapcar #'buffer-name (buffer-list)))
+         (recent-files recentf-list)
+         (bookmarks (bookmark-all-names))
+         (themes (custom-available-themes))
+         (all-options (append buffers recent-files bookmarks
+                              (mapcar (lambda (theme) (concat "Theme: " (symbol-name theme))) themes)))
+         (selection (completing-read "Switch to: "
+                                     (lambda (str pred action)
+                                       (if (eq action 'metadata)
+                                           '(metadata . ((category . file)))
+                                         (complete-with-action action all-options str pred)))
+                                     nil t nil 'file-name-history)))
+    (pcase selection
+      ((pred (lambda (sel) (member sel buffers))) (switch-to-buffer selection))
+      ((pred (lambda (sel) (member sel bookmarks))) (bookmark-jump selection))
+      ((pred (lambda (sel) (string-prefix-p "Theme: " sel)))
+       (load-theme (intern (substring selection (length "Theme: "))) t))
+      (_ (find-file selection)))))
