@@ -168,80 +168,24 @@
   (key-chord-define-global "sd" 'basic-save-buffer)             ; too much of shift-;-w-q-<ENT> in my life
   (key-chord-define-global "j;" 'execute-extended-command))     ; same with SPC-shift-; to run emacsy command
 
+(load! "avy-functions.el")
 (after! avy
   (setq avy-timeout-seconds 0.7)
-
-  (defun avy-action-kill-whole-defun (pt)
-    (save-excursion
-      (goto-char pt)
-      (cl-destructuring-bind (start . end)
-          (bounds-of-thing-at-point 'defun)
-        (kill-region start end)))
-    (select-window
-     (cdr
-      (ring-ref avy-ring 0)))
-    t)
-
-  (defun avy-action-copy-whole-defun (pt)
-    (save-excursion
-      (goto-char pt)
-      (cl-destructuring-bind (start . end)
-          (bounds-of-thing-at-point 'defun)
-        (copy-region-as-kill start end)))
-    (select-window
-     (cdr
-      (ring-ref avy-ring 0)))
-    t)
-
-  (defun avy-action-yank-whole-defun (pt)
-    (avy-action-copy-whole-defun pt)
-    (save-excursion (yank))
-    t)
-
-  (defun avy-action-teleport-whole-defun (pt)
-    (avy-action-kill-whole-defun pt)
-    (save-excursion (yank)) t)
-
-  (defun avy-action-exchange (pt)
-    "Exchange sexp at PT with the one at point."
-    (set-mark pt)
-    (transpose-sexps 0))
-
-  (defun avy-action-mark-to-char (pt)
-    (activate-mark)
-    (goto-char pt))
-
-  (defun avy-action-lookup-documentation (pt)
-   (save-excursion
-     (goto-char pt)
-     (call-interactively '+lookup/documentation))
-   (select-window
-    (cdr (ring-ref avy-ring 0)))
-   t)
-
-  (defun avy-action-lookup-references (pt)
-    (save-excursion
-      (goto-char pt)
-      (call-interactively '+lookup/references))
-    (select-window
-     (cdr (ring-ref avy-ring 0)))
-    t)
-
-  :custom
-  (setq avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; don't use home row for mapping avy functions in avy-dispactch-alist!
-  :config
-  (avy-setup-default)
+ :custom
+ (setq avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; don't use home row for mapping avy functions in avy-dispactch-alist!
+ :config
+ (avy-setup-default)
 
  (add-to-list 'avy-dispatch-alist '(?c . avy-action-exchange))
 
- (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-sexp
-       (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-defun
-       (alist-get ?r avy-dispatch-alist) 'avy-action-kill-move
+ (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-whole-sexp
+       (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-defun 
+       (alist-get ?q avy-dispatch-alist) 'avy-action-kill-move ; jump to and replace sexp (e.g. change function no touching args)
        (alist-get ?y avy-dispatch-alist) 'avy-action-yank
        (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-defun
-       (alist-get ?w avy-dispatch-alist) 'avy-action-copy
-       (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-defun
-       (alist-get ?t avy-dispatch-alist) 'avy-action-teleport
+       (alist-get ?w avy-dispatch-alist) 'avy-action-clone-whole-sexp
+       (alist-get ?W avy-dispatch-alist) 'avy-action-clone-whole-defun
+       (alist-get ?t avy-dispatch-alist) 'avy-action-teleport-whole-sexp
        (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-defun
        (alist-get ?z avy-dispatch-alist) 'avy-action-zap-to-char
        (alist-get ?m avy-dispatch-alist) 'avy-action-mark-to-char
