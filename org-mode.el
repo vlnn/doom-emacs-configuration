@@ -21,6 +21,14 @@
         org-startup-truncated nil
         org-reverse-note-order t  ; new stuff should be higher in the files
         org-id-track-globally t)
+  (setq org-agenda-deadline-leaders
+        '("" "" "%2d d. ago: ")
+      org-deadline-warning-days 0
+      org-agenda-span 7
+      org-agenda-start-day "-3d"
+      org-agenda-skip-function-global 
+        '(org-agenda-skip-entry-if 'todo 'done)
+      org-log-done 'time)
   (add-to-list 'org-global-properties
          '("Effort_ALL". "0:05 0:15 0:30 1:00 2:00 1d 2d 1w 2w 1m"))
   (setq org-tags-column 80
@@ -54,7 +62,9 @@
           ("r" "Resources item" entry (file+function "resources.org" org-ask-location) "* TOREAD %?" :prepend t)
           ("R" "Resources source" entry (file "resources.org") "* SOURCE %?" :prepend t)
           ("Q" "I have a Question for archives!" entry (file "archives.org") "* QUESTION %?" :prepend t)
-          ("I" "I have an Idea for archives!" entry (file "archives.org") "* IDEA %?" :prepend t)))
+          ("I" "I have an Idea for archives!" entry (file "archives.org") "* IDEA %?" :prepend t)
+          ("X" "Stash to INBOX (don't want to think right now)!" entry (file "inbox.org") "* CHANGEME %?" :prepend t)
+          ("x" "Stash to INBOX (don't want to think right now)!" entry (file "inbox.org") "* CHANGEME %?" :prepend t)))
 
  (defun org-summary-todo (n-done n-not-done)
    "Switch entry to DONE when all subentries are done, to TODO otherwise."
