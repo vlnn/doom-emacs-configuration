@@ -159,8 +159,6 @@
   ;; every windows should be avy'ed
   (key-chord-define-global "jk" 'avy-goto-char-timer)           ; default and most useful movement
   (key-chord-define-global "ji" 'evil-avy-goto-line)            ; not sure if it's better than the <line number> G or <line number> gg
-  (key-chord-define-global "io" 'evil-end-of-line)              ; shiftless $
-  (key-chord-define-global "ui" 'evil-beginning-of-line)        ; shiftless ^ (even though we have 0)
   (key-chord-define-global "78" 'sp-beginning-of-previous-sexp) ; get to the beginning of the prev sexp
   (key-chord-define-global "89" 'sp-beginning-of-sexp)          ; get to the beginning of the sexp
   (key-chord-define-global "90" 'sp-end-of-sexp)                ; get to the end of the sexp
