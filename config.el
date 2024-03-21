@@ -53,6 +53,8 @@
 (use-package! hl-line
   :custom-face
   (hl-line ((t (:background "#d5f7d5")))))
+(visual-fill-column-mode -1)
+(setq visual-fill-column-split-window-sensibly t)
 (mouse-avoidance-mode 'animate)
 (setq mouse-avoidance-threshold 0.5)
 
@@ -256,7 +258,8 @@
   (org-capture))
 
 (defun try/switch-to-thing ()
-  "Switch to a buffer, open a recent file, jump to a bookmark, or change the theme from a unified interface."
+  "Switch to a buffer, open a recent file, jump to a bookmark, or change
+   the theme from a unified interface."
   (interactive)
   (let* ((buffers (mapcar #'buffer-name (buffer-list)))
          (recent-files recentf-list)
