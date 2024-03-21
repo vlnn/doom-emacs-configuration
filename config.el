@@ -5,9 +5,10 @@
 ;; Common editor configuration shared between all the modes
 ;; Fantasque is great font, so let's use it where possible for text.
 (setq font-family "Iosevka Term")
-(setq doom-font (font-spec :family font-family :size 13)
-      doom-symbol-font (font-spec :family font-family :size 13)
-      doom-big-font (font-spec :family font-family :size 19))
+(setq font-family "M+1Code Nerd Font Mono")
+(setq doom-font (font-spec :family font-family :size 15 :weight 'regular)
+      doom-symbol-font (font-spec :family font-family :size 15 :weight 'regular)
+      doom-big-font (font-spec :family font-family :size 19 :weight 'regular))
 
 ;; Using Macbook is hard. But we'll manage
 (when (eq system-type 'darwin)
