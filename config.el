@@ -31,7 +31,7 @@
 (setq word-wrap nil)
 
 ;; I don't like to comment out block of lisp with ;
-(defmacro comment (&rest body)
+(defmacro comment (&rest _body)
   "Comment out one or more s-expressions."
   nil)
 
