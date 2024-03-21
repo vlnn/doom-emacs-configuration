@@ -187,6 +187,7 @@
        (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-defun
        (alist-get ?z avy-dispatch-alist) 'avy-action-zap-to-char
        (alist-get ?m avy-dispatch-alist) 'avy-action-mark-to-char
+       (alist-get ?C avy-dispatch-alist) 'avy-action-comment-whole-sexp
        (alist-get ?i avy-dispatch-alist) 'avy-action-lookup-documentation
        (alist-get ?r avy-dispatch-alist) 'avy-action-lookup-references
        (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char))

@@ -61,6 +61,16 @@
 (defun avy-action-clone-whole-defun (pt)
   (avy-action-copy-whole-defun pt)
   (save-excursion (yank)) t)
+
+(defun avy-action-comment-whole-sexp (pt)
+  (goto-char pt)
+  (sp-backward-up-sexp)
+  (evil-forward-char)
+  (evil-insert 1)
+  (insert "comment ")
+  (evil-normal-state)
+  (save-excursion (yank)) t)
+
 (defun avy-action-exchange (pt)
   "Exchange sexp at PT with the one at point."
   (set-mark pt)
