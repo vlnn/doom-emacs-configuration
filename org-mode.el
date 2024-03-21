@@ -13,7 +13,9 @@
   :config
   (setq org-directory "~/Documents/org/"
         org-default-notes-file "~/Documents/org/notes.org"
-        org-agenda-files (list "archives.org" "areas.org" "projects.org" "resources.org"))
+        org-agenda-files (list "archives.org" "areas.org" "projects.org" "resources.org")
+        org-archive-location "~/Documents/org/archives/%s_archive::"
+        org-journal-dir "~/Documents/org/areas/journal")
   (setq org-log-done 'time
         org-log-reschedule 'time
         org-log-into-drawer t

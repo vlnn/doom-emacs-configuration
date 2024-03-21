@@ -276,3 +276,7 @@
       ((pred (lambda (sel) (string-prefix-p "Theme: " sel)))
        (load-theme (intern (substring selection (length "Theme: "))) t))
       (_ (find-file selection)))))
+
+(defun my-org-archive-done-tasks ()
+  (interactive)
+  (org-map-entries 'org-archive-subtree "/DONE" 'file))
