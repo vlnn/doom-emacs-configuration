@@ -56,7 +56,7 @@
 
 ;; blamer is actually your git lense
 ;(package! blamer :recipe (:host github :repo "artawower/blamer.el"))
-(package! why-this)
+;(package! why-this)
 
 ;; topsy shows "sticky" definitions at the very top of the screen if function is too big
 (package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
