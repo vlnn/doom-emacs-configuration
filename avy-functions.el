@@ -67,8 +67,8 @@
   (sp-backward-up-sexp)
   (evil-insert 1)
   (insert "(comment ")
-  (evil-normal-state
-   t))
+  (evil-normal-state)
+  t)
 
 (defun avy-action-exchange (pt)
   "Exchange sexp at PT with the one at point."
