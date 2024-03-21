@@ -63,11 +63,13 @@
   (save-excursion (yank)) t)
 
 (defun avy-action-comment-whole-sexp (pt)
-  (goto-char pt)
-  (sp-backward-up-sexp)
-  (evil-insert 1)
-  (insert "(comment ")
-  (evil-normal-state)
+  (save-excursion
+    (progn
+     (goto-char pt)
+     (sp-backward-up-sexp)
+     (evil-insert 1)
+     (insert "(comment ")
+     (evil-normal-state)))
   t)
 
 (defun avy-action-exchange (pt)
