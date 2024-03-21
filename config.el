@@ -167,7 +167,7 @@
   (key-chord-define-global "90" 'sp-end-of-sexp)                ; get to the end of the sexp
   (key-chord-define-global "0-" 'sp-end-of-next-sexp)           ; get to the end of next sexp
   (key-chord-define-global "sd" 'basic-save-buffer)             ; too much of shift-;-w-q-<ENT> in my life
-  (key-chord-define-global "j;" 'execute-extended-command-for-buffer)) ; same as M-x, to run emacsy command, but specific for the buffer
+  (key-chord-define-global "j;" 'execute-extended-command))     ; same as M-x, to run emacsy command, but specific for the buffer
 
 (load! "avy-functions.el")
 (after! avy
