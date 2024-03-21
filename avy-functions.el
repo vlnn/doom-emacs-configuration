@@ -62,6 +62,18 @@
   (avy-action-copy-whole-defun pt)
   (save-excursion (yank)) t)
 
+(defun avy-action-rename-sexp (pt)
+  (avy-action-kill-move pt)
+  (evil-insert 1)
+  t)
+
+(defun avy-action-rename-whole-sexp (pt)
+  (goto-char pt)
+  (sp-backward-sexp)
+  (sp-kill-sexp)
+  (evil-insert 1)
+  t)
+
 (defun avy-action-comment-whole-sexp (pt)
   (save-excursion
     (progn
