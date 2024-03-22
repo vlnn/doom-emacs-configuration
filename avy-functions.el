@@ -68,10 +68,22 @@
   t)
 
 (defun avy-action-rename-whole-sexp (pt)
-  (goto-char pt)
-  (sp-backward-sexp)
-  (sp-kill-sexp)
-  (evil-insert 1)
+   (goto-char pt)
+   (sp-backward-sexp)
+   (sp-kill-sexp)
+   (evil-insert 1)
+   t)
+
+(defun avy-action-comment-whole-defn (pt)
+  (save-excursion
+    (progn
+      (goto-char pt)
+      (cl-destructuring-bind (start . end)
+        (bounds-of-thing-at-point 'defun)
+        (goto-char start))
+      (evil-insert 1)
+      (insert "(comment ")
+      (evil-normal-state)))
   t)
 
 (defun avy-action-comment-whole-sexp (pt)

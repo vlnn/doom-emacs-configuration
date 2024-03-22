@@ -177,8 +177,6 @@
   :config
   (avy-setup-default)
 
-  (add-to-list 'avy-dispatch-alist '(?c . avy-action-exchange))
-
   (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-whole-sexp
         (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-defun
         (alist-get ?q avy-dispatch-alist) 'avy-action-rename-sexp          ; jump to and replace sexp (e.g. change function no touching args)
@@ -190,7 +188,8 @@
         (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-defun
         (alist-get ?z avy-dispatch-alist) 'avy-action-zap-to-char
         (alist-get ?m avy-dispatch-alist) 'avy-action-mark-to-char
-        (alist-get ?C avy-dispatch-alist) 'avy-action-comment-whole-sexp   ; comment out whole sexp avy'ed
+        (alist-get ?c avy-dispatch-alist) 'avy-action-comment-whole-sexp   ; comment out whole sexp avy'ed
+        (alist-get ?C avy-dispatch-alist) 'avy-action-comment-whole-defn   ; comment out whole defn avy'ed
         (alist-get ?i avy-dispatch-alist) 'avy-action-lookup-documentation
         (alist-get ?r avy-dispatch-alist) 'avy-action-lookup-references
         (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char))
