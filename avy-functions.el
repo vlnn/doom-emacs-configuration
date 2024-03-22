@@ -81,9 +81,9 @@
       (cl-destructuring-bind (start . end)
         (bounds-of-thing-at-point 'defun)
         (goto-char start))
-      (evil-insert 1)
-      (insert "(comment ")
-      (evil-normal-state)))
+      (paredit-wrap-sexp)
+      (insert "comment ")
+      (sp-newline)))
   t)
 
 (defun avy-action-comment-whole-sexp (pt)
@@ -91,9 +91,9 @@
     (progn
       (goto-char pt)
       (sp-backward-up-sexp)
-      (evil-insert 1)
-      (insert "(comment ")
-      (evil-normal-state)))
+      (paredit-wrap-sexp)
+      (insert "comment ")
+      (sp-newline)))
   t)
 
 (defun avy-action-exchange (pt)
