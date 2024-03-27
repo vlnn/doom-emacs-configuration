@@ -27,7 +27,7 @@
         '("" "" "%2d d. ago: ")
       org-deadline-warning-days 0
       org-agenda-span 7
-      org-agenda-start-day "-3d"
+      org-agenda-start-day "-1d"
       org-agenda-skip-function-global 
         '(org-agenda-skip-entry-if 'todo 'done)
       org-log-done 'time)
@@ -56,8 +56,8 @@
 
   (setq org-capture-templates
         '(("p" "Projects")
-          ("pw" "Projects at work" entry (file+headline "projects.org" "Work") "* TODO %? :work:" :prepend t)
-          ("pp" "Personal Projects Todo" entry (file+headline "projects.org" "Personal") "* TODO %? :personal:" :prepend t)
+          ("pw" "Projects at work" entry (file+headline "projects.org" "Work") "* TODO [#A] %? :work:" :prepend t)
+          ("pp" "Personal Projects Todo" entry (file+headline "projects.org" "Personal") "* TODO [#B] %? :personal:" :prepend t)
           ("pP" "Personal Projects" entry (file+headline "projects.org" "Personal") "* PROJ %? :personal:" :prepend t)
           ("a" "Areas todo" entry (file+function "areas.org" org-ask-location) "*** TODO %?" :prepend t)
           ("A" "Areas" entry (file "areas.org") "* AREA %?" :prepend t)
@@ -76,7 +76,7 @@
  (add-hook 'org-after-todo-statistics-hook #'org-summary-todo)
  (add-hook 'auto-save-hook 'org-save-all-org-buffers)
 
- (setq org-agenda-span 5
+ (setq org-agenda-span 7
        org-agenda-start-day "-1d"
        org-agenda-start-with-clockreport-mode t
        org-agenda-clockreport-parameter-plist '(:stepskip0 t :link t :maxlevel 2 :fileskip0 t :step day) ; no empty records in the agenda
@@ -94,7 +94,7 @@
        org-habit-show-all-today t
        org-habit-show-done-always-green t
        org-habit-preceding-days 7
-       org-habit-following-days 2
+       org-habit-following-days 3
        org-use-property-inheritance t))
 
 (use-package! org-agenda
@@ -123,6 +123,15 @@
       ("t" "To do" todo "TODO")
       ("T" "To do #A" todo "TODO [#A]|HOLD [#A]|WAIT [#A]")
       ("i" "In progress" todo "PROGRESS|WAIT")
+      ("r" "Weekly Review"
+           ((agenda "" ((org-agenda-overriding-header "Tasks Completed:")
+                        (org-agenda-skip-function '(org-agenda-skip-subtree-if 'nottodo 'done))
+                        (org-agenda-skip-scheduled-if-done nil)
+                        (org-agenda-skip-timestamp-if-done nil)
+                        (org-agenda-span 7)
+                        (org-agenda-use-time-grid nil)
+                        (setq org-agenda-show-all-dates nil)))
+            (tags "TODO=\"DONE\"&CLOSED>=\"<-1w>\"")))
       ("h" "On hold" todo "HOLD")
       ("d" "Done" todo "DONE|KILL"))))
 
