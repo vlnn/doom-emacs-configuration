@@ -89,3 +89,5 @@
 (package! plz.el
   :recipe (:host github
            :repo "vlnn/plz.el"))
+
+(package! frog-jump-buffer)

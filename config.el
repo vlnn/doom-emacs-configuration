@@ -161,6 +161,7 @@
   ;; To use avy-goto-char-timer as main driver it should be mapped to something shorter than g-s-/
   ;; every windows should be avy'ed
   (key-chord-define-global "jk" 'avy-goto-char-timer)           ; default and most useful movement
+  (key-chord-define-global "bn" 'frog-jump-buffer)              ; get another way of quick switching buffers
   (key-chord-define-global "ji" 'evil-avy-goto-line)            ; not sure if it's better than the <line number> G or <line number> gg
   (key-chord-define-global "78" 'sp-beginning-of-previous-sexp) ; get to the beginning of the prev sexp
   (key-chord-define-global "89" 'sp-beginning-of-sexp)          ; get to the beginning of the sexp
