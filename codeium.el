@@ -11,6 +11,7 @@
       :desc "Try AI" "A" #'my/cape-codeium)
 (keymap-global-set "C-c a i" #'my/cape-codeium)
 
-(use-package! codeium
-  :config
-  (add-hook! prog-mode (add-hook 'completion-at-point-functions #'codeium-completion-at-point 100 t)))
+(comment
+ (use-package! codeium
+   :config
+   (add-hook! prog-mode (add-hook 'completion-at-point-functions #'codeium-completion-at-point 100 t))))
