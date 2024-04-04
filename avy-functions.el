@@ -67,6 +67,22 @@
   (evil-insert 1)
   t)
 
+(defun avy-action-clojure-eval-whole-sexp (pt)
+  (save-excursion
+    (progn
+      (goto-char pt)
+      (paredit-forward-up)
+      (cider-eval-last-sexp)))
+  t)
+
+(defun avy-action-clojure-eval-whole-defn (pt)
+  (save-excursion
+    (progn
+      (goto-char pt)
+      (paredit-forward-up)
+      (cider-eval-defun-at-point)))
+  t)
+
 (defun avy-action-rename-whole-sexp (pt)
    (goto-char pt)
    (sp-backward-sexp)

@@ -180,6 +180,8 @@
 
   (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-whole-sexp
         (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-defun
+        (alist-get ?e avy-dispatch-alist) 'avy-action-clojure-eval-whole-sexp
+        (alist-get ?E avy-dispatch-alist) 'avy-action-clojure-eval-whole-defn
         (alist-get ?q avy-dispatch-alist) 'avy-action-rename-sexp          ; jump to and replace sexp (e.g. change function no touching args)
         (alist-get ?Q avy-dispatch-alist) 'avy-action-rename-whole-sexp    ; jump to and replace sexp (e.g. change function no touching args)
         (alist-get ?y avy-dispatch-alist) 'avy-action-yank
