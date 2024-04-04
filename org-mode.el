@@ -22,6 +22,7 @@
         org-startup-indented t
         org-startup-truncated nil
         org-reverse-note-order t  ; new stuff should be higher in the files
+        org-id-locations-file "~/Documents/org/.orgids"
         org-id-track-globally t)
   (setq org-agenda-deadline-leaders
         '("" "" "%2d d. ago: ")
