@@ -1,0 +1,3 @@
+[submodule "cider-storm"]
+	path = cider-storm
+	url = https://github.com/flow-storm/cider-storm
