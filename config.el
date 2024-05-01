@@ -207,10 +207,8 @@
 ;; TABs should never be inserted at all
 ;; (I might need to change it for python or YAML -- but hopefully I don't need them)
 (setq-default indent-tabs-mode nil)
-
-;; TAB should work both for line indent and autocompletion
 (setq-default c-basic-offset tab-width)
-(setq tab-always-indent 'complete)
+(setq tab-always-indent nil)
 
 (load! "magit.el")
 (load! "org-mode.el")
