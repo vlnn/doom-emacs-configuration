@@ -1,0 +1,37 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# key: Sample Functions for demo-it
+# name: demoit
+# contributor: Howard Abrams <howardabrams@gmail.com>
+# --
+;;; ${1:`(file-name-sans-extension (file-name-base (buffer-file-name)))`} --- ${2:Simple Summary}
+
+;;; Commentary:
+
+;; $3
+
+;;; Code:
+
+(load-library "demo-it")
+
+;; ----------------------------------------------------------------------
+;;  Create functions for complicated, but individual steps
+
+(defun ${4:my-demo}-step-function ()
+    "Display $1.org (an 'org-mode' file) as a presentation."
+    (demo-it-presentation "$1.org")
+    (demo-it-presentation-highlight-phrase "Step 1"))
+
+;; ----------------------------------------------------------------------
+;; Demonstration Order and configuration
+
+(demo-it-create :fullscreen :single-window
+                $0
+                (demo-it-title-screen "$1-title.org")
+                $4-step-function)
+
+;; ----------------------------------------------------------------------
+;; Start the presentation whenever this script is evaluated. Good idea?
+
+(demo-it-start)
+
+;;; $1.el ends here

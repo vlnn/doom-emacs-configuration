@@ -222,6 +222,12 @@
   (setq save-abbrevs 'silently))
 (setq-default abbrev-mode 1)
 
+(use-package! demo-it
+  :config
+  (define-key demo-it-mode-map "<f12>" 'demo-it-step)
+  (comment (map! :map demo-it-mode-map
+                 "<f12>" #'demo-it-step)))
+
 (keyfreq-mode 1)
 (keyfreq-autosave-mode 1)
 (setq keyfreq-excluded-commands

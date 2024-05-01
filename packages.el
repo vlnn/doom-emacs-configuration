@@ -91,3 +91,4 @@
            :repo "vlnn/plz.el"))
 
 (package! frog-jump-buffer)
+(package! demo-it)
