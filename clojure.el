@@ -41,3 +41,6 @@
         "[" #'parinfer-rust-switch-mode
         "P" #'cider-pprint-eval-last-sexp-to-comment
         "{" #'parinfer-rust-toggle-disable))
+
+(add-to-list 'load-path (concat doom-user-dir "cider-storm"))
+(require 'cider-storm)
