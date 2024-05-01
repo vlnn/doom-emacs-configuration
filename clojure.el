@@ -2,6 +2,17 @@
 
 ;; Clojure (and cider)
 
+;; workaround to make tabs working for yasnippets
+(defun clj-tab ()
+  (interactive)
+  (if (yas-active-snippets)
+      (yas-next-field-or-maybe-expand)
+    (evil-jump-item)))
+
+(map! :after cider
+      :map evil-org-mode-map
+      :i "<tab>" #'clj-tab)
+
 (after! cider
   (add-to-list 'exec-path "/home/va/.asdf/shims")
   (setq nrepl-use-ssh-fallback-for-remote-hosts t) ;; Cider should be able to connect to remote hosts using ssh
@@ -16,6 +27,7 @@
         ("N" #'cider-test-run-ns-tests)
         ("T" #'projectile-toggle-between-implementation-and-test))
   (setq cider-print-options '(("length" 20) ("right-margin" 70)))
+  (subword-mode)
   (evil-make-intercept-map cider--debug-mode-map 'normal) ;; don't mess evil-mode with cider debug
   (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
 
