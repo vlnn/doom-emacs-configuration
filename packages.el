@@ -92,3 +92,9 @@
 
 (package! frog-jump-buffer)
 (package! demo-it)
+
+(package! org-static-blog
+  :recipe (:host github
+           :repo "bastibe/org-static-blog"))
+
+(package! sicp)
