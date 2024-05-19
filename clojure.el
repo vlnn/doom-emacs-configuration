@@ -6,18 +6,17 @@
 (defun clj-tab ()
   (interactive)
   (if (yas-active-snippets)
-      (yas-next-field-or-maybe-expand)
-    (evil-jump-item)))
+      (yas-next-field)
+    (yas-expand)))
 
-(map! :after cider
-      :map evil-org-mode-map
+(map! :map prog-mode-map ; HACK not sure if it should be clojure-specific only, so it's open experiment for now
       :i "<tab>" #'clj-tab)
 
 (after! cider
   (add-to-list 'exec-path "/home/va/.asdf/shims")
   (setq nrepl-use-ssh-fallback-for-remote-hosts t) ;; Cider should be able to connect to remote hosts using ssh
   (setq cider-eldoc-display-context-dependent-info t)
-  ;(setq clojure-align-forms-automatically t)
+                                        ;(setq clojure-align-forms-automatically t)
   (map! :after clojure-mode :map clojure-mode-map :localleader ;; faster simpler workflow shortcuts
         ("f" #'consult-flycheck)
         ("m" #'cider-selector)
