@@ -944,6 +944,7 @@
    ("untilll" "until" nil 0)
    ("useing" "using" nil 0)
    ("usualyl" "usually" nil 0)
+   ("ususal" "usual" nil 0)
    ("veyr" "very" nil 0)
    ("virtualyl" "virtually" nil 0)
    ("vrey" "very" nil 0)
