@@ -98,3 +98,5 @@
            :repo "bastibe/org-static-blog"))
 
 (package! sicp)
+
+(unpin! parinfer-rust-mode)
