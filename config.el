@@ -174,6 +174,8 @@
 (after! avy
   (setq avy-timeout-seconds 0.7)
   :custom
+  (set-face-attribute 'avy-lead-face-0 nil :foreground "black" :background "yellow green")
+  (set-face-attribute 'avy-lead-face nil :foreground "black" :background "lime green")
   (setq avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; don't use home row for mapping avy functions in avy-dispactch-alist!
   :config
   (avy-setup-default)
@@ -223,8 +225,8 @@
 (use-package! demo-it
   :config
   (define-key demo-it-mode-map "<f12>" 'demo-it-step)
-  (comment (map! :map demo-it-mode-map
-                 "<f12>" #'demo-it-step)))
+  (map! :map demo-it-mode-map
+        "<f12>" #'demo-it-step))
 
 (keyfreq-mode 1)
 (keyfreq-autosave-mode 1)
