@@ -64,7 +64,7 @@
           ("A" "Areas" entry (file "areas.org") "* AREA %?" :prepend t)
           ("r" "Resources item" entry (file+function "resources.org" org-ask-location) "* TOREAD %?" :prepend t)
           ("R" "Resources source" entry (file "resources.org") "* SOURCE %?" :prepend t)
-          ("Q" "I have a Question for archives!" entry (file "archives.org") "* QUESTION %?" :prepend t)
+          ("Q" "I have a Question for archives!" entry (file "questions.org") "* QUESTION %?" :prepend t)
           ("I" "I have an Idea for archives!" entry (file "archives.org") "* IDEA %?" :prepend t)
           ("X" "Stash to INBOX (don't want to think right now)!" entry (file "inbox.org") "* CHANGEME %?" :prepend t)
           ("x" "Stash to INBOX (don't want to think right now)!" entry (file "inbox.org") "* CHANGEME %?" :prepend t)))
@@ -122,6 +122,7 @@
                                   :order 1)))))))
       ("c" "aCtivities" todo "ACT")
       ("t" "To do" todo "TODO")
+      ("Q" "Questions (and sometimes answers)" todo "QUESTION|ANSWER")
       ("T" "To do #A" todo "TODO [#A]|HOLD [#A]|WAIT [#A]")
       ("i" "In progress" todo "PROGRESS|WAIT")
       ("r" "Weekly Review"
