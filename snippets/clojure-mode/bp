@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: bp
+# uuid:
+# key: bp
+# condition: t
+# --
+(new bp)

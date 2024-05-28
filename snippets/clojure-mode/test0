@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: t0
+# uuid:
+# key: test0
+# condition: t
+# --
+abc0$0def2$2end

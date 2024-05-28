@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: fn
+# key: fn
+# condition: t
+# expand-env: ((yas-indent-line 'fixed))
+# --
+(fn [${0:x}] ($1))

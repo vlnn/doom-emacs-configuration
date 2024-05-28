@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: mapl
+# uuid:
+# key: mapl
+# condition: t
+# --
+(map #($1) $2)$>
