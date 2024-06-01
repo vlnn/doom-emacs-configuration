@@ -75,7 +75,6 @@
      (org-todo (if (= n-not-done 0) "DONE" "TODO"))))
 
  (add-hook 'org-after-todo-statistics-hook #'org-summary-todo)
- (add-hook 'auto-save-hook 'org-save-all-org-buffers)
 
  (setq org-agenda-span 7
        org-agenda-start-day "-1d"
