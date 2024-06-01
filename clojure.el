@@ -32,7 +32,8 @@
 
 (use-package! parinfer-rust-mode
   :init
-  (setq parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
+  (setq parinfer-rust-mode 'paren
+        parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
   :config
   (map! :map parinfer-rust-mode-map
         :localleader
