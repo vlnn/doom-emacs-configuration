@@ -30,17 +30,20 @@
   (evil-make-intercept-map cider--debug-mode-map 'normal) ;; don't mess evil-mode with cider debug
   (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
 
-(use-package! parinfer-rust-mode
-  :init
-  (setq parinfer-rust-mode 'paren
-        parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
-  :config
-  (map! :map parinfer-rust-mode-map
-        :localleader
-        "p" #'cider-pprint-eval-last-sexp
-        "[" #'parinfer-rust-switch-mode
-        "P" #'cider-pprint-eval-last-sexp-to-comment
-        "{" #'parinfer-rust-toggle-disable))
+(after! cider
+  :defer t
+  (use-package! parinfer-rust-mode
+    :defer t
+    :init
+    (setq parinfer-rust-mode 'paren
+          parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
+    :config
+    (map! :map parinfer-rust-mode-map
+          :localleader
+          "p" #'cider-pprint-eval-last-sexp
+          "[" #'parinfer-rust-switch-mode
+          "P" #'cider-pprint-eval-last-sexp-to-comment
+          "{" #'parinfer-rust-toggle-disable)))
 
 (add-to-list 'load-path (concat doom-user-dir "cider-storm"))
 (require 'cider-storm)
