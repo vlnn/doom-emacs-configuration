@@ -9,7 +9,6 @@
     (cape-interactive #'codeium-completion-at-point)))
 (map! :leader
       :desc "Try AI" "A" #'my/cape-codeium)
-(keymap-global-set "C-c a i" #'my/cape-codeium)
 
 (comment
  (use-package! codeium

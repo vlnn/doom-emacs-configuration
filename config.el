@@ -1,13 +1,13 @@
 ;;; $DOOMDIR/config.el -*- lexical-binding: t; -*-
 ;; TODO each {{{ block }}} below should be perhaps moved to it's own file,
 ;; but I like to think about it more than to do it
-
+;;
 ;; Common editor configuration shared between all the modes
 ;; Fantasque is great font, so let's use it where possible for text.
-(setq font-family "Iosevka Term")
+;; (setq font-family "Iosevka Term")
 (setq font-family "M+1Code Nerd Font Mono")
-(setq doom-font (font-spec :family font-family :size 15 :weight 'regular)
-      doom-symbol-font (font-spec :family font-family :size 15 :weight 'regular)
+(setq doom-font (font-spec :family font-family :size 13 :weight 'regular)
+      doom-symbol-font (font-spec :family font-family :size 13 :weight 'thin)
       doom-big-font (font-spec :family font-family :size 19 :weight 'regular))
 
 ;; Using Macbook is hard. But we'll manage
@@ -22,7 +22,18 @@
 (use-package! stimmung-themes
   :demand t
   :config
+  (setq doom-themes-enable-bold nil
+        eglot-highlight-symbol-face nil)
   (stimmung-themes-load-light))
+
+(custom-set-faces! '(font-lock-keyword-face :weight regular))
+(custom-set-faces! '(font-lock-function-name-face :weight bold))
+(custom-set-faces! '(font-lock-function-call-face :weight regular))
+(custom-set-faces! '(font-lock-variable-name-face :foreground "darkest blue" :weight regular))
+(custom-set-faces! '(font-lock-variable-use-face :foreground "darkest blue" :weight regular))
+(custom-set-faces! '(font-lock-property-name-face :foreground "darkest green" :weight regular :slant italic))
+(custom-set-faces! '(font-lock-property-use-face :foreground "darkest green" :weight regular :slant italic))
+
 
 ;; I like absolute line numbers. For relative line numbers, set this to `relative'.
 (setq display-line-numbers-type t)
@@ -168,6 +179,7 @@
   (key-chord-define-global "90" 'sp-end-of-sexp)                ; get to the end of the sexp
   (key-chord-define-global "0-" 'sp-end-of-next-sexp)           ; get to the end of next sexp
   (key-chord-define-global "sd" 'basic-save-buffer)             ; too much of shift-;-w-q-<ENT> in my life
+  (key-chord-define-global "mn" 'dap-hydra)                     ; hydra for debugging
   (key-chord-define-global "j\;" 'execute-extended-command))     ; same as M-x, to run emacsy command, but specific for the buffer
 
 (load! "avy-functions.el")
@@ -247,13 +259,8 @@
         beacon-blink-when-focused 't
         beacon-blink-when-point-moves-vertically 3))
 
-(use-package! lsp
-  :config
-                                        ; this should make stuff faster... so I've been told.
-  (setq font-lock-maximum-decoration 1))
-
-(use-package! org-shortcut)
 (load! "secrets.el")
+(load! "gptel.el")
 
 (defun make-orgcapture-frame ()
   "Create a new frame and run org-capture."
@@ -261,7 +268,7 @@
   (make-frame '((name . "remember") (width . 80) (height . 16)
                 (top . 400) (left . 300)
                 (font . "-apple-Monaco-medium-normal-normal-*-13-*-*-*-m-0-iso10646-1")))
-  
+
   (select-frame-by-name "remember")
   (org-capture))
 
@@ -293,3 +300,46 @@
   (org-map-entries 'org-archive-subtree "/DONE" 'file))
 
 (load! "blog.el")
+(load! "roam.el")
+
+(after! python
+  (map! :map python-mode-map
+        :localleader
+        :prefix ("e" . "eval")
+        :desc "statement"  "e" #'python-shell-send-statement
+        :desc "function"  "f" #'python-shell-send-defun
+        :desc "file"  "F" #'python-shell-send-file
+        :desc "region"  "r" #'python-shell-send-region))
+
+(after! python
+  (map! :map python-mode-map
+        :localleader
+        :prefix ("r" . "repl")
+        :desc "REPL"  "r" #'+python/open-ipython-repl))
+
+(use-package! pipenv
+  :commands pipenv-project-p
+  :hook (python-mode . pipenv-mode)
+  :init (setq pipenv-with-projectile nil)
+  :config
+  (map! :map python-mode-map
+        :localleader
+        :prefix ("p" . "pipenv")
+        :desc "activate"    "a" #'pipenv-activate
+        :desc "deactivate"  "d" #'pipenv-deactivate
+        :desc "install"     "i" #'pipenv-install
+        :desc "lock"        "l" #'pipenv-lock
+        :desc "open module" "o" #'pipenv-open
+        :desc "run"         "r" #'pipenv-run
+        :desc "shell"       "s" #'pipenv-shell
+        :desc "uninstall"   "u" #'pipenv-uninstall))
+
+(load! "python.el")
+
+(use-package! drag-stuff
+  :defer t
+  :init
+  (map! "<M-up>"    #'drag-stuff-up
+        "<M-down>"  #'drag-stuff-down
+        "<M-left>"  #'drag-stuff-left
+        "<M-right>" #'drag-stuff-right))

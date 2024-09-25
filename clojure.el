@@ -8,7 +8,6 @@
   (if (yas-active-snippets)
       (yas-next-field)
     (yas-expand)))
-
 (map! :map prog-mode-map ; HACK not sure if it should be clojure-specific only, so it's open experiment for now
       :i "<tab>" #'clj-tab)
 
@@ -31,19 +30,35 @@
   (add-hook 'cider-inspector-mode-hook #'evil-normalize-keymaps))
 
 (after! cider
-  :defer t
-  (use-package! parinfer-rust-mode
-    :defer t
-    :init
-    (setq parinfer-rust-mode 'paren
-          parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
-    :config
-    (map! :map parinfer-rust-mode-map
-          :localleader
-          "p" #'cider-pprint-eval-last-sexp
-          "[" #'parinfer-rust-switch-mode
-          "P" #'cider-pprint-eval-last-sexp-to-comment
-          "{" #'parinfer-rust-toggle-disable)))
+  :defer   (use-package! parinfer-rust-mode
+             :defer t
+             :init
+             (setq parinfer-rust-mode 'paren
+                   parinfer-rust-library "~/.config/emacs/.local/etc/parinfer-rust/libparinfer_rust.dylib") ; due to MacOS on M1. Had to compile it and put in this folder.
+             :config
+             (map! :map parinfer-rust-mode-map
+                   :localleader
+                   "p" #'cider-pprint-eval-last-sexp
+                   "[" #'parinfer-rust-switch-mode
+                   "P" #'cider-pprint-eval-last-sexp-to-comment
+                   "{" #'parinfer-rust-toggle-disable)))
+
 
 (add-to-list 'load-path (concat doom-user-dir "cider-storm"))
 (require 'cider-storm)
+
+(use-package! cov
+  :demand t
+  :defer t
+  :init
+  (setq cov-coverage-mode t)
+  (setq cov-fringe-symbol 'empty-line)
+  (custom-set-faces
+   '(cov-coverage-not-run-face ((t (:foreground "#900000"))))
+   '(cov-coverage-run-face ((t (:foreground "#00BE00"))))
+   '(cov-none-face ((t (:foreground "#0000F0")))))
+
+  :config
+  (setq cov-lcov-file-name (concat (clojure-project-dir) "target/coverage/lcov.info"))
+  :hook
+  (cider-mode . cov-mode))
