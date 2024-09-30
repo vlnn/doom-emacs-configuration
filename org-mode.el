@@ -11,12 +11,26 @@
 
 (after! org
   :config
+  (defun org-journal-file-header-func (time)
+    "Custom function to create journal header."
+    (concat
+     (pcase org-journal-file-type
+       (`daily "#+TITLE: Daily Journal\n#+STARTUP: showeverything")
+       (`weekly "#+TITLE: Weekly Journal\n#+STARTUP: showlevels 3")
+       (`monthly "#+TITLE: Monthly Journal\n#+STARTUP: folded")
+       (`yearly "#+TITLE: Yearly Journal\n#+STARTUP: folded"))))
+
   (setq org-directory "~/Documents/org/"
         org-default-notes-file "~/Documents/org/notes.org"
-        org-agenda-files (list "archives.org" "areas.org" "projects.org" "resources.org")
+        ;; org-agenda-files (list "todo.org")
         org-archive-location "~/Documents/org/archives/%s_archive::"
         org-journal-dir "~/Documents/org/areas/journal")
-  (setq org-journal-date-format "%Y-%m-%d, %A")
+  (add-to-list 'org-agenda-files org-journal-dir)
+  (setq org-journal-date-format "%Y-%m-%d, %A"
+        org-journal-file-type 'weekly
+        org-journal-hide-entries-p nil
+        org-journal-file-format "%Y%m%d.org"
+        org-journal-file-header 'org-journal-file-header-func)
   (setq org-log-done 'time
         org-log-reschedule 'time
         org-log-into-drawer t
@@ -29,6 +43,7 @@
         '("" "" "%2d d. ago: ")
         org-deadline-warning-days 0
         org-agenda-span 7
+        org-agenda-inhibit-startup nil
         org-agenda-start-day "-1d"
         org-agenda-skip-function-global
         '(org-agenda-skip-entry-if 'todo 'done)
