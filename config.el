@@ -302,44 +302,10 @@
 (load! "blog.el")
 (load! "roam.el")
 
-(after! python
-  (map! :map python-mode-map
-        :localleader
-        :prefix ("e" . "eval")
-        :desc "statement"  "e" #'python-shell-send-statement
-        :desc "function"  "f" #'python-shell-send-defun
-        :desc "file"  "F" #'python-shell-send-file
-        :desc "region"  "r" #'python-shell-send-region))
-
-(after! python
-  (map! :map python-mode-map
-        :localleader
-        :prefix ("r" . "repl")
-        :desc "REPL"  "r" #'+python/open-ipython-repl))
-
-(use-package! pipenv
-  :commands pipenv-project-p
-  :hook (python-mode . pipenv-mode)
-  :init (setq pipenv-with-projectile nil)
-  :config
-  (map! :map python-mode-map
-        :localleader
-        :prefix ("p" . "pipenv")
-        :desc "activate"    "a" #'pipenv-activate
-        :desc "deactivate"  "d" #'pipenv-deactivate
-        :desc "install"     "i" #'pipenv-install
-        :desc "lock"        "l" #'pipenv-lock
-        :desc "open module" "o" #'pipenv-open
-        :desc "run"         "r" #'pipenv-run
-        :desc "shell"       "s" #'pipenv-shell
-        :desc "uninstall"   "u" #'pipenv-uninstall))
-
 (load! "python.el")
 
 (use-package! drag-stuff
   :defer t
   :init
   (map! "<M-up>"    #'drag-stuff-up
-        "<M-down>"  #'drag-stuff-down
-        "<M-left>"  #'drag-stuff-left
-        "<M-right>" #'drag-stuff-right))
+        "<M-down>"  #'drag-stuff-down))
