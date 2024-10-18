@@ -62,3 +62,5 @@
   (setq cov-lcov-file-name (concat (clojure-project-dir) "target/coverage/lcov.info"))
   :hook
   (cider-mode . cov-mode))
+(after! clojure-mode
+  (setq dash-docs-docsets '("Clojure")))

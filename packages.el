@@ -106,3 +106,4 @@
 ;;; (package! ruff-format)
 (package! python-coverage :recipe (:host github :repo "wbolster/emacs-python-coverage"))
 (package! drag-stuff)
+(package! magit-delta)

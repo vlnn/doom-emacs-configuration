@@ -27,7 +27,7 @@
         org-journal-dir "~/Documents/org/areas/journal")
   (add-to-list 'org-agenda-files org-journal-dir)
   (setq org-journal-date-format "%Y-%m-%d, %A"
-        org-journal-file-type 'weekly
+        org-journal-file-type 'daily
         org-journal-hide-entries-p nil
         org-journal-file-format "%Y%m%d.org"
         org-journal-file-header 'org-journal-file-header-func)
