@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: test
+# key: test
+# --
+def test_$1():
+    assert 0 == 1

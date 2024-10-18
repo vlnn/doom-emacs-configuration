@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: pytest
+# key: pytest
+# condition: t
+
+# --
+import pytest
+${1:from ${2:test_file} import ${3:function_under_test}}
+
+$0
