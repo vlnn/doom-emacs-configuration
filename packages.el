@@ -108,3 +108,4 @@
 (package! drag-stuff)
 (package! magit-delta)
 (package! zoom)
+(package! literate-calc-mode)

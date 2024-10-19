@@ -91,6 +91,8 @@
       (org-todo (if (= n-not-done 0) "DONE" "TODO"))))
 
   (add-hook 'org-after-todo-statistics-hook #'org-summary-todo)
+  (use-package! literate-calc-mode)
+  (add-hook 'org-mode-hook #'literate-calc-minor-mode)
 
   (setq org-agenda-span 7
         org-agenda-start-day "-1d"
@@ -152,6 +154,7 @@
      ("h" "On hold" todo "HOLD")
      ("d" "Done" todo "DONE|KILL"))))
 
+
 (after! org
   (super-save-mode +1)
   (setq super-save-auto-save-when-idle t
@@ -159,7 +162,7 @@
         auto-save-default nil
         super-save-all-buffers t))
 
-                                        ; deft is being used for fast search across all org files with SPC n d
+;; deft is being used for fast search across all org files with SPC n d
 (setq deft-directory "~/Documents/org")
 (setq deft-default-extension "org")
 
