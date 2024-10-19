@@ -218,6 +218,8 @@
   :config
   (setq ws-butler-keep-whitespace-before-point t))
 
+(dtrt-indent-global-mode 1) ; We'll see about that
+
 ;; TABs should never be inserted at all
 ;; (I might need to change it for python or YAML -- but hopefully I don't need them)
 (setq-default indent-tabs-mode nil)
@@ -309,3 +311,8 @@
   :init
   (map! "<M-up>"    #'drag-stuff-up
         "<M-down>"  #'drag-stuff-down))
+
+(use-package! zoom
+  :init
+  (custom-set-variables '(zoom-size '(0.618 . 0.618))))
+(zoom-mode)
