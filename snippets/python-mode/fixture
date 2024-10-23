@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: Pytest Fixture
+# key: fx
+# --
+@pytest.fixture(scope='${1:function}')
+def ${2:name}(request):
+    ${3:body}
