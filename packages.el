@@ -108,4 +108,5 @@
 (package! drag-stuff)
 (package! magit-delta)
 (package! zoom)
+(package! emacsql :pin "491105a")
 (package! literate-calc-mode)

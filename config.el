@@ -150,7 +150,8 @@
         winum-auto-setup-mode-line t))
 
 (after! flycheck
-  (setq flycheck-check-syntax-automatically '(save mode-enable)))
+  (setq flycheck-check-syntax-automatically '(save mode-enable))
+  (add-hook 'after-init-hook #'global-flycheck-mode))
 
 ;; General preferences
 ;; Common mapping
@@ -314,5 +315,5 @@
 
 (use-package! zoom
   :init
-  (custom-set-variables '(zoom-size '(0.618 . 0.618)))
+  (custom-set-variables '(zoom-size '(0.418 . 0.518)))
   (zoom-mode))

@@ -31,7 +31,6 @@
   (setq-hook! 'python-mode-hook +format-with 'ruff)
   (add-hook 'python-ts-mode-hook 'ruff-format-on-save-mode))
 
-
 (defun my/run-coverage-and-refresh ()
   "Run coverage and refresh overlays."
   (interactive)
@@ -43,6 +42,10 @@
       :desc "Run coverage and refresh"
       "p c" #'my/run-coverage-and-refresh)
 
+(after! (:and python lsp-ui)
+  (flycheck-select-checker 'python-mypy)
+  (flycheck-add-next-checker 'lsp 'python-mypy t)
+  (flycheck-add-next-checker 'python-mypy 'python-ruff t))
 
 (after! (:and python-mode apheleia-mode)
   (add-to-list 'apheleia-mode-alist '(python-mode . '(ruff-isort ruff)))
