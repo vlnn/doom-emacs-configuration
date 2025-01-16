@@ -1,52 +1,27 @@
 ;;; python.el -*- lexical-binding: t; -*-
 
-(map! :map (python-mode-map python-ts-mode-map)
-      :localleader
-      :prefix ("e" . "eval")
-      :desc "statement"  "e" #'python-shell-send-statement
-      :desc "function"  "f" #'python-shell-send-defun
-      :desc "file"  "F" #'python-shell-send-file
-      :desc "region"  "r" #'python-shell-send-region)
-
-(map! :map (python-ts-mode-map python-mode-map)
-      :localleader
-      :prefix ("r" . "repl")
-      :desc "REPL"  "r" #'+python/open-ipython-repl
-      :desc "Buffer"   "b" #'python-shell-send-buffer
-      :desc "Function" "f" #'python-shell-send-defun
-      :desc "Region"   "R" #'python-shell-send-region)
-
 (after! python
-  (setq dash-docs-docsets '("Python"))
-  (setq python-shell-interpreter "poetry"
-        python-shell-interpreter-args "run python")
-  (setq python-ts-mode-hook python-mode-hook)
-  (setq-local lsp-ruff-lsp-python-path python-shell-interpreter)
-  (setq treesit-font-lock-level 4)
-  (add-hook 'python-ts-mode-hook 'python-coverage-overlay-mode)
-  (add-hook 'python-mode-hook 'python-coverage-overlay-mode)
-  (add-hook 'python-mode-hook 'lsp)
-  (add-hook 'python-ts-mode-hook 'lsp)
-  (setq flycheck-python-ruff-executable "ruff")
-  (setq-hook! 'python-mode-hook +format-with 'ruff)
-  (add-hook 'python-ts-mode-hook 'ruff-format-on-save-mode))
+  (defun my/set-python-interpreter ()
+    "Set Python interpreter based on current Poetry project"
+    (when-let* ((project-root (project-root (project-current)))
+                (poetry-env (shell-command-to-string
+                             (format "cd %s && poetry env info --path" project-root))))
+      (setq python-shell-interpreter
+            (concat (string-trim poetry-env) "/bin/python -i"))))
 
-(defun my/run-coverage-and-refresh ()
-  "Run coverage and refresh overlays."
-  (interactive)
-  (let ((default-directory (projectile-project-root)))
-    (shell-command "poetry run coverage run -m pytest && coverage xml")
-    (python-coverage-overlay-refresh)))
+  (setq python-shell-send-buffer-function #'python-shell-send-file)
+  (poetry-tracking-mode)
 
-(map! :leader
-      :desc "Run coverage and refresh"
-      "p c" #'my/run-coverage-and-refresh)
+  (add-hook 'project-switch-project-hook #'my/set-python-interpreter))
 
-(after! (:and python lsp-ui)
-  (flycheck-select-checker 'python-mypy)
-  (flycheck-add-next-checker 'lsp 'python-mypy t)
-  (flycheck-add-next-checker 'python-mypy 'python-ruff t))
-
-(after! (:and python-mode apheleia-mode)
-  (add-to-list 'apheleia-mode-alist '(python-mode . '(ruff-isort ruff)))
-  (add-to-list 'apheleia-mode-alist '(python-ts-mode . '(ruff-isort ruff))))
+(map! :after python
+      :map (python-mode-map python-ts-mode-map)
+      :localleader
+      (:prefix ("e" . "eval")
+       :desc "eval statement"  "e" #'python-shell-send-statement
+       :desc "eval function"  "f" #'python-shell-send-defun
+       :desc "eval file"      "F" #'python-shell-send-file
+       :desc "eval buffer"    "r" #'python-shell-send-buffer
+       :desc "eval region"    "r" #'python-shell-send-region)
+      (:prefix ("p" . "pipenv")
+       :desc "run"       "r" #'pipenv-run))

@@ -18,33 +18,28 @@
 ;; Start as big as possible
 (add-to-list 'default-frame-alist '(fullscreen . maximized))
 
-;; The best clean light theme I've found yet
-(use-package! stimmung-themes
-  :demand t
+
+;; I don't like to comment out block of lisp with ;
+(defmacro comment (&rest _body)
+  "Comment out one or more s-expressions."
+  nil)
+
+
+(comment (setq doom-theme 'doom-flatwhite))
+(setq doom-theme 'doom-earl-grey)
+
+(use-package! ultra-scroll
+  :init
+  (setq scroll-conservatively 101 ; important!
+        scroll-margin 0)
   :config
-  (setq doom-themes-enable-bold nil
-        eglot-highlight-symbol-face nil)
-  (stimmung-themes-load-light))
-
-(custom-set-faces! '(font-lock-keyword-face :weight regular))
-(custom-set-faces! '(font-lock-function-name-face :weight bold))
-(custom-set-faces! '(font-lock-function-call-face :weight regular))
-(custom-set-faces! '(font-lock-variable-name-face :foreground "darkest blue" :weight regular))
-(custom-set-faces! '(font-lock-variable-use-face :foreground "darkest blue" :weight regular))
-(custom-set-faces! '(font-lock-property-name-face :foreground "darkest green" :weight regular :slant italic))
-(custom-set-faces! '(font-lock-property-use-face :foreground "darkest green" :weight regular :slant italic))
-
+  (ultra-scroll-mode 1))
 
 ;; I like absolute line numbers. For relative line numbers, set this to `relative'.
 (setq display-line-numbers-type t)
 
 ;; I don't like how word-wrap is working
 (setq word-wrap nil)
-
-;; I don't like to comment out block of lisp with ;
-(defmacro comment (&rest _body)
-  "Comment out one or more s-expressions."
-  nil)
 
 ;; default undo settings are too aggregative to my likings -- undoing these!
 ;; NB: This is important! Do not delete or modify or another year of hellish ux is coming
@@ -137,6 +132,10 @@
       "C-h"       #'+evil/window-move-left
       "C-k"       #'+evil/window-move-down
       "C-\;"      #'+evil/window-move-right)
+
+(map! :leader
+      :desc "ace-window"
+      "W" #'ace-window)
 
 ;; generalize movements in result of SPC SPC, g D etc.
 (map! :map (minibuffer-mode-map

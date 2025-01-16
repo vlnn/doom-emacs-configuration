@@ -110,3 +110,4 @@
 (package! zoom)
 (package! emacsql :pin "491105a")
 (package! literate-calc-mode)
+(package! ultra-scroll :recipe (:host github :repo "jdtsmith/ultra-scroll"))
