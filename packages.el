@@ -111,3 +111,13 @@
 (package! emacsql :pin "491105a")
 (package! literate-calc-mode)
 (package! ultra-scroll :recipe (:host github :repo "jdtsmith/ultra-scroll"))
+
+(package! lsp-pyright)
+(disable-packages!
+ anaconda-mode
+ company-anaconda
+ lsp-python-ms  ; prefer lsp-pyright
+ pipenv         ; prefer poetry
+ nose)           ; prefer pytest
+
+(package! mini-ontop :recipe (:host github :repo "hkjels/mini-ontop.el"))
