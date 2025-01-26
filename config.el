@@ -24,6 +24,7 @@
   "Comment out one or more s-expressions."
   nil)
 
+(setq lsp-copilot-enabled nil)
 
 (comment (setq doom-theme 'doom-flatwhite))
 (setq doom-theme 'doom-earl-grey)
