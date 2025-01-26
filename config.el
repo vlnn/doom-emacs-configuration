@@ -317,3 +317,8 @@
   :init
   (custom-set-variables '(zoom-size '(0.418 . 0.518)))
   (zoom-mode))
+
+(use-package! mini-ontop
+  :ensure t
+  :config (mini-ontop-mode 1)
+  (setq mini-ontop-lines 40)) ; this is magic number working on my setup. Improvement a bit too miniscule to fix it properly.
