@@ -6,20 +6,15 @@
                     (require 'lsp-pyright)
                     (lsp-defered))))  ; or lsp-deferred
 
+
+
 (after! python
-  (defun my/set-python-interpreter ()
-    "Set Python interpreter based on current Poetry project"
-    (when-let* ((project-root (project-root (project-current)))
-                (poetry-env (shell-command-to-string
-                             (format "cd %s && poetry env info --path" project-root))))
-      (setq python-shell-interpreter
-            (concat (string-trim poetry-env) "/bin/python -i"))))
+  (advice-add '+python/open-repl :around
+              (lambda (orig-fun &rest args)
+                (let ((default-directory (or poetry-project-root default-directory)))
+                  (apply orig-fun args))))
+  (poetry-tracking-mode))
 
-  (setq python-shell-send-buffer-function #'python-shell-send-file)
-
-  (poetry-tracking-mode)
-
-  (add-hook 'project-switch-project-hook #'my/set-python-interpreter))
 
 (after! lsp-mode
   (setq lsp-diagnostic-clean-after-change nil
