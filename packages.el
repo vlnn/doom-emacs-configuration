@@ -121,3 +121,10 @@
  nose)           ; prefer pytest
 
 (package! mini-ontop :recipe (:host github :repo "hkjels/mini-ontop.el"))
+(package! hammy :recipe (:host github :repo "alphapapa/hammy.el"))
+(package! org-alert)
+
+(package! lsp-jedi)
+
+(package! d2-mode)
+(package! ellama)

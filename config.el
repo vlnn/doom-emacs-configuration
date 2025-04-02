@@ -264,6 +264,7 @@
 
 (load! "secrets.el")
 (load! "gptel.el")
+(load! "timers.el")
 
 (defun make-orgcapture-frame ()
   "Create a new frame and run org-capture."
@@ -303,7 +304,6 @@
   (org-map-entries 'org-archive-subtree "/DONE" 'file))
 
 (load! "blog.el")
-(load! "roam.el")
 
 (load! "python.el")
 
