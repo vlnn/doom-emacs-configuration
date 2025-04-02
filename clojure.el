@@ -43,9 +43,9 @@
                    "P" #'cider-pprint-eval-last-sexp-to-comment
                    "{" #'parinfer-rust-toggle-disable)))
 
-
-(add-to-list 'load-path (concat doom-user-dir "cider-storm"))
-(require 'cider-storm)
+(comment
+ (add-to-list 'load-path (concat doom-user-dir "cider-storm"))
+ (require 'cider-storm))
 
 (use-package! cov
   :demand t
