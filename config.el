@@ -322,3 +322,13 @@
   :ensure t
   :config (mini-ontop-mode 1)
   (setq mini-ontop-lines 40)) ; this is magic number working on my setup. Improvement a bit too miniscule to fix it properly.
+
+(use-package! ellama
+  :init
+  (map! "C-c e"  #'ellama)
+  (setopt ellama-auto-scroll t)
+  :config
+  ;; show ellama context in header line in all buffers
+  (ellama-context-header-line-global-mode +1)
+  ;; show ellama session id in header line in all buffers
+  (ellama-session-header-line-global-mode +1))

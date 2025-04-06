@@ -9,6 +9,10 @@
     (cape-interactive #'codeium-completion-at-point)))
 (map! :leader
       :desc "Try AI" "A" #'my/cape-codeium)
+(map! :leader
+      :desc "Ellama" "e" #'ellama)
+
+
 
 (comment
  (use-package! codeium
