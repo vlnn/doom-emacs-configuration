@@ -70,7 +70,6 @@
 (package! git-link)
 (package! stimmung-themes)
 (package! cape)
-(package! codeium :recipe (:host github :repo "Exafunction/codeium.el"))
 
 (package! beacon)
 
@@ -97,7 +96,6 @@
 
 (package! elquery)
 
-(package! gptel)
 (unpin! flycheck)
 
 (package! magit-todos)
@@ -127,4 +125,4 @@
 (package! lsp-jedi)
 
 (package! d2-mode)
-(package! ellama)
+(package! aider :recipe (:host github :repo "tninja/aider.el"))

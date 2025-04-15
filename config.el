@@ -253,7 +253,6 @@
         evil-delete-backward-char-and-join
         next-line))
 
-(load! "codeium.el")
 
 (use-package! beacon
   :config
@@ -263,7 +262,6 @@
         beacon-blink-when-point-moves-vertically 3))
 
 (load! "secrets.el")
-(load! "gptel.el")
 (load! "timers.el")
 
 (defun make-orgcapture-frame ()
@@ -323,12 +321,14 @@
   :config (mini-ontop-mode 1)
   (setq mini-ontop-lines 40)) ; this is magic number working on my setup. Improvement a bit too miniscule to fix it properly.
 
-(use-package! ellama
+
+(use-package aider
   :init
-  (map! "C-c e"  #'ellama)
-  (setopt ellama-auto-scroll t)
+  (require 'aider-helm)
+  (key-chord-define-global "12" 'aider-transient-menu)
+  (map! :leader
+        :desc "aider" "1" #'aider-transient-menu)
   :config
-  ;; show ellama context in header line in all buffers
-  (ellama-context-header-line-global-mode +1)
-  ;; show ellama session id in header line in all buffers
-  (ellama-session-header-line-global-mode +1))
+  (setq aider-args '("--model" "sonnet" "--no-auto-accept-architect" "--no-auto-commits"))
+  (setq aider-program "/Users/va/.local/bin/aider")
+  (setenv "ANTHROPIC_API_KEY" anthropic-ai-api))
