@@ -253,7 +253,6 @@
         evil-delete-backward-char-and-join
         next-line))
 
-(load! "codeium.el")
 
 (use-package! beacon
   :config
@@ -263,7 +262,6 @@
         beacon-blink-when-point-moves-vertically 3))
 
 (load! "secrets.el")
-(load! "gptel.el")
 (load! "timers.el")
 
 (defun make-orgcapture-frame ()
@@ -322,3 +320,19 @@
   :ensure t
   :config (mini-ontop-mode 1)
   (setq mini-ontop-lines 40)) ; this is magic number working on my setup. Improvement a bit too miniscule to fix it properly.
+
+
+(use-package aider
+  :init
+  (require 'aider-helm)
+  (key-chord-define-global "12" 'aider-transient-menu)
+  (map! :leader
+        :desc "aider" "1" #'aider-transient-menu)
+  :config
+                                        ;(setq aider-args '("--model" "sonnet" "--no-auto-accept-architect" "--no-auto-commits"))
+  (setenv "OLLAMA_API_BASE" "http://127.0.0.1:11434")
+  (comment (setq aider-args '("--model" "ollama_chat/deepseek-coder:33b" "--no-auto-accept-architect" "--no-auto-commits")))
+  (setq aider-args '("--model" "sonnet" "--no-auto-accept-architect" "--no-auto-commits"))
+  (setq aider-program "/Users/va/.local/bin/aider")
+  (require 'aider-doom)
+  (setenv "ANTHROPIC_API_KEY" anthropic-ai-api))

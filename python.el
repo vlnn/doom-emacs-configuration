@@ -25,11 +25,13 @@
   (setq lsp-enabled-clients '(pyright ruff ms-python)))
 
 (after! python
+  (poetry-tracking-mode)
+  (setq python-shell-interpreter "poetry")
+  (setq python-shell-interpreter-args "run python")
   (advice-add '+python/open-repl :around
               (lambda (orig-fun &rest args)
                 (let ((default-directory (or poetry-project-root default-directory)))
-                  (apply orig-fun args))))
-  (poetry-tracking-mode))
+                  (apply orig-fun args)))))
 
 (after! lsp-mode
   (setq lsp-diagnostic-clean-after-change nil
@@ -71,7 +73,7 @@
        :desc "Rename" "r" #'lsp-rename
        :desc "Format buffer" "f" #'lsp-format-buffer
        :desc "Format region" "r" #'lsp-format-region
-       :desc "Extract method" "e" (lambda () (interactive) 
+       :desc "Extract method" "e" (lambda () (interactive)
                                     (lsp-execute-code-action '(("refactor.extract.method"))))))
 
 (map! :after python
@@ -94,5 +96,3 @@
        :desc "inline variable" "i" (lambda () (interactive)
                                      (lsp-execute-code-action '(("refactor.inline.variable"))))
        :desc "organize imports" "o" #'lsp-organize-imports))
-
-
