@@ -56,7 +56,11 @@
   (custom-set-faces
    '(cov-coverage-not-run-face ((t (:foreground "#900000"))))
    '(cov-coverage-run-face ((t (:foreground "#00BE00"))))
-   '(cov-none-face ((t (:foreground "#0000F0"))))))
+   '(cov-none-face ((t (:foreground "#0000F0")))))
 
+  :config
+  (setq cov-lcov-file-name (concat (clojure-project-dir) "target/coverage/lcov.info"))
+  :hook
+  (cider-mode . cov-mode))
 (after! clojure-mode
   (setq dash-docs-docsets '("Clojure")))

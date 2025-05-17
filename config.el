@@ -253,7 +253,6 @@
         evil-delete-backward-char-and-join
         next-line))
 
-(load! "codeium.el")
 
 (use-package! beacon
   :config
@@ -263,7 +262,6 @@
         beacon-blink-when-point-moves-vertically 3))
 
 (load! "secrets.el")
-(load! "gptel.el")
 (load! "timers.el")
 
 (defun make-orgcapture-frame ()
@@ -322,3 +320,17 @@
   :ensure t
   :config (mini-ontop-mode 1)
   (setq mini-ontop-lines 40)) ; this is magic number working on my setup. Improvement a bit too miniscule to fix it properly.
+
+
+(use-package aider
+  :init
+  (require 'aider-helm)
+  (key-chord-define-global "12" 'aider-transient-menu)
+  (map! :leader
+        :desc "aider" "1" #'aider-transient-menu)
+  :config
+  (comment (setq aider-args '("--model" "sonnet" "--no-auto-accept-architect" "--no-auto-commits" "--yes-always")))
+  (setq aider-args '("--model" "ollama_chat/deepseek-coder:6.7b" "--no-auto-accept-architect" "--no-auto-commits" "--yes-always"))
+  (require 'aider-doom)
+  (setq aider-program "/opt/homebrew/bin/aider")
+  (setenv "ANTHROPIC_API_KEY" anthropic-ai-api))

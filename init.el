@@ -102,7 +102,7 @@
         +docsets)
        (lsp +peek)               ; M-x vscode
        tree-sitter
-       (magit +forge)             ; a git porcelain for Emacs
+       magit              ; a git porcelain for Emacs
        ;; make              ; run make tasks from Emacs
        ;; (pass +auth)              ; password manager for nerds
        ;; pdf               ; pdf enhancements
