@@ -71,7 +71,7 @@
        :desc "Rename" "r" #'lsp-rename
        :desc "Format buffer" "f" #'lsp-format-buffer
        :desc "Format region" "r" #'lsp-format-region
-       :desc "Extract method" "e" (lambda () (interactive) 
+       :desc "Extract method" "e" (lambda () (interactive)
                                     (lsp-execute-code-action '(("refactor.extract.method"))))))
 
 (map! :after python
@@ -94,30 +94,3 @@
        :desc "inline variable" "i" (lambda () (interactive)
                                      (lsp-execute-code-action '(("refactor.inline.variable"))))
        :desc "organize imports" "o" #'lsp-organize-imports))
-
-(set-popup-rules!
-  '(("^ \\*" :slot -1)))
-
-(after! dape
-  (setq dape-buffer-window-arrangement nil)
-
-  (add-to-list 'dape-configs
-               `(debugpy-poetry
-                 modes (python-mode python-ts-mode)
-                 command "poetry"
-                 command-args ("run" "python" "-m" "debugpy.adapter")
-                 :type "executable"
-                 :request "launch"
-                 :cwd dape-cwd-fn
-                 :program dape-buffer-default
-                 :stopOnEntry t))
-  (add-to-list 'dape-configs
-               `(debugpy-poetry-pytest
-                 modes (python-mode python-ts-mode)
-                 command "poetry"
-                 command-args ("run" "python" "-m" "debugpy" "--listen" "0" "--wait-for-client" "-m" "pytest" "--pdb-trace" "-s")
-                 :type "executable"
-                 :request "launch"
-                 :cwd dape-cwd-fn
-                 :program dape-buffer-default
-                 :stopOnEntry t)))

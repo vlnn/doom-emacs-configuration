@@ -280,22 +280,43 @@
   (interactive)
   (let* ((buffers (mapcar #'buffer-name (buffer-list)))
          (recent-files recentf-list)
-         (bookmarks (bookmark-all-names))
-         (themes (custom-available-themes))
-         (all-options (append buffers recent-files bookmarks
-                              (mapcar (lambda (theme) (concat "Theme: " (symbol-name theme))) themes)))
-         (selection (completing-read "Switch to: "
-                                     (lambda (str pred action)
-                                       (if (eq action 'metadata)
-                                           '(metadata . ((category . file)))
-                                         (complete-with-action action all-options str pred)))
-                                     nil t nil 'file-name-history)))
-    (pcase selection
-      ((pred (lambda (sel) (member sel buffers))) (switch-to-buffer selection))
-      ((pred (lambda (sel) (member sel bookmarks))) (bookmark-jump selection))
-      ((pred (lambda (sel) (string-prefix-p "Theme: " sel)))
-       (load-theme (intern (substring selection (length "Theme: "))) t))
-      (_ (find-file selection)))))
+         (bookmarks (bookmark-all-names))))
+  (after! dape
+    ;; Poetry debug configuration - CORRECTED
+    (pushnew! dape-configs
+              `(debugpy-poetry
+                modes (python-mode python-ts-mode)
+                command "poetry"
+                command-args ("run" "python" "-m" "debugpy.adapter")
+                :type "executable"
+                :request "launch"
+                :cwd dape-cwd-fn
+                :program dape-buffer-default))
+
+    ;; Poetry pytest configuration - CORRECTED
+    (pushnew! dape-configs
+              `(debugpy-poetry-pytest
+                modes (python-mode python-ts-mode)
+                command "poetry"
+                command-args ("run" "python" "-m" "debugpy" "--listen" "localhost:0" "--wait-for-client" "-m" "pytest" "-s")
+                :type "executable"
+                :request "launch"
+                :cwd dape-cwd-fn
+                :program dape-buffer-default)))        (themes (custom-available-themes))
+  (all-options (append buffers recent-files bookmarks
+                       (mapcar (lambda (theme) (concat "Theme: " (symbol-name theme))) themes)))
+  (selection (completing-read "Switch to: "
+                              (lambda (str pred action)
+                                (if (eq action 'metadata)
+                                    '(metadata . ((category . file)))
+                                  (complete-with-action action all-options str pred)))
+                              nil t nil 'file-name-history))
+  (pcase selection
+    ((pred (lambda (sel) (member sel buffers))) (switch-to-buffer selection))
+    ((pred (lambda (sel) (member sel bookmarks))) (bookmark-jump selection))
+    ((pred (lambda (sel) (string-prefix-p "Theme: " sel)))
+     (load-theme (intern (substring selection (length "Theme: "))) t))
+    (_ (find-file selection))))
 
 (defun my-org-archive-done-tasks ()
   (interactive)
@@ -311,10 +332,10 @@
   (map! "<M-up>"    #'drag-stuff-up
         "<M-down>"  #'drag-stuff-down))
 
-(use-package! zoom
-  :init
-  (custom-set-variables '(zoom-size '(0.418 . 0.518)))
-  (zoom-mode))
+(comment (use-package! zoom
+           :init
+           (custom-set-variables '(zoom-size '(0.418 . 0.518)))
+           (zoom-mode)))
 
 (use-package! mini-ontop
   :ensure t
@@ -322,7 +343,7 @@
   (setq mini-ontop-lines 40)) ; this is magic number working on my setup. Improvement a bit too miniscule to fix it properly.
 
 
-(use-package aider
+(use-package! aider
   :init
   (require 'aider-helm)
   (key-chord-define-global "12" 'aider-transient-menu)
@@ -334,3 +355,138 @@
   (require 'aider-doom)
   (setq aider-program "/opt/homebrew/bin/aider")
   (setenv "ANTHROPIC_API_KEY" anthropic-ai-api))
+
+
+
+(use-package! dape
+  :ensure t
+  :defer t
+  :custom
+  (dape-buffer-window-arrangement nil)
+  (dape-info-hide-mode-line t)
+  :config
+  (dape-breakpoint-global-mode))
+
+(after! dape
+  ;; Poetry debug configuration - CORRECTED
+  (pushnew! dape-configs
+            `(debugpy-poetry
+              modes (python-mode python-ts-mode)
+              command "poetry"
+              command-args ("run" "python" "-m" "debugpy.adapter")
+              :type "executable"
+              :request "launch"
+              :cwd dape-cwd-fn
+              :program dape-buffer-default
+              :stopOnEntry 't))
+
+  ;; Poetry pytest configuration - CORRECTED
+  (pushnew! dape-configs
+            `(debugpy-poetry-pytest
+              modes (python-mode python-ts-mode)
+              command "poetry"
+              command-args ("run" "python" "-m" "debugpy" "--listen" "localhost:0" "--wait-for-client" "-m" "pytest" "-s")
+              :type "executable"
+              :request "launch"
+              :cwd dape-cwd-fn
+              :program dape-buffer-default
+              :stopOnEntry 't)))
+
+;; Custom window layout function with SMALLER windows
+(defun my/dape-setup-separate-windows ()
+  "Create separate windows for each dape info buffer."
+  (run-with-timer 0.3 nil
+                  (lambda ()
+                    ;; Clear any existing side windows first
+                    (when (fboundp 'window-toggle-side-windows)
+                      (window-toggle-side-windows))
+
+                    (let ((stack-buf (get-buffer "*dape-info Stack*"))
+                          (scope-buf (get-buffer "*dape-info Scope*"))
+                          (breakpoints-buf (get-buffer "*dape-info Breakpoints*"))
+                          (threads-buf (get-buffer "*dape-info Threads*"))
+                          (repl-buf (get-buffer "*dape-repl*")))
+
+                      ;; Create MUCH smaller right side windows - 25% of frame width
+                      (when stack-buf
+                        (display-buffer-in-side-window stack-buf
+                                                       '((side . right) (slot . -3) (window-width . 0.25))))
+                      (when scope-buf
+                        (display-buffer-in-side-window scope-buf
+                                                       '((side . right) (slot . -2) (window-width . 0.25))))
+                      (when breakpoints-buf
+                        (display-buffer-in-side-window breakpoints-buf
+                                                       '((side . right) (slot . -1) (window-width . 0.25))))
+                      (when threads-buf
+                        (display-buffer-in-side-window threads-buf
+                                                       '((side . right) (slot . 0) (window-width . 0.25))))
+
+                      ;; Create smaller bottom window for REPL - 10% of frame height
+                      (when repl-buf
+                        (display-buffer-in-side-window repl-buf
+                                                       '((side . bottom) (slot . -1) (window-height . 0.1))))))))
+
+
+;; Helper function to clean up dape windows
+(defun my/dape-cleanup-windows ()
+  "Clean up dape windows when debugging stops."
+  (when (fboundp 'window-toggle-side-windows)
+    (window-toggle-side-windows)))
+
+;; Manual commands for showing individual windows with small sizes
+(defun my/dape-show-stack ()
+  "Show dape stack window."
+  (interactive)
+  (when-let ((buf (get-buffer "*dape-info Stack*")))
+    (display-buffer-in-side-window buf '((side . right) (slot . -3) (window-width . 0.25)))))
+
+(defun my/dape-show-scope ()
+  "Show dape scope window."
+  (interactive)
+  (when-let ((buf (get-buffer "*dape-info Scope*")))
+    (display-buffer-in-side-window buf '((side . right) (slot . -2) (window-width . 0.25)))))
+
+(defun my/dape-show-breakpoints ()
+  "Show dape breakpoints window."
+  (interactive)
+  (when-let ((buf (get-buffer "*dape-info Breakpoints*")))
+    (display-buffer-in-side-window buf '((side . right) (slot . -1) (window-width . 0.25)))))
+
+(defun my/dape-show-threads ()
+  "Show dape threads window."
+  (interactive)
+  (when-let ((buf (get-buffer "*dape-info Threads*")))
+    (display-buffer-in-side-window buf '((side . right) (slot . 0) (window-width . 0.25)))))
+
+(defun my/dape-show-repl ()
+  "Show dape REPL window."
+  (interactive)
+  (when-let ((buf (get-buffer "*dape-repl*")))
+    (display-buffer-in-side-window buf '((side . bottom) (slot . -1) (window-height . 0.15)))))
+
+;; Add hooks for automatic window management
+(add-hook 'dape-on-start-hooks 'dape-info)
+(add-hook 'dape-on-start-hooks 'dape-repl)
+(add-hook 'dape-on-start-hooks 'my/dape-setup-separate-windows)
+(add-hook 'dape-on-stopped-hooks 'my/dape-setup-separate-windows)
+(add-hook 'dape-on-disconnect-hooks 'my/dape-cleanup-windows)
+
+;; Key bindings for manual window control
+(map! :after dape
+      :map dape-mode-map
+      :localleader
+      (:prefix ("w" . "windows")
+               "s" #'my/dape-show-stack
+               "v" #'my/dape-show-scope
+               "b" #'my/dape-show-breakpoints
+               "t" #'my/dape-show-threads
+               "r" #'my/dape-show-repl
+               "c" #'my/dape-cleanup-windows))
+
+;; Hide connection buffers completely
+(advice-add 'dape--callback :around
+            (lambda (orig-fun &rest args)
+              (let ((display-buffer-alist
+                     (cons '("\\*dape-connection.*\\*" . (display-buffer-no-window))
+                           display-buffer-alist)))
+                (apply orig-fun args))))
