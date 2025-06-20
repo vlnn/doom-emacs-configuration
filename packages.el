@@ -126,3 +126,4 @@
 
 (package! d2-mode)
 (package! aider :recipe (:host github :repo "tninja/aider.el"))
+(unpin! transient)

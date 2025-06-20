@@ -95,4 +95,29 @@
                                      (lsp-execute-code-action '(("refactor.inline.variable"))))
        :desc "organize imports" "o" #'lsp-organize-imports))
 
+(set-popup-rules!
+  '(("^ \\*" :slot -1)))
 
+(after! dape
+  (setq dape-buffer-window-arrangement nil)
+
+  (add-to-list 'dape-configs
+               `(debugpy-poetry
+                 modes (python-mode python-ts-mode)
+                 command "poetry"
+                 command-args ("run" "python" "-m" "debugpy.adapter")
+                 :type "executable"
+                 :request "launch"
+                 :cwd dape-cwd-fn
+                 :program dape-buffer-default
+                 :stopOnEntry t))
+  (add-to-list 'dape-configs
+               `(debugpy-poetry-pytest
+                 modes (python-mode python-ts-mode)
+                 command "poetry"
+                 command-args ("run" "python" "-m" "debugpy" "--listen" "0" "--wait-for-client" "-m" "pytest" "--pdb-trace" "-s")
+                 :type "executable"
+                 :request "launch"
+                 :cwd dape-cwd-fn
+                 :program dape-buffer-default
+                 :stopOnEntry t)))
