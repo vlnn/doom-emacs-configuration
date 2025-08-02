@@ -11,7 +11,7 @@
   :after lsp-mode
   :init
   (setq lsp-python-ms-extra-paths nil
-        lsp-python-ms-python-executable-cmd "python"
+        lsp-python-ms-python-executable-cmd "poetry run python"
         lsp-python-ms-auto-install-server t))
 
 ;; Configure rope-specific settings
@@ -29,6 +29,20 @@
               (lambda (orig-fun &rest args)
                 (let ((default-directory (or poetry-project-root default-directory)))
                   (apply orig-fun args))))
+  (setq python-interpreter "poetry run python"
+        python-pytest-executable "poetry run pytest")
+  (after! projectile
+    (projectile-register-project-type 'poetry '("pyproject.toml")
+                                      :project-file "pyproject.toml"
+                                      :test "poetry run pytest tests/"
+                                      :test-prefix "test_"
+                                      :test-suffix "_test"
+                                      :src-dir "src/"
+                                      :test-dir "tests/"
+                                      :install "poetry install"
+                                      :package "poetry build")
+    (setq projectile-create-missing-test-files t))
+
   (poetry-tracking-mode))
 
 (after! lsp-mode
@@ -77,11 +91,12 @@
 (map! :after python
       :map (python-mode-map python-ts-mode-map)
       :localleader
+      :desc "open test or implementation file" "t" #'projectile-find-implementation-or-test-other-window
       (:prefix ("e" . "eval")
        :desc "eval statement"  "e" #'python-shell-send-statement
        :desc "eval function"  "f" #'python-shell-send-defun
        :desc "eval file"      "F" #'python-shell-send-file
-       :desc "eval buffer"    "r" #'python-shell-send-buffer
+       :desc "eval buffer"    "b" (lambda () (interactive) (python-shell-send-buffer t))
        :desc "eval region"    "r" #'python-shell-send-region)
       (:prefix ("p" . "pipenv")
        :desc "run"       "r" #'pipenv-run)
@@ -94,3 +109,8 @@
        :desc "inline variable" "i" (lambda () (interactive)
                                      (lsp-execute-code-action '(("refactor.inline.variable"))))
        :desc "organize imports" "o" #'lsp-organize-imports))
+
+(after! apheleia
+  (setf (alist-get 'ruff apheleia-formatters)
+        '("ruff" "format" "--stdin-filename" filepath "-"))
+  (setf (alist-get 'python-mode apheleia-mode-alist) 'ruff))
