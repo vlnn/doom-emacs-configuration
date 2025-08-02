@@ -385,20 +385,19 @@
     (with-current-buffer buffer
       (when (= (point-max) 1)
         (insert (denote-create-project-frontmatter project-name)))
-      (denote-enable-auto-save)
       (denote-setup-popup-keybindings)))
 
-  (defun denote-enable-auto-save ()
-    "Enable auto-save modes for the current buffer."
-    (auto-save-mode 1)
-    (setq-local auto-save-visited-mode t)
-    (auto-save-visited-mode 1))
+  (defun denote-save-and-close-popup ()
+    "Save buffer and close popup."
+    (interactive)
+    (save-buffer)
+    (+popup/close))
 
   (defun denote-setup-popup-keybindings ()
     "Setup keybindings for popup buffer."
-    (local-set-key (kbd "q") (lambda ()
-                               (interactive)
-                               (+popup/close))))
+    (local-set-key (kbd "q") #'denote-save-and-close-popup)
+    (evil-local-set-key 'normal (kbd "q") #'denote-save-and-close-popup))
+
 
   (defun denote-open-project-popup (buffer)
     "Open BUFFER in a popup window and focus it."
