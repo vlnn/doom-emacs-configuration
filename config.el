@@ -370,18 +370,20 @@
 
   ;; Project notes integration
   (defun denote-project-notes ()
-    "Open or create a single project note file for current projectile project."
     (interactive)
     (if-let ((project-name (projectile-project-name)))
         (let* ((project-slug (denote-sluggify-title project-name))
                (filename (format "project--%s__project.org" project-slug))
                (filepath (expand-file-name filename denote-directory)))
+          ;; Split window vertically and open in the new window
+          (split-window-right)
+          (other-window 1)
           (find-file filepath)
           ;; Add front matter if file is empty
           (when (= (point-max) 1)
             (insert (format "#+title: project %s\n#+filetags: :project:\n#+date: %s\n\n"
-                           project-name
-                           (format-time-string "%Y-%m-%d")))))
+                            project-name
+                            (format-time-string "%Y-%m-%d")))))
       (message "Not in a projectile project")))
 
   (defun denote-find-project-notes ()
