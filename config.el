@@ -368,30 +368,53 @@
   (setq denote-file-type nil) ; org by default
   (setq denote-prompts '(title keywords))
 
+  (defun denote-project-note-filepath (project-name)
+    "Generate the filepath for a project note given PROJECT-NAME."
+    (let* ((project-slug (denote-sluggify-title project-name))
+           (filename (format "project--%s__project.org" project-slug)))
+      (expand-file-name filename denote-directory)))
+
+  (defun denote-create-project-frontmatter (project-name)
+    "Create frontmatter content for a project note with PROJECT-NAME."
+    (format "#+title: project %s\n#+filetags: :project:\n#+date: %s\n\n"
+            project-name
+            (format-time-string "%Y-%m-%d")))
+
+  (defun denote-setup-project-buffer (buffer project-name)
+    "Configure BUFFER for project note with PROJECT-NAME."
+    (with-current-buffer buffer
+      (when (= (point-max) 1)
+        (insert (denote-create-project-frontmatter project-name)))
+      (denote-enable-auto-save)
+      (denote-setup-popup-keybindings)))
+
+  (defun denote-enable-auto-save ()
+    "Enable auto-save modes for the current buffer."
+    (auto-save-mode 1)
+    (setq-local auto-save-visited-mode t)
+    (auto-save-visited-mode 1))
+
+  (defun denote-setup-popup-keybindings ()
+    "Setup keybindings for popup buffer."
+    (local-set-key (kbd "q") (lambda ()
+                               (interactive)
+                               (+popup/close))))
+
+  (defun denote-open-project-popup (buffer)
+    "Open BUFFER in a popup window and focus it."
+    (let ((popup-window (+popup-buffer buffer '((side . right) (size . 0.4)))))
+      (when popup-window
+        (select-window popup-window))))
+
   (defun denote-project-notes ()
     "Open or create a single project note file for current projectile project in popup."
     (interactive)
     (if-let ((project-name (projectile-project-name)))
-        (let* ((project-slug (denote-sluggify-title project-name))
-               (filename (format "project--%s__project.org" project-slug))
-               (filepath (expand-file-name filename denote-directory)))
-          (let ((buffer (find-file-noselect filepath)))
-            (with-current-buffer buffer
-              (when (= (point-max) 1)
-                (insert (format "#+title: project %s\n#+filetags: :project:\n#+date: %s\n\n"
-                                project-name
-                                (format-time-string "%Y-%m-%d"))))
-              (auto-save-mode 1)
-              (setq-local auto-save-visited-mode t)
-              (auto-save-visited-mode 1)
-              (local-set-key (kbd "q") (lambda ()
-                                         (interactive)
-                                         (+popup/close))))
-            (let ((popup-window (+popup-buffer buffer '((side . right) (size . 0.4)))))
-              (when popup-window
-                (select-window popup-window)))))
+        (let* ((filepath (denote-project-note-filepath project-name))
+               (buffer (find-file-noselect filepath)))
+          (denote-setup-project-buffer buffer project-name)
+          (denote-open-project-popup buffer))
       (message "Not in a projectile project")))
-
 
   (defun denote-find-project-notes ()
     "Alias for denote-project-notes since we now have one file per project."
