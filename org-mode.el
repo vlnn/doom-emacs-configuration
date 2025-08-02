@@ -162,10 +162,6 @@
         auto-save-default nil
         super-save-all-buffers t))
 
-;; deft is being used for fast search across all org files with SPC n d
-(setq deft-directory "~/Documents/org")
-(setq deft-default-extension "org")
-
 (defun org-todo-with-date (&optional arg)
   (interactive "P")
   (cl-letf* ((org-read-date-prefer-future nil)

@@ -127,3 +127,10 @@
 (package! d2-mode)
 (package! aider :recipe (:host github :repo "tninja/aider.el"))
 (unpin! transient)
+
+(package! mindstream :recipe (:host github :repo "countvajhula/mindstream"))
+
+(package! uv :recipe (:host github :repo "johannes-mueller/uv.el"))
+(package! casual)
+
+(package! denote)

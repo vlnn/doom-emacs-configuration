@@ -138,6 +138,7 @@
       :desc "ace-window"
       "W" #'ace-window)
 
+
 ;; generalize movements in result of SPC SPC, g D etc.
 (map! :map (minibuffer-mode-map
             ivy-minibuffer-map
@@ -344,11 +345,62 @@
   :init
   (require 'aider-helm)
   (key-chord-define-global "12" 'aider-transient-menu)
-  (map! :leader
-        :desc "aider" "1" #'aider-transient-menu)
+  (map! :leader :desc "aider" "1" #'aider-transient-menu)
+
   :config
-  (comment (setq aider-args '("--model" "sonnet" "--no-auto-accept-architect" "--no-auto-commits" "--yes-always")))
-  (setq aider-args '("--model" "ollama_chat/deepseek-coder:6.7b" "--no-auto-accept-architect" "--no-auto-commits" "--yes-always"))
   (require 'aider-doom)
-  (setq aider-program "/opt/homebrew/bin/aider")
-  (setenv "ANTHROPIC_API_KEY" anthropic-ai-api))
+  (setq aider-program "aider")
+  (set-popup-rule! "^\\*aider" :quit nil)
+  (set-popup-rule! "^\\*Python\\*" :quit nil))
+
+(use-package! mindstream
+  :config
+  (mindstream-mode))
+
+(use-package! casual)
+
+(use-package! denote
+  :config
+  (setq denote-directory (expand-file-name "~/org/denote/"))
+  (setq denote-known-keywords '("emacs" "journal" "project" "idea"))
+  (setq denote-infer-keywords t)
+  (setq denote-sort-keywords t)
+  (setq denote-file-type nil) ; org by default
+  (setq denote-prompts '(title keywords))
+
+  ;; Project notes integration
+  (defun denote-project-notes ()
+    "Open or create a single project note file for current projectile project."
+    (interactive)
+    (if-let ((project-name (projectile-project-name)))
+        (let* ((project-slug (denote-sluggify-title project-name))
+               (filename (format "project--%s__project.org" project-slug))
+               (filepath (expand-file-name filename denote-directory)))
+          (find-file filepath)
+          ;; Add front matter if file is empty
+          (when (= (point-max) 1)
+            (insert (format "#+title: project %s\n#+filetags: :project:\n#+date: %s\n\n"
+                           project-name
+                           (format-time-string "%Y-%m-%d")))))
+      (message "Not in a projectile project")))
+
+  (defun denote-find-project-notes ()
+    "Alias for denote-project-notes since we now have one file per project."
+    (interactive)
+    (denote-project-notes))
+
+  ;; Optional: Set up keybindings
+  (map! :leader
+        (:prefix-map ("n d" . "denote")
+         :desc "Create note" "n" #'denote
+         :desc "Open or create" "o" #'denote-open-or-create
+         :desc "Find file" "f" #'denote-find-file
+         :desc "Find by keyword" "k" #'denote-find-file-by-keyword
+         :desc "Insert link" "l" #'denote-link
+         :desc "Backlinks" "b" #'denote-backlinks
+         :desc "Project notes" "p" #'denote-project-notes))
+
+  ;; Add to projectile menu separately
+  (map! :leader
+        :prefix "p"
+        :desc "Project notes" "n" #'denote-project-notes))
