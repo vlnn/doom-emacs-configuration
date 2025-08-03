@@ -154,14 +154,6 @@
      ("h" "On hold" todo "HOLD")
      ("d" "Done" todo "DONE|KILL"))))
 
-
-(after! org
-  (super-save-mode +1)
-  (setq super-save-auto-save-when-idle t
-        super-save-silent t
-        auto-save-default nil
-        super-save-all-buffers t))
-
 (defun org-todo-with-date (&optional arg)
   (interactive "P")
   (cl-letf* ((org-read-date-prefer-future nil)
