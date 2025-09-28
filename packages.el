@@ -134,3 +134,12 @@
 (package! casual)
 
 (package! denote)
+
+;; (package! denote-projectile-notes :recipe (:host github :repo "vlnn/denote-projectile-notes"))
+(package! denote-projectile-notes :recipe (:local-repo "~/src/emacs/denote-projectile-notes"))
+
+(package! pet :recipe (:host github :repo "wyuenho/emacs-pet"))
+(package! ob-duckdb :recipe (:host github :repo "gggion/ob-duckdb" :files ("*.el")))
+
+(package! org-timeblock)
+(package! elfeed-score)

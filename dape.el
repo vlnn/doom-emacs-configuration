@@ -6,161 +6,128 @@
   (dape-buffer-window-arrangement nil)
   (dape-info-hide-mode-line t)
   :config
-  (dape-breakpoint-global-mode))
+  (dape-breakpoint-global-mode)
+  (map! :leader :prefix "d" :desc "Run forward to cursor" "f" #'dape-until))
 
-;;; Configuration constants
-(defconst my/dape-side-window-width 0.25
-  "Width ratio for dape side windows.")
+;;; Configuration
+(defconst my/dape-window-width 0.25)
+(defconst my/dape-window-height 0.25)
+(defconst my/dape-setup-delay 0.3)
 
-(defconst my/dape-bottom-window-height 0.15
-  "Height ratio for dape bottom window.")
+;;; Debug configurations
+(defun my/debugpy-config (runner)
+  "Create debugpy config for RUNNER (poetry/uv)."
+  `(,(intern (format "debugpy-%s" runner))
+    modes (python-mode python-ts-mode)
+    command ,runner
+    command-args ("run" "python" "-m" "debugpy.adapter")
+    :type "executable"
+    :request "launch"
+    :cwd dape-cwd-fn
+    :program dape-buffer-default
+    :console "integratedTerminal"
+    :justMyCode nil))
 
-(defconst my/dape-window-setup-delay 0.3
-  "Delay in seconds before setting up dape windows.")
+(defun my/pytest-config (runner)
+  "Create pytest config for RUNNER (poetry/uv)."
+  (if (eq runner 'uv)
+      `(debugpy-uv-pytest
+        modes (python-mode python-ts-mode)
+        command "uv"
+        command-args ("run" "python" "-m" "debugpy" "--listen" "5678" 
+                      "--wait-for-client" "-m" "pytest" dape-buffer-default)
+        command-cwd ,(lambda () (project-root (project-current)))
+        port 5678
+        :type "python"
+        :request "attach"
+        :connect (:host "localhost" :port 5678))
+    `(debugpy-poetry-pytest
+      modes (python-mode python-ts-mode)
+      command "poetry"
+      command-args ("run" "python" "-m" "debugpy" "--listen" "localhost:0"
+                    "--wait-for-client" "-m" "pytest" "-s")
+      :type "executable"
+      :request "launch"
+      :cwd dape-cwd-fn
+      :program dape-buffer-default
+      :stopOnEntry t)))
 
-;;; Poetry debug configurations
-(defun my/add-poetry-debug-configs ()
-  "Add poetry-specific debug configurations to dape."
-  (my/add-poetry-debugpy-config)
-  (my/add-poetry-pytest-config))
+(defun my/add-debug-configs ()
+  "Register all debug configurations."
+  (dolist (runner '("poetry" "uv"))
+    (pushnew! dape-configs (my/debugpy-config runner)))
+  (dolist (runner '(poetry uv))
+    (pushnew! dape-configs (my/pytest-config runner))))
 
-(defun my/add-poetry-debugpy-config ()
-  "Add basic poetry debugpy configuration."
-  (pushnew! dape-configs
-            `(debugpy-poetry
-              modes (python-mode python-ts-mode)
-              command "poetry"
-              command-args ("run" "python" "-m" "debugpy.adapter")
-              :type "executable"
-              :request "launch"
-              :cwd dape-cwd-fn
-              :program dape-buffer-default
-              :stopOnEntry 't)))
+;;; Buffer utilities
+(defun my/dape-buffer (info-type)
+  "Get dape buffer for INFO-TYPE."
+  (get-buffer (if (string= info-type "repl")
+                  "*dape-repl*"
+                (format "*dape-info %s*" info-type))))
 
-(defun my/add-poetry-pytest-config ()
-  "Add poetry pytest debug configuration."
-  (pushnew! dape-configs
-            `(debugpy-poetry-pytest
-              modes (python-mode python-ts-mode)
-              command "poetry"
-              command-args ("run" "python" "-m" "debugpy" "--listen" "localhost:0"
-                            "--wait-for-client" "-m" "pytest" "-s")
-              :type "executable"
-              :request "launch"
-              :cwd dape-cwd-fn
-              :program dape-buffer-default
-              :stopOnEntry 't)))
+;;; Window display
+(defun my/side-window-config (side slot &optional width height)
+  "Create side window config."
+  `((side . ,side) (slot . ,slot)
+    ,@(when width `((window-width . ,width)))
+    ,@(when height `((window-height . ,height)))))
 
-(after! dape
-  (my/add-poetry-debug-configs))
-
-;;; Buffer management
-(defun my/dape-buffer-name (info-type)
-  "Generate dape buffer name for INFO-TYPE."
-  (format "*dape-info %s*" info-type))
-
-(defun my/get-dape-info-buffer (info-type)
-  "Get dape info buffer by INFO-TYPE if it exists."
-  (get-buffer (my/dape-buffer-name info-type)))
-
-(defun my/get-dape-repl-buffer ()
-  "Get the dape REPL buffer if it exists."
-  (get-buffer "*dape-repl*"))
-
-;;; Window display utilities
-(defun my/make-side-window-config (side slot &optional width height)
-  "Create window configuration for SIDE and SLOT with optional WIDTH or HEIGHT."
-  (let ((config `((side . ,side) (slot . ,slot))))
-    (when width
-      (push `(window-width . ,width) config))
-    (when height
-      (push `(window-height . ,height) config))
-    config))
-
-(defun my/display-buffer-in-side (buffer side slot &optional width height)
-  "Display BUFFER in side window with SIDE, SLOT, and optional WIDTH or HEIGHT."
+(defun my/display-side-window (buffer side slot &optional width height)
+  "Display BUFFER in side window."
   (when buffer
-    (display-buffer-in-side-window
-     buffer
-     (my/make-side-window-config side slot width height))))
+    (display-buffer-in-side-window 
+     buffer (my/side-window-config side slot width height))))
 
-(defun my/display-dape-buffer-right (buffer slot)
-  "Display BUFFER in right side window at SLOT position."
-  (my/display-buffer-in-side buffer 'right slot my/dape-side-window-width))
+(defun my/display-right (buffer slot)
+  "Display BUFFER on right side at SLOT."
+  (my/display-side-window buffer 'right slot my/dape-window-width))
 
-(defun my/display-dape-buffer-bottom (buffer)
-  "Display BUFFER in bottom side window."
-  (my/display-buffer-in-side buffer 'bottom -1 nil my/dape-bottom-window-height))
+(defun my/display-bottom (buffer)
+  "Display BUFFER at bottom."
+  (my/display-side-window buffer 'bottom -1 nil my/dape-window-height))
 
-;;; Window layout management
-(defun my/toggle-side-windows-safely ()
-  "Toggle side windows if the function is available."
+;;; Window management
+(defun my/toggle-sides ()
+  "Toggle side windows if available."
   (when (fboundp 'window-toggle-side-windows)
     (window-toggle-side-windows)))
 
-(defun my/clear-existing-side-windows ()
-  "Clear any existing side windows."
-  (my/toggle-side-windows-safely))
+(defun my/setup-info-windows ()
+  "Setup debug info windows."
+  (let ((windows '(("Stack" . -3) ("Scope" . -2) 
+                   ("Breakpoints" . -1) ("Threads" . 0))))
+    (dolist (window windows)
+      (my/display-right (my/dape-buffer (car window)) (cdr window)))))
 
-(defun my/display-debug-info-windows ()
-  "Display all debug info windows on the right side."
-  (let ((window-configs '(("Stack" . -3)
-                          ("Scope" . -2)
-                          ("Breakpoints" . -1)
-                          ("Threads" . 0))))
-    (dolist (config window-configs)
-      (my/display-dape-buffer-right
-       (my/get-dape-info-buffer (car config))
-       (cdr config)))))
+(defun my/setup-windows ()
+  "Setup all dape windows."
+  (my/toggle-sides)
+  (my/setup-info-windows)
+  (my/display-bottom (my/dape-buffer "repl")))
 
-(defun my/display-repl-window ()
-  "Display the dape REPL window at the bottom."
-  (my/display-dape-buffer-bottom (my/get-dape-repl-buffer)))
+(defun my/delayed-setup ()
+  "Setup windows after delay."
+  (run-with-timer my/dape-setup-delay nil #'my/setup-windows))
 
-(defun my/create-dape-window-layout ()
-  "Create the complete window layout for dape buffers."
-  (my/clear-existing-side-windows)
-  (my/display-debug-info-windows)
-  (my/display-repl-window))
+;;; Individual window commands
+(defun my/show-window (info-type slot side)
+  "Show specific dape window."
+  (if (eq side 'bottom)
+      (my/display-bottom (my/dape-buffer info-type))
+    (my/display-right (my/dape-buffer info-type) slot)))
 
-;;; Main window setup functions
-(defun my/setup-dape-windows ()
-  "Setup all dape debug windows with proper layout after a delay."
-  (run-with-timer my/dape-window-setup-delay nil #'my/create-dape-window-layout))
+(defun my/show-dape-stack () (interactive) (my/show-window "Stack" -3 'right))
+(defun my/show-dape-scope () (interactive) (my/show-window "Scope" -2 'right))
+(defun my/show-dape-breakpoints () (interactive) (my/show-window "Breakpoints" -1 'right))
+(defun my/show-dape-threads () (interactive) (my/show-window "Threads" 0 'right))
+(defun my/show-dape-repl () (interactive) (my/show-window "repl" nil 'bottom))
 
-(defun my/cleanup-dape-windows ()
-  "Clean up dape windows when debugging stops."
-  (my/toggle-side-windows-safely))
-
-;;; Individual window display commands
-(defun my/show-dape-stack ()
-  "Show dape stack window."
-  (interactive)
-  (my/display-dape-buffer-right (my/get-dape-info-buffer "Stack") -3))
-
-(defun my/show-dape-scope ()
-  "Show dape scope window."
-  (interactive)
-  (my/display-dape-buffer-right (my/get-dape-info-buffer "Scope") -2))
-
-(defun my/show-dape-breakpoints ()
-  "Show dape breakpoints window."
-  (interactive)
-  (my/display-dape-buffer-right (my/get-dape-info-buffer "Breakpoints") -1))
-
-(defun my/show-dape-threads ()
-  "Show dape threads window."
-  (interactive)
-  (my/display-dape-buffer-right (my/get-dape-info-buffer "Threads") 0))
-
-(defun my/show-dape-repl ()
-  "Show dape REPL window."
-  (interactive)
-  (my/display-dape-buffer-bottom (my/get-dape-repl-buffer)))
-
-;;; Hook setup
-(add-hook 'dape-on-start-hooks #'dape-info)
-(add-hook 'dape-on-start-hooks #'dape-repl)
-(add-hook 'dape-on-start-hooks #'my/setup-dape-windows)
-(add-hook 'dape-on-stopped-hooks #'my/setup-dape-windows)
-(add-hook 'dape-on-disconnect-hooks #'my/cleanup-dape-windows)
+;;; Setup hooks
+(after! dape
+  (my/add-debug-configs)
+  (add-hook 'dape-on-start-hooks #'dape-info)
+  (add-hook 'dape-on-start-hooks #'dape-repl)
+  (add-hook 'dape-on-start-hooks #'my/delayed-setup)
+  (add-hook 'dape-on-stopped-hooks #'my/delayed-setup)
+  (add-hook 'dape-on-disconnect-hooks #'my/toggle-sides))

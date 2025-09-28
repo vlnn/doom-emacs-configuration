@@ -9,6 +9,10 @@
 (setq doom-font (font-spec :family font-family :size 13 :weight 'regular)
       doom-symbol-font (font-spec :family font-family :size 13 :weight 'thin)
       doom-big-font (font-spec :family font-family :size 19 :weight 'regular))
+(after! doom-themes
+  (custom-set-faces!
+    '(font-lock-keyword-face :weight regular))
+  (doom/reload-font))
 
 ;; Using Macbook is hard. But we'll manage
 (when (eq system-type 'darwin)
@@ -17,6 +21,7 @@
 
 ;; Start as big as possible
 (add-to-list 'default-frame-alist '(fullscreen . maximized))
+(setq gc-cons-threshold most-positive-fixnum)
 
 
 ;; I don't like to comment out block of lisp with ;
@@ -26,8 +31,8 @@
 
 (setq lsp-copilot-enabled nil)
 
-(comment (setq doom-theme 'doom-flatwhite))
-(setq doom-theme 'doom-earl-grey)
+(setq doom-theme 'doom-flatwhite)
+                                        ; (setq doom-theme 'doom-earl-grey)
 
 (use-package! ultra-scroll
   :init
@@ -215,13 +220,6 @@
 
 (load! "clojure.el")
 
-;; To kill trailing whitespaces... but being sane killer not removing whitespace I just typed in
-(use-package! ws-butler
-  :config
-  (setq ws-butler-keep-whitespace-before-point t))
-
-(dtrt-indent-global-mode 1) ; We'll see about that
-
 ;; TABs should never be inserted at all
 ;; (I might need to change it for python or YAML -- but hopefully I don't need them)
 (setq-default indent-tabs-mode nil)
@@ -229,7 +227,9 @@
 (setq tab-always-indent nil)
 
 (load! "magit.el")
+
 (load! "org-mode.el")
+
 (load! "json.el")
 
 (use-package! abbrev
@@ -275,49 +275,6 @@
   (select-frame-by-name "remember")
   (org-capture))
 
-(defun try/switch-to-thing ()
-  "Switch to a buffer, open a recent file, jump to a bookmark, or change
-   the theme from a unified interface."
-  (interactive)
-  (let* ((buffers (mapcar #'buffer-name (buffer-list)))
-         (recent-files recentf-list)
-         (bookmarks (bookmark-all-names))))
-  (after! dape
-    ;; Poetry debug configuration - CORRECTED
-    (pushnew! dape-configs
-              `(debugpy-poetry
-                modes (python-mode python-ts-mode)
-                command "poetry"
-                command-args ("run" "python" "-m" "debugpy.adapter")
-                :type "executable"
-                :request "launch"
-                :cwd dape-cwd-fn
-                :program dape-buffer-default))
-
-    ;; Poetry pytest configuration - CORRECTED
-    (pushnew! dape-configs
-              `(debugpy-poetry-pytest
-                modes (python-mode python-ts-mode)
-                command "poetry"
-                command-args ("run" "python" "-m" "debugpy" "--listen" "localhost:0" "--wait-for-client" "-m" "pytest" "-s")
-                :type "executable"
-                :request "launch"
-                :cwd dape-cwd-fn
-                :program dape-buffer-default)))        (themes (custom-available-themes))
-  (all-options (append buffers recent-files bookmarks
-                       (mapcar (lambda (theme) (concat "Theme: " (symbol-name theme))) themes)))
-  (selection (completing-read "Switch to: "
-                              (lambda (str pred action)
-                                (if (eq action 'metadata)
-                                    '(metadata . ((category . file)))
-                                  (complete-with-action action all-options str pred)))
-                              nil t nil 'file-name-history))
-  (pcase selection
-    ((pred (lambda (sel) (member sel buffers))) (switch-to-buffer selection))
-    ((pred (lambda (sel) (member sel bookmarks))) (bookmark-jump selection))
-    ((pred (lambda (sel) (string-prefix-p "Theme: " sel)))
-     (load-theme (intern (substring selection (length "Theme: "))) t))
-    (_ (find-file selection))))
 
 (defun my-org-archive-done-tasks ()
   (interactive)
@@ -359,4 +316,54 @@
 
 (use-package! casual)
 
-(load! "project-notes.el")
+(use-package! denote
+  :config
+  (setq denote-directory (expand-file-name "~/org/denote/"))
+  (setq denote-known-keywords '("emacs" "journal" "project" "idea"))
+  (setq denote-infer-keywords t)
+  (setq denote-sort-keywords t)
+  (setq denote-file-type nil) ; org by default
+  (setq denote-prompts '(title keywords)))
+
+(use-package! denote-projectile-notes
+  :after (denote projectile)
+  :config
+  (map! :leader
+        :prefix "p"
+        :desc "Project notes" "n" #'denote-project-notes
+        :desc "New project note" "N" #'denote-create-project-note))
+
+(after! projectile
+  (setq projectile-enable-caching t
+        projectile-indexing-method 'alien
+        projectile-sort-order 'recentf))
+
+(use-package! ob-duckdb)
+(after! org
+  (org-babel-do-load-languages 'org-babel-load-languages
+                               (append org-babel-load-languages '((duckdb . t)))))
+
+(after! plantuml-mode
+  ;; Use executable mode instead of jar
+  (setq plantuml-default-exec-mode 'executable)
+  (setq plantuml-executable-path "plantuml") ; or full path if not in PATH
+
+  ;; Enable org-babel support
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((plantuml . t)))
+
+  ;; Set executable path for org-babel too
+  (setq org-plantuml-executable-path "plantuml")
+  (setq org-plantuml-exec-mode 'executable))
+
+
+(use-package! elfeed-score
+  :ensure t
+  :config
+  (progn
+    (elfeed-score-enable)
+    (define-key elfeed-search-mode-map "=" elfeed-score-map)))
+
+
+(turn-on-solaire-mode)
