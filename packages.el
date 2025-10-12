@@ -141,5 +141,4 @@
 (package! pet :recipe (:host github :repo "wyuenho/emacs-pet"))
 (package! ob-duckdb :recipe (:host github :repo "gggion/ob-duckdb" :files ("*.el")))
 
-(package! org-timeblock)
 (package! elfeed-score)
