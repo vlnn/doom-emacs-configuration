@@ -282,8 +282,6 @@
 
 (load! "blog.el")
 
-(load! "python.el")
-
 (use-package! drag-stuff
   :defer t
   :init
@@ -339,9 +337,6 @@
         projectile-sort-order 'recentf))
 
 (use-package! ob-duckdb)
-(after! org
-  (org-babel-do-load-languages 'org-babel-load-languages
-                               (append org-babel-load-languages '((duckdb . t)))))
 
 (after! plantuml-mode
   ;; Use executable mode instead of jar
@@ -367,3 +362,4 @@
 
 
 (turn-on-solaire-mode)
+
