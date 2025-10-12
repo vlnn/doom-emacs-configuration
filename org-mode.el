@@ -50,7 +50,15 @@
   (setq org-todo-keyword-faces
         '(("KILL" . (:background "#e0e2e8" :weight bold))
           ("TODO" . (:background "#c5e7ef" :weight bold))
-          ("DONE" . (:background "#d5d2d8" :weight bold)))))
+          ("DONE" . (:background "#d5d2d8" :weight bold))))
+
+  
+  (setq org-clock-persist t
+        org-clock-persist-query-resume nil
+        org-clock-auto-clock-resolution 'when-no-clock-is-running)
+  (org-clock-persistence-insinuate))
+
+  
 
 (after! org-journal
   (setq org-journal-enable-agenda-integration t
@@ -72,8 +80,6 @@ With prefix argument JUST-GOTO, only go to today's entry without adding TODO."
 (map! :leader
       :prefix "n j"
       :desc "New todo in journal" "t" #'my/org-journal-new-todo)
-
-
 
 (after! doom-themes
   (custom-set-faces!
