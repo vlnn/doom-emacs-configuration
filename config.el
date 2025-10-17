@@ -139,9 +139,9 @@
       "C-k"       #'+evil/window-move-down
       "C-\;"      #'+evil/window-move-right)
 
-(map! :leader
-      :desc "ace-window"
-      "W" #'ace-window)
+(comment (map! :leader
+               :desc "ace-window"
+               "W" #'ace-window))
 
 
 ;; generalize movements in result of SPC SPC, g D etc.
