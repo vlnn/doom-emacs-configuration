@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: python source block
+# key: <sp
+# group: codeBlocks
+# condition: t
+# --
+#+BEGIN_SRC python :results value
+${1:python code}
+#+END_SRC
+$0

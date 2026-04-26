@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: wishful function stub
+# key: stub
+# expand-env: ((yas-indent-line 'fixed) (col (current-indentation)))
+# --
+`(make-string col ?\s)`def ${1:function_name}(${2:args}): ...
+$0

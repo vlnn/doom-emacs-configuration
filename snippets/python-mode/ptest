@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: parametrized pytest test
+# key: ptest
+# --
+@pytest.mark.parametrize("${1:input}, ${2:expected}", [
+    (${3:case1_input}, ${4:case1_expected}),
+], ids=["${5:case1 description}"])
+def test_${6:function}_${7:scenario}($1, $2${8:, mocker}):
+    result = ${6}($1)
+
+    assert result == $2, "$6 should $7"
+$0

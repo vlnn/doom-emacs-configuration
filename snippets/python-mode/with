@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: wrap with context manager
+# key: withw
+# expand-env: ((yas-indent-line 'fixed) (col (current-indentation)))
+# --
+`(make-string col ?\s)`with ${1:context} as ${2:ctx}:
+`(yas-body (+ col 4))`${3:}
+$0

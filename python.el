@@ -1,34 +1,25 @@
 ;;; python.el -*- lexical-binding: t; -*-
 
-(use-package! eglot
-  :config
-  (add-to-list 'eglot-server-programs
-               '(python-mode . ("ty" "server")))
-  (add-to-list 'eglot-server-programs
-               `(python-mode . ,(eglot-alternatives
-                                 '(("basedpyright-langserver" "--stdio")))))
-  (add-to-list 'eglot-server-programs
-               `(python-ts-mode . ,(eglot-alternatives
-                                    '(("basedpyright-langserver" "--stdio"))))))
-
 (after! python
-  (require 'dape)
-  (setq projectile-create-missing-test-files t
-        projectile-project-test-dir "tests"))
+  (setq python-shell-prompt-detect-failure-warning nil
+        python-shell-interpreter "uv"
+        python-shell-interpreter-args "run python -i")
 
-(defun my/format-buffer-with-ruff ()
-  "Format current buffer using uv run ruff format."
-  (when (eq major-mode 'python-mode)
-    (let* ((file (buffer-file-name))
-           (command (format "uv run ruff format %s" (shell-quote-argument file))))
-      (shell-command command)
-      (revert-buffer t t t))))
+  (defun +python--run-from-project-root (orig-fun &rest args)
+    (let ((default-directory (or (projectile-project-root) default-directory)))
+      (apply orig-fun args)))
 
-(add-hook 'python-mode-hook
-          (lambda ()
-            (add-hook 'before-save-hook #'my/format-buffer-with-ruff nil t)))
+  (advice-add 'run-python :around #'+python--run-from-project-root)
 
-(use-package! pet
-  :config
-  (add-hook 'python-base-mode-hook 'pet-mode -10))
+  (defvar +python--last-window nil
+    "Window the user came from when toggling the Python REPL.")
 
+  (defun +python/toggle-repl ()
+    (interactive)
+    (if (eq major-mode 'inferior-python-mode)
+        (when (and +python--last-window (window-live-p +python--last-window))
+          (select-window +python--last-window))
+      (setq +python--last-window (selected-window))
+      (python-shell-switch-to-shell)))
+
+  (map! :leader :desc "Toggle Python REPL" "o z" #'+python/toggle-repl))

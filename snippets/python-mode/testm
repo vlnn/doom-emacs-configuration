@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: pytest test with mocker
+# key: testm
+# --
+def test_${1:function}_${2:scenario}(mocker):
+    ${3:dep} = mocker.patch("${4:module}.${3}")
+
+    ${5:result} = $1(${6:args})
+
+    assert $5 == ${7:expected}, "$1 should $2"
+$0

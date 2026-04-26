@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: assert with message
+# key: ass
+# --
+assert ${1:expression}, "${2:$1} should ${3:do something}"
+$0

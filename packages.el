@@ -1,144 +1,94 @@
 ;; -*- no-byte-compile: t; -*-
 ;;; $DOOMDIR/packages.el
 
-;; To install a package with Doom you must declare them here and run 'doom sync'
-;; on the command line, then restart Emacs for the changes to take effect -- or
-;; use 'M-x doom/reload'.
-
-
-;; To install SOME-PACKAGE from MELPA, ELPA or emacsmirror:
-                                        ;(package! some-package)
-
-;; To install a package directly from a remote git repo, you must specify a
-;; `:recipe'. You'll find documentation on what `:recipe' accepts here:
-;; https://github.com/radian-software/straight.el#the-recipe-format
-                                        ;(package! another-package
-                                        ;  :recipe (:host github :repo "username/repo"))
-
-;; If the package you are trying to install does not contain a PACKAGENAME.el
-;; file, or is located in a subdirectory of the repo, you'll need to specify
-;; `:files' in the `:recipe':
-                                        ;(package! this-package
-                                        ;  :recipe (:host github :repo "username/repo"
-                                        ;           :files ("some-file.el" "src/lisp/*.el")))
-
-;; If you'd like to disable a package included with Doom, you can do so here
-;; with the `:disable' property:
-                                        ;(package! builtin-package :disable t)
-
-;; You can override the recipe of a built in package without having to specify
-;; all the properties for `:recipe'. These will inherit the rest of its recipe
-;; from Doom or MELPA/ELPA/Emacsmirror:
-                                        ;(package! builtin-package :recipe (:nonrecursive t))
-                                        ;(package! builtin-package-2 :recipe (:repo "myfork/package"))
-
-;; Specify a `:branch' to install a package from a particular branch or tag.
-;; This is required for some packages whose default branch isn't 'master' (which
-;; our package manager can't deal with; see radian-software/straight.el#279)
-                                        ;(package! builtin-package :recipe (:branch "develop"))
-
-;; Use `:pin' to specify a particular commit to install.
-                                        ;(package! builtin-package :pin "1a2b3c4d5e")
-
-
-;; Doom's packages are pinned to a specific commit and updated from release to
-;; release. The `unpin!' macro allows you to unpin single packages...
-                                        ;(unpin! pinned-package)
-;; ...or multiple packages
-                                        ;(unpin! pinned-package another-pinned-package)
-;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
-                                        ;(unpin! t)
-
-(package! keyfreq)
-(package! keycast)
-(package! key-chord)
-(package! deadgrep)
-
-;; topsy shows "sticky" definitions at the very top of the screen if function is too big
-(package! topsy :recipe (:host github :repo "alphapapa/topsy.el"))
-
-;; try one-window approach
-(package! current-window-only :recipe (:host github :repo "FrostyX/current-window-only"))
-
-(package! clojure-essential-ref-nov)
-
-(package! jsonian :recipe (:host github :repo "iwahbe/jsonian"))
-(package! json-mode :disable t)
-
+;;; Built-in module overrides
 (unpin! clj-refactor)
-(package! impatient-mode)
-(package! git-link)
-(package! stimmung-themes)
-(package! cape)
-
-(package! beacon)
-
-(package! org-shortcut
-  :recipe (:host github
-           :repo "glittershark/org-clubhouse"))
-
-(package! super-save)
-(package! plz.el
-  :recipe (:host github
-           :repo "vlnn/plz.el"))
-
-(package! frog-jump-buffer)
-(package! demo-it)
-
-(package! org-static-blog
-  :recipe (:host github
-           :repo "bastibe/org-static-blog"))
-
-(package! sicp)
-(package! cov)
-
-(unpin! parinfer-rust-mode)
-
-(package! elquery)
-
 (unpin! flycheck)
+(unpin! parinfer-rust-mode)
+(unpin! transient)
 
-(package! magit-todos)
-(package! nose :disable t)
-(package! org-trello :recipe (:build (:not native-compile)))
-;;; (package! ruff-format)
-(package! python-coverage :recipe (:host github :repo "wbolster/emacs-python-coverage"))
-(package! drag-stuff)
-(package! magit-delta)
-(package! zoom)
-(package! emacsql :pin "491105a")
-(package! literate-calc-mode)
-(package! ultra-scroll :recipe (:host github :repo "jdtsmith/ultra-scroll"))
-
-(package! lsp-pyright)
 (disable-packages!
  anaconda-mode
  company-anaconda
- lsp-python-ms  ; prefer lsp-pyright
- pipenv         ; prefer poetry
- nose)           ; prefer pytest
+ lsp-python-ms       ; prefer lsp-pyright
+ nose                ; prefer pytest
+ pipenv)             ; prefer poetry
 
-(package! mini-ontop :recipe (:host github :repo "hkjels/mini-ontop.el"))
-(package! hammy :recipe (:host github :repo "alphapapa/hammy.el"))
-(package! org-alert)
+(package! json-mode :disable t)
 
+;;; Editing
+(package! key-chord)
+(package! drag-stuff)
+(package! expand-region)
+(package! demo-it)
+(package! frog-jump-buffer)
+(package! ultra-scroll :recipe (:host github :repo "jdtsmith/ultra-scroll"))
+(package! mini-ontop  :recipe (:host github :repo "hkjels/mini-ontop.el"))
+(package! topsy       :recipe (:host github :repo "alphapapa/topsy.el"))
+
+;;; UI
+(package! beacon)
+(package! zoom)
+
+;;; Navigation / search
+(package! deadgrep)
+(package! cape)
+
+;;; Version control
+(package! magit-todos)
+(package! magit-delta)
+(package! git-link)
+(package! why-this)
+
+;;; Languages
+(package! clojure-essential-ref-nov)
+(package! forth-mode)
+(package! po-mode)
+(package! sicp)
+
+;;; Python
 (package! lsp-jedi)
+(package! pet)
+(package! python-coverage :recipe (:host github :repo "wbolster/emacs-python-coverage"))
+(package! cov)
 
+;;; Data
+(package! jsonian      :recipe (:host github :repo "iwahbe/jsonian"))
+(package! ob-duckdb    :recipe (:host github :repo "gggion/ob-duckdb" :files ("*.el")))
 (package! d2-mode)
-(package! aider :recipe (:host github :repo "tninja/aider.el"))
-(unpin! transient)
+(package! plz.el       :recipe (:host github :repo "vlnn/plz.el"))
+(package! emacsql :pin "491105a")
 
+;;; Org / notes / planning
+(package! denote)
+(package! denote-projectile-notes :recipe (:local-repo "~/src/emacs/denote-projectile-notes"))
+(package! org-shortcut    :recipe (:host github :repo "glittershark/org-clubhouse"))
+(package! org-static-blog :recipe (:host github :repo "bastibe/org-static-blog"))
+(package! org-trello :recipe (:build (:not native-compile)))
+(package! org-alert)
+(package! literate-calc-mode)
+(package! hammy :recipe (:host github :repo "alphapapa/hammy.el"))
+
+;;; Reading
+(package! elfeed-score)
+
+;;; AI / coding assistants
+(package! aider :recipe (:host github :repo "tninja/aider.el"))
+(package! ai-code)
 (package! mindstream :recipe (:host github :repo "countvajhula/mindstream"))
 
+;;; Tools
+(package! github-explorer :recipe (:host github :repo "TxGVNN/github-explorer"))
+(package! impatient-mode)
+(package! super-save)
 (package! uv :recipe (:host github :repo "johannes-mueller/uv.el"))
-(package! casual)
+(package! vterm)
 
-(package! denote)
+;;; Casual transient menus
+(package! casual      :recipe (:host github :repo "kickingvegas/casual"))
+(package! casual-avy  :recipe (:host github :repo "kickingvegas/casual-avy"))
 
-;; (package! denote-projectile-notes :recipe (:host github :repo "vlnn/denote-projectile-notes"))
-(package! denote-projectile-notes :recipe (:local-repo "~/src/emacs/denote-projectile-notes"))
-
-(package! pet :recipe (:host github :repo "wyuenho/emacs-pet"))
-(package! ob-duckdb :recipe (:host github :repo "gggion/ob-duckdb" :files ("*.el")))
-
-(package! elfeed-score)
+;;; Theming experiments
+(package! stimmung-themes)
+(package! elquery)
+(package! mason)

@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: wrap with try/except
+# key: try
+# expand-env: ((yas-indent-line 'fixed) (col (current-indentation)))
+# --
+`(make-string col ?\s)`try:
+`(yas-body (+ col 4))`${1:}
+`(make-string col ?\s)`except ${2:Exception} as ${3:e}:
+`(make-string (+ col 4) ?\s)`${4:raise}
+$0
