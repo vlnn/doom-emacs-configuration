@@ -1,6 +1,6 @@
 ;;; appearance.el -*- lexical-binding: t; -*-
 
-(setq font-family "Departure Mono")
+(setq font-family "DepartureMono Nerd Font Propo")
 
 (setq doom-font        (font-spec :family font-family :size 13 :weight 'regular)
       doom-symbol-font (font-spec :family font-family :size 13 :weight 'thin)
