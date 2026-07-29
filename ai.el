@@ -11,7 +11,7 @@
   :config
   (require 'aider-doom)
   (setenv "OLLAMA_API_BASE" "http://127.0.0.1:11434")
-  (setq aider-program "aider"
+  (setq aider-program "cecli"
         aider-args '("--model" "ollama_chat/qwopus-coder"))
   (set-popup-rule! "^\\*aider"   :quit nil)
   (set-popup-rule! "^\\*Python\\*" :quit nil))

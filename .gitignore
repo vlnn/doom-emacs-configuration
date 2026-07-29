@@ -1,3 +1,5 @@
-secrets.el
-custom*
 .aider*
+.ipynb_checkpoints/
+flycheck_*.el
+*.elc
+secrets.el
