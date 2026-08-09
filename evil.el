@@ -17,8 +17,8 @@
 (with-eval-after-load 'evil-maps
   (define-key evil-motion-state-map "j"  'evil-backward-char)
   (define-key evil-motion-state-map "\;" 'evil-forward-char)
-  (define-key evil-motion-state-map "k"  'evil-next-line)
-  (define-key evil-motion-state-map "l"  'evil-previous-line))
+  (define-key evil-motion-state-map "k"  'evil-next-visual-line)
+  (define-key evil-motion-state-map "l"  'evil-previous-visual-line))
 
 (map! :map evil-window-map
       "j"     #'evil-window-left
@@ -47,3 +47,10 @@
 (after! winum
   (setq winum-scope 'visible
         winum-auto-setup-mode-line t))
+
+(after! evil-org
+  (map! :map evil-org-mode-map
+        :nvm "k"      #'evil-next-visual-line
+        :nvm "l"      #'evil-previous-visual-line
+        :nvm "<down>" #'evil-next-visual-line
+        :nvm "<up>"   #'evil-previous-visual-line))
