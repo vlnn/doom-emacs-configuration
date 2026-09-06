@@ -37,4 +37,4 @@
   (ultra-scroll-mode 1))
 
 ;; Start as big as possible
-(add-to-list 'default-frame-alist '(fullscreen . maximized))
+;; (add-to-list 'default-frame-alist '(fullscreen . maximized))

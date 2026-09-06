@@ -126,3 +126,6 @@
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((plantuml . t))))
+(setq frame-resize-pixelwise t
+      window-resize-pixelwise t)
+(setq frame-inhibit-implied-resize t)

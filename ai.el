@@ -53,3 +53,10 @@
 (set-popup-rule! "^\\*Ollama\\*$"
   :side 'right :size 0.4 :select t :quit nil :ttl nil)
 
+
+(use-package! opencode
+  :init
+  (map! :leader :desc "opencode" "2" #'opencode)
+  :config
+  (setq opencode-default-model "anthropic/claude-sonnet-4-6")
+  (set-popup-rule! "^\\*opencode" :side 'right :size 0.4 :select t :quit nil :ttl nil))

@@ -55,7 +55,10 @@
 (package! jsonian      :recipe (:host github :repo "iwahbe/jsonian"))
 (package! ob-duckdb    :recipe (:host github :repo "gggion/ob-duckdb" :files ("*.el")))
 (package! d2-mode)
-(package! plz.el       :recipe (:host github :repo "vlnn/plz.el"))
+(package! plz.el :recipe (:host github :repo "alphapapa/plz.el"))
+(package! plz-media-type)
+(package! plz-event-source)
+; (package! plz.el       :recipe (:host github :repo "vlnn/plz.el"))
 (package! emacsql :pin "491105a")
 
 ;;; Org / notes / planning
@@ -101,3 +104,5 @@
                ("terminfo/65" "terminfo/65/*")
                ("integration" "integration/*")
                (:exclude ".dir-locals.el" "*-tests.el"))))
+
+(package! opencode :recipe (:host codeberg :repo "sczi/opencode.el"))
