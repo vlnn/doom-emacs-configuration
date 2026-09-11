@@ -129,3 +129,11 @@
 (setq frame-resize-pixelwise t
       window-resize-pixelwise t)
 (setq frame-inhibit-implied-resize t)
+
+
+(add-to-list 'load-path "~/tmp/ride")
+
+(use-package! ride
+  :commands (ride-connect))
+
+(add-hook 'dyalog-mode-hook #'ride-eval-minor-mode)
