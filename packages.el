@@ -42,6 +42,7 @@
 
 ;;; Languages
 (package! clojure-essential-ref-nov)
+(package! gnu-apl-mode)
 (package! forth-mode)
 (package! po-mode)
 (package! sicp)

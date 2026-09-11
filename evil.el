@@ -38,6 +38,7 @@
 ;; REPLs should start in insert mode
 (after! evil
   (dolist (mode '(dape-repl-mode
+                  ride-repl-mode
                   comint-mode
                   inferior-python-mode
                   eshell-mode

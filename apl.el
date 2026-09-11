@@ -1,0 +1,91 @@
+;;; apl.el -*- lexical-binding: t; -*-
+
+;; gnu-apl-mode + ride.el for Dyalog APL, wired the same way the
+;; (clojure +lsp) module wires cider: major mode with eldoc/imenu,
+;; APL-Z glyph input, repl/eval handlers, popup rules, localleader.
+
+(use-package! gnu-apl-mode
+  :mode ("\\.dyalog\\'" . gnu-apl-mode)
+  :mode ("\\.apl[fcnoi]\\'" . gnu-apl-mode)
+  :init
+  (defun +apl--enable-input-method ()
+    (require 'gnu-apl-input)
+    (activate-input-method "APL-Z"))
+  (add-hook 'gnu-apl-mode-hook #'+apl--enable-input-method)
+  (add-hook 'ride-repl-mode-hook #'+apl--enable-input-method)
+  :config
+  ;; super is Cmd on macOS; glyphs come from APL-Z, not s- chords
+  (setopt gnu-apl-mode-map-prefix "H-")
+  ;; these two start a GNU APL process; ride owns eval
+  (map! :map gnu-apl-mode-map
+        "C-c C-s" nil
+        "C-c C-f" nil)
+  (map! :localleader
+        :map gnu-apl-mode-map
+        (:prefix ("h" . "help")
+         "a" #'gnu-apl-apropos-symbol
+         "d" #'gnu-apl-show-help-for-symbol
+         "k" #'gnu-apl-show-keyboard)))
+
+;; Dyalog-style backtick prefix (`i inserts iota); on gnu-apl-input, not the
+;; mode, so the REPL gets it even when no APL file has been opened yet.
+;; GNU APL's ◊ is not Dyalog's ⋄ statement separator, so fix `` first.
+(after! gnu-apl-input
+  (setf (alist-get "diamond" gnu-apl--symbols nil nil #'equal)
+        '("⋄" "`"))
+  (setopt gnu-apl-key-prefix ?\`))
+
+(add-to-list 'load-path "~/tmp/ride")
+
+(use-package! ride
+  :commands (ride-connect ride-eval-minor-mode)
+  :init
+  (add-hook 'gnu-apl-mode-hook #'ride-eval-minor-mode)
+  :config
+  (set-repl-handler! 'gnu-apl-mode #'+apl/open-repl)
+  (set-eval-handler! 'gnu-apl-mode #'ride-eval-region)
+
+  ;; ride prefers dyalog-mode here, which is no longer installed
+  (defadvice! +apl--edit-buffers-use-gnu-apl (&rest _)
+    :override #'ride-edit--ensure-major-mode
+    (unless (eq major-mode 'gnu-apl-mode)
+      (gnu-apl-mode)))
+
+  (set-popup-rules!
+    '(("^\\*ride-repl:" :quit nil :ttl nil)
+      ("^\\*ride-log:"  :ignore t)))
+
+  (map! :localleader
+        :map gnu-apl-mode-map
+        "'" #'ride-connect
+        "c" #'ride-connect
+        (:prefix ("d" . "debug")
+         "d" #'ride-trace)
+        (:prefix ("e" . "eval")
+         "b" #'ride-eval-buffer
+         "e" #'ride-eval-line-or-region
+         "r" #'ride-eval-region)
+        (:prefix ("g" . "goto")
+         "g" #'ride-edit-at-point
+         "G" #'ride-edit)
+        (:prefix ("r" . "repl")
+         "b" #'ride-pop-to-repl
+         "l" #'ride-load-file
+         "q" #'ride-disconnect
+         "s" #'ride-transcript-save
+         "w" #'ride-set-width))
+
+  (map! :localleader
+        :map ride-repl-mode-map
+        "e" #'ride-edit-at-point
+        "q" #'ride-disconnect
+        "s" #'ride-transcript-save
+        "w" #'ride-set-width))
+
+(defun +apl/open-repl (&optional _arg)
+  "Return the RIDE REPL buffer, connecting first when there is no session."
+  (interactive)
+  (require 'ride)
+  (let ((conn (or (ride-current-conn)
+                  (call-interactively #'ride-connect))))
+    (ride-conn-repl-buffer conn)))

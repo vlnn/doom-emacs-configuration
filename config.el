@@ -22,6 +22,7 @@
 ;;;   notes        — denote
 ;;;   ai           — aider / ai-code / gptel / mindstream
 ;;;   forth        — forth-mode + dumb-jump rules
+;;;   apl          — gnu-apl-mode + ride.el, mirrors the cider setup
 ;;;   casual       — transient menus across modes
 ;;;   snippets     — yas helpers used by snippet files
 (load! "macos.el")
@@ -38,6 +39,7 @@
 (load! "notes.el")
 (load! "ai.el")
 (load! "forth.el")
+(load! "apl.el")
 (load! "casual.el")
 (load! "snippets.el")
 
@@ -130,10 +132,3 @@
       window-resize-pixelwise t)
 (setq frame-inhibit-implied-resize t)
 
-
-(add-to-list 'load-path "~/tmp/ride")
-
-(use-package! ride
-  :commands (ride-connect))
-
-(add-hook 'dyalog-mode-hook #'ride-eval-minor-mode)
