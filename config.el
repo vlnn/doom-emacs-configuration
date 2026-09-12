@@ -22,7 +22,7 @@
 ;;;   notes        — denote
 ;;;   ai           — aider / ai-code / gptel / mindstream
 ;;;   forth        — forth-mode + dumb-jump rules
-;;;   apl          — gnu-apl-mode + ride.el, mirrors the cider setup
+;;;   apl          — gnu-apl-mode + ride-apl.el, mirrors the cider setup
 ;;;   casual       — transient menus across modes
 ;;;   snippets     — yas helpers used by snippet files
 (load! "macos.el")

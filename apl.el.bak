@@ -16,7 +16,7 @@
   :config
   ;; super is Cmd on macOS; glyphs come from APL-Z, not s- chords
   (setopt gnu-apl-mode-map-prefix "H-")
-  ;; these two start a GNU APL process; ride-apl owns eval
+  ;; these two start a GNU APL process; ride owns eval
   (map! :map gnu-apl-mode-map
         "C-c C-s" nil
         "C-c C-f" nil)
@@ -35,57 +35,57 @@
         '("⋄" "`"))
   (setopt gnu-apl-key-prefix ?\`))
 
-(add-to-list 'load-path "~/tmp/ride-apl")
+(add-to-list 'load-path "~/tmp/ride")
 
 (use-package! ride-apl
-  :commands (ride-apl-connect ride-apl-eval-minor-mode)
+  :commands (ride-connect ride-eval-minor-mode)
   :init
-  (add-hook 'gnu-apl-mode-hook #'ride-apl-eval-minor-mode)
+  (add-hook 'gnu-apl-mode-hook #'ride-eval-minor-mode)
   :config
   (set-repl-handler! 'gnu-apl-mode #'+apl/open-repl)
-  (set-eval-handler! 'gnu-apl-mode #'ride-apl-eval-region)
+  (set-eval-handler! 'gnu-apl-mode #'ride-eval-region)
 
-  ;; ride-apl prefers dyalog-mode here, which is no longer installed
+  ;; ride prefers dyalog-mode here, which is no longer installed
   (defadvice! +apl--edit-buffers-use-gnu-apl (&rest _)
-    :override #'ride-apl-edit--ensure-major-mode
+    :override #'ride-edit--ensure-major-mode
     (unless (eq major-mode 'gnu-apl-mode)
       (gnu-apl-mode)))
 
   (set-popup-rules!
-    '(("^\\*ride-apl-repl:" :quit nil :ttl nil)
-      ("^\\*ride-apl-log:"  :ignore t)))
+    '(("^\\*ride-repl:" :quit nil :ttl nil)
+      ("^\\*ride-log:"  :ignore t)))
 
   (map! :localleader
         :map gnu-apl-mode-map
-        "'" #'ride-apl-connect
-        "c" #'ride-apl-connect
+        "'" #'ride-connect
+        "c" #'ride-connect
         (:prefix ("d" . "debug")
-         "d" #'ride-apl-trace)
+         "d" #'ride-trace)
         (:prefix ("e" . "eval")
-         "b" #'ride-apl-eval-buffer
-         "e" #'ride-apl-eval-line-or-region
-         "r" #'ride-apl-eval-region)
+         "b" #'ride-eval-buffer
+         "e" #'ride-eval-line-or-region
+         "r" #'ride-eval-region)
         (:prefix ("g" . "goto")
-         "g" #'ride-apl-edit-at-point
-         "G" #'ride-apl-edit)
+         "g" #'ride-edit-at-point
+         "G" #'ride-edit)
         (:prefix ("r" . "repl")
-         "b" #'ride-apl-pop-to-repl
-         "l" #'ride-apl-load-file
-         "q" #'ride-apl-disconnect
-         "s" #'ride-apl-transcript-save
-         "w" #'ride-apl-set-width))
+         "b" #'ride-pop-to-repl
+         "l" #'ride-load-file
+         "q" #'ride-disconnect
+         "s" #'ride-transcript-save
+         "w" #'ride-set-width))
 
   (map! :localleader
-        :map ride-apl-repl-mode-map
-        "e" #'ride-apl-edit-at-point
-        "q" #'ride-apl-disconnect
-        "s" #'ride-apl-transcript-save
-        "w" #'ride-apl-set-width))
+        :map ride-repl-mode-map
+        "e" #'ride-edit-at-point
+        "q" #'ride-disconnect
+        "s" #'ride-transcript-save
+        "w" #'ride-set-width))
 
 (defun +apl/open-repl (&optional _arg)
   "Return the RIDE REPL buffer, connecting first when there is no session."
   (interactive)
-  (require 'ride-apl)
-  (let ((conn (or (ride-apl-current-conn)
-                  (call-interactively #'ride-apl-connect))))
-    (ride-apl-conn-repl-buffer conn)))
+  (require 'ride)
+  (let ((conn (or (ride-current-conn)
+                  (call-interactively #'ride-connect))))
+    (ride-conn-repl-buffer conn)))
