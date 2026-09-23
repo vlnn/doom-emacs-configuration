@@ -107,3 +107,6 @@
                (:exclude ".dir-locals.el" "*-tests.el"))))
 
 (package! opencode :recipe (:host codeberg :repo "sczi/opencode.el"))
+(package! ride-apl
+  :recipe (:host github :repo "vlnn/ride-apl"
+           :files ("*.el" (:exclude "*-test.el"))))

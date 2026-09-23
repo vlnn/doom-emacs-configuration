@@ -13,6 +13,8 @@
     (activate-input-method "APL-Z"))
   (add-hook 'gnu-apl-mode-hook #'+apl--enable-input-method)
   (add-hook 'ride-apl-repl-mode-hook #'+apl--enable-input-method)
+  (add-hook 'gnu-apl-mode-hook
+          (lambda () (setq mode-name "Dyalog")))
   :config
   ;; super is Cmd on macOS; glyphs come from APL-Z, not s- chords
   (setopt gnu-apl-mode-map-prefix "H-")
@@ -34,8 +36,6 @@
   (setf (alist-get "diamond" gnu-apl--symbols nil nil #'equal)
         '("⋄" "`"))
   (setopt gnu-apl-key-prefix ?\`))
-
-(add-to-list 'load-path "~/tmp/ride-apl")
 
 (use-package! ride-apl
   :commands (ride-apl-connect ride-apl-eval-minor-mode)
@@ -89,3 +89,18 @@
   (let ((conn (or (ride-apl-current-conn)
                   (call-interactively #'ride-apl-connect))))
     (ride-apl-conn-repl-buffer conn)))
+
+(defvar +apl-font-families '("APL387" "APL385 Unicode"))
+(defvar +apl-font-height 1.1)
+
+(defun +apl--installed-font-family ()
+  (seq-find (lambda (family) (find-font (font-spec :family family)))
+            +apl-font-families))
+
+(defun +apl--use-apl-font ()
+  (when-let ((family (+apl--installed-font-family)))
+    (buffer-face-set `(:family ,family :height ,+apl-font-height))))
+
+
+(add-hook 'gnu-apl-mode-hook #'+apl--use-apl-font)
+(add-hook 'ride-repl-mode-hook #'+apl--use-apl-font)
