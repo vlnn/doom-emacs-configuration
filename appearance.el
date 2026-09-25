@@ -27,7 +27,7 @@
 (setq display-line-numbers-type t)
 (setq word-wrap nil)
 
-(turn-on-solaire-mode)
+; (turn-on-solaire-mode)
 
 (use-package! ultra-scroll
   :init

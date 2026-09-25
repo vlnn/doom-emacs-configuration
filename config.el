@@ -37,7 +37,7 @@
 (load! "dape.el")
 (load! "dirvish.el")
 (load! "notes.el")
-(load! "ai.el")
+;(load! "ai.el")
 (load! "forth.el")
 (load! "apl.el")
 (load! "casual.el")
