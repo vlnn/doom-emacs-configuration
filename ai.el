@@ -10,9 +10,10 @@
   (map! :leader :desc "aider" "1" #'aider-transient-menu)
   :config
   (require 'aider-doom)
-  (setenv "OLLAMA_API_BASE" "http://127.0.0.1:11434")
+  (setenv "OPENAI_API_BASE" "http://127.0.0.1:8080/v1")
+  (setenv "OPENAI_API_KEY" "llama-server")
   (setq aider-program "cecli"
-        aider-args '("--model" "ollama_chat/qwopus-coder"))
+        aider-args '("--model" "openai/qwopus-coder"))
   (set-popup-rule! "^\\*aider"   :quit nil)
   (set-popup-rule! "^\\*Python\\*" :quit nil))
 
@@ -33,7 +34,11 @@
   (setq gptel-model 'qwopus-reason
         gptel-include-reasoning 'ignore
         gptel-backend
-        (gptel-make-ollama "Ollama"
+        (gptel-make-openai "llama-server"
+          :host "127.0.0.1:8080"
+          :protocol "http"
+          :endpoint "/v1/chat/completions"
+          :key "llama-server"
           :stream t
           :models '(qwopus-reason
                     qwopus-coder
@@ -50,7 +55,7 @@
   :side 'right :size 0.4 :select t :quit 'current :ttl nil)
 
 
-(set-popup-rule! "^\\*Ollama\\*$"
+(set-popup-rule! "^\\*llama-server\\*$"
   :side 'right :size 0.4 :select t :quit nil :ttl nil)
 
 
