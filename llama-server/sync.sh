@@ -8,11 +8,15 @@ restart_agent() {
   launchctl kickstart -k "gui/$(id -u)/$LLAMA_LABEL"
 }
 
+model_action() {
+  local action="$1" model="$2"
+  curl -fsS -X POST "$(server_url)/models/$action" -H 'Content-Type: application/json' -d "{\"model\": \"$model\"}" >/dev/null
+}
+
 prefetch() {
   local model="$1"
   echo "fetching $model ..."
-  curl -fsS -X POST "$(server_url)/models/load" -H 'Content-Type: application/json' -d "{\"model\": \"$model\"}" >/dev/null
-  curl -fsS -X POST "$(server_url)/models/unload" -H 'Content-Type: application/json' -d "{\"model\": \"$model\"}" >/dev/null
+  model_action load "$model" && model_action unload "$model" || echo "  failed: $model is not known to the server"
 }
 
 prefetch_all() {
