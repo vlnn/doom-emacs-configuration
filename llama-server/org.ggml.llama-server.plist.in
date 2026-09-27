@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>org.ggml.llama-server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@LLAMA_SERVER@</string>
+    <string>--host</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>8080</string>
+    <string>--models-preset</string>
+    <string>@CONFIG_INI@</string>
+    <string>--models-max</string>
+    <string>2</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>LLAMA_CACHE</key>
+    <string>@MODELS_DIR@</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>@LOG@</string>
+  <key>StandardErrorPath</key>
+  <string>@LOG@</string>
+</dict>
+</plist>

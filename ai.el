@@ -30,20 +30,48 @@
 (use-package! mindstream
   :config (mindstream-mode))
 
+(defconst my/llama-server-host "127.0.0.1:8080")
+
+(defconst my/llama-server-fallback-models
+  '(qwopus-reason qwopus-coder qwen3-coder:30b deepseek-r1:32b))
+
+(defun my/llama-server-url (path)
+  (concat "http://" my/llama-server-host path))
+
+(defun my/llama-server-model-ids (json)
+  (mapcar (lambda (m) (intern (alist-get 'id m)))
+          (alist-get 'data json)))
+
+(defun my/llama-server-fetch-models ()
+  (with-current-buffer (url-retrieve-synchronously (my/llama-server-url "/v1/models") t t 2)
+    (goto-char url-http-end-of-headers)
+    (let ((json-key-type 'symbol)
+          (json-array-type 'list))
+      (my/llama-server-model-ids (json-read)))))
+
+(defun my/llama-server-models ()
+  (or (ignore-errors (my/llama-server-fetch-models))
+      my/llama-server-fallback-models))
+
+(defun my/llama-server-backend ()
+  (gptel-make-openai "llama-server"
+    :host my/llama-server-host
+    :protocol "http"
+    :endpoint "/v1/chat/completions"
+    :key "llama-server"
+    :stream t
+    :models (my/llama-server-models)))
+
+(defun my/llama-server-refresh-models ()
+  "Re-read the served model list after editing llama-server/config.ini."
+  (interactive)
+  (setq gptel-backend (my/llama-server-backend))
+  (message "gptel models: %s" (gptel-backend-models gptel-backend)))
+
 (after! gptel
   (setq gptel-model 'qwopus-reason
         gptel-include-reasoning 'ignore
-        gptel-backend
-        (gptel-make-openai "llama-server"
-          :host "127.0.0.1:8080"
-          :protocol "http"
-          :endpoint "/v1/chat/completions"
-          :key "llama-server"
-          :stream t
-          :models '(qwopus-reason
-                    qwopus-coder
-                    qwen3-coder:30b
-                    deepseek-r1:32b)))
+        gptel-backend (my/llama-server-backend))
   (setf (alist-get 'review gptel-directives)
         "You review code. Flag non-idiomatic constructs, missing or weak test cases, oversized functions, and asserts lacking explanation strings. Be terse."
         (alist-get 'plan gptel-directives)
