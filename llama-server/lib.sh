@@ -46,3 +46,67 @@ wait_for_server() {
 fetch_served_models() {
   curl -fsS "$(server_url)/v1/models" | served_model_names
 }
+
+model_status() {
+  python3 -c '
+import json, sys
+name = sys.argv[1]
+for m in json.load(sys.stdin)["data"]:
+    if m["id"] == name:
+        s = m["status"]
+        print("failed" if s.get("failed") else s["value"])
+        break
+else:
+    print("unknown")
+' "$1"
+}
+
+fetch_model_status() {
+  curl -fsS "$(server_url)/models" | model_status "$1"
+}
+
+model_progress() {
+  python3 -c '
+import json, sys
+name = sys.argv[1]
+for m in json.load(sys.stdin)["data"]:
+    if m["id"] == name and m.get("progress"):
+        done = sum(p["done"] for p in m["progress"].values())
+        total = sum(p["total"] for p in m["progress"].values())
+        gib = 2 ** 30
+        print(f"{done / gib:.2f} / {total / gib:.2f} GiB  {100 * done / total:.1f}%")
+' "$1"
+}
+
+fetch_model_progress() {
+  curl -fsS "$(server_url)/models" | model_progress "$1"
+}
+
+cache_size() {
+  du -sh "${LLAMA_MODELS_DIR:-$HOME/.cache/llama.cpp}" 2>/dev/null | cut -f1
+}
+
+loading_progress() {
+  local model="$1" progress
+  progress="$(fetch_model_progress "$model")"
+  echo "${progress:-loading, cache at $(cache_size)}"
+}
+
+model_action() {
+  local action="$1" model="$2"
+  curl -fsS -X POST "$(server_url)/models/$action" -H 'Content-Type: application/json' -d "{\"model\": \"$model\"}" >/dev/null
+}
+
+wait_until_loaded() {
+  local model="$1" status
+  while :; do
+    status="$(fetch_model_status "$model")"
+    case "$status" in
+      loaded) printf '\r\033[K'; return 0 ;;
+      failed|unknown|unloaded) printf '\r\033[K  %s: %s\n' "$model" "$status" >&2; return 1 ;;
+      downloading|loading) printf '\r\033[K  %s' "$(loading_progress "$model")" ;;
+      *) printf '\r\033[K  %s' "$status" ;;
+    esac
+    sleep 5
+  done
+}

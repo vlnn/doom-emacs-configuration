@@ -8,20 +8,19 @@ restart_agent() {
   launchctl kickstart -k "gui/$(id -u)/$LLAMA_LABEL"
 }
 
-model_action() {
-  local action="$1" model="$2"
-  curl -fsS -X POST "$(server_url)/models/$action" -H 'Content-Type: application/json' -d "{\"model\": \"$model\"}" >/dev/null
-}
-
 prefetch() {
   local model="$1"
   echo "fetching $model ..."
-  model_action load "$model" && model_action unload "$model" || echo "  failed: $model is not known to the server"
+  case "$(fetch_model_status "$model")" in
+    loaded|sleeping) echo "  already loaded"; return 0 ;;
+    unknown) echo "  not known to the server (restart it after editing config.ini)"; return 0 ;;
+  esac
+  model_action load "$model" && wait_until_loaded "$model" && model_action unload "$model" && echo "  done"
 }
 
 prefetch_all() {
   while IFS= read -r model; do
-    [[ -n "$model" ]] && prefetch "$model"
+    [[ -z "$model" ]] || prefetch "$model" || true
   done < <(preset_model_names "$here/config.ini")
 }
 

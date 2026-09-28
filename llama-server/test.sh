@@ -57,10 +57,26 @@ test_missing_models_reports_difference() {
   assert_eq "" "$(missing_models $'alpha' $'alpha\nbeta')" "missing_models should be empty when the server serves everything in the preset"
 }
 
+test_model_status_reads_router_status() {
+  local json='{"data":[{"id":"alpha","status":{"value":"loaded"}},{"id":"beta","status":{"value":"downloading","failed":false}},{"id":"gamma","status":{"value":"unloaded","failed":true,"exit_code":1}}]}'
+  assert_eq "loaded" "$(model_status alpha <<<"$json")" "model_status should read the status value of a served model"
+  assert_eq "downloading" "$(model_status beta <<<"$json")" "model_status should report in-progress downloads"
+  assert_eq "failed" "$(model_status gamma <<<"$json")" "model_status should report failed over the raw status"
+  assert_eq "unknown" "$(model_status delta <<<"$json")" "model_status should report unknown for models the server does not list"
+}
+
+test_model_progress_sums_files() {
+  local json='{"data":[{"id":"alpha","status":{"value":"downloading"},"progress":{"u1":{"done":1073741824,"total":2147483648},"u2":{"done":0,"total":2147483648}}},{"id":"beta","status":{"value":"loading"}}]}'
+  assert_eq "1.00 / 4.00 GiB  25.0%" "$(model_progress alpha <<<"$json")" "model_progress should sum done and total over all files of a model"
+  assert_eq "" "$(model_progress beta <<<"$json")" "model_progress should print nothing for a model without download progress"
+}
+
+test_model_progress_sums_files
 test_render_substitutes_placeholders
 test_preset_model_names_lists_sections
 test_served_model_names_parses_v1_models
 test_missing_models_reports_difference
+test_model_status_reads_router_status
 
 if ((failures > 0)); then
   echo "$failures failure(s)"

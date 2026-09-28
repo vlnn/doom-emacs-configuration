@@ -33,7 +33,7 @@
 (defconst my/llama-server-host "127.0.0.1:8080")
 
 (defconst my/llama-server-fallback-models
-  '(qwopus-reason qwopus-coder deepseek-r1-32b))
+  '(qwopus-reason qwopus-coder qwopus-fast gpt-oss-20b))
 
 (defun my/llama-server-url (path)
   (concat "http://" my/llama-server-host path))
