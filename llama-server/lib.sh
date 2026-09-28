@@ -18,6 +18,20 @@ preset_model_names() {
   sed -n 's/^\[\(.*\)\]$/\1/p' "$ini" | grep -vx '\*'
 }
 
+preset_hf_models() {
+  local ini="$1"
+  sed -n 's/^hf *= *\([^:]*\):\{0,1\}\(.*\)$/\1 \2/p' "$ini"
+}
+
+hf_include_pattern() {
+  local tag="$1"
+  [[ -n "$tag" ]] && echo "*$tag*" || echo "*.gguf"
+}
+
+hf_cli() {
+  command -v hf 2>/dev/null || command -v huggingface-cli 2>/dev/null
+}
+
 served_model_names() {
   python3 -c 'import json, sys; print("\n".join(m["id"] for m in json.load(sys.stdin)["data"]))'
 }

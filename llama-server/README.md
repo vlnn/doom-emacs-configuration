@@ -8,7 +8,9 @@ server for that list at startup, so Emacs never drifts from what is installed.
 ./install.sh            # brew install llama.cpp, link config.ini, start launchd agent
 ./sync.sh               # compare config.ini with what the server serves
 ./sync.sh --restart     # after editing config.ini
-./sync.sh --prefetch    # download every model now instead of on first request
+./sync.sh --pull        # download every hf= model with the hf CLI (resumable), then restart
+./sync.sh --prefetch    # let the server load each model once (downloads if --pull was skipped)
+./sync.sh --unload-all  # free memory without restarting
 ./test.sh               # unit tests for the shell helpers
 ```
 

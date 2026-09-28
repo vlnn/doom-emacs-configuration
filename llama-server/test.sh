@@ -71,6 +71,21 @@ test_model_progress_sums_files() {
   assert_eq "" "$(model_progress beta <<<"$json")" "model_progress should print nothing for a model without download progress"
 }
 
+test_preset_hf_models_lists_repo_and_tag() {
+  local ini
+  ini="$(mktemp)"
+  printf '[*]\nctx-size = 1\n\n[a]\nhf = org/repo-GGUF:Q4_K_M\n\n[b]\nmodel = /x.gguf\n\n[c]\nhf = ggml-org/gpt-oss-20b-GGUF\n' >"$ini"
+  assert_eq $'org/repo-GGUF Q4_K_M\nggml-org/gpt-oss-20b-GGUF ' "$(preset_hf_models "$ini")" "preset_hf_models should list repo and tag for every hf section, empty tag when absent"
+  rm -f "$ini"
+}
+
+test_hf_include_pattern_matches_tag_or_everything() {
+  assert_eq "*Q4_K_M*" "$(hf_include_pattern Q4_K_M)" "hf_include_pattern should glob around the quant tag"
+  assert_eq "*.gguf" "$(hf_include_pattern "")" "hf_include_pattern should take all ggufs when no tag is given"
+}
+
+test_preset_hf_models_lists_repo_and_tag
+test_hf_include_pattern_matches_tag_or_everything
 test_model_progress_sums_files
 test_render_substitutes_placeholders
 test_preset_model_names_lists_sections
