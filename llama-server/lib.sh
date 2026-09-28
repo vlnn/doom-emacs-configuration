@@ -28,6 +28,16 @@ hf_include_pattern() {
   [[ -n "$tag" ]] && echo "*$tag*" || echo "*.gguf"
 }
 
+blob_is_intact() {
+  local blob="$1"
+  [[ "$(basename "$blob")" == "$(shasum -a 256 "$blob" | cut -c1-64)" ]]
+}
+
+lfs_blobs() {
+  local cache="${LLAMA_MODELS_DIR:-$HOME/.cache/llama.cpp}"
+  find "$cache" -path '*/blobs/*' -type f -name '[0-9a-f]*' -size +1M 2>/dev/null | grep -E '/[0-9a-f]{64}$' || true
+}
+
 hf_cli() {
   command -v hf 2>/dev/null || command -v huggingface-cli 2>/dev/null
 }

@@ -84,8 +84,22 @@ test_hf_include_pattern_matches_tag_or_everything() {
   assert_eq "*.gguf" "$(hf_include_pattern "")" "hf_include_pattern should take all ggufs when no tag is given"
 }
 
+test_blob_is_intact_compares_name_with_sha256() {
+  local dir good bad
+  dir="$(mktemp -d)"
+  printf 'hello\n' >"$dir/tmp"
+  good="$dir/$(shasum -a 256 "$dir/tmp" | cut -c1-64)"
+  mv "$dir/tmp" "$good"
+  bad="$dir/0000000000000000000000000000000000000000000000000000000000000000"
+  printf 'hello\n' >"$bad"
+  assert_eq "ok" "$(blob_is_intact "$good" && echo ok || echo bad)" "blob_is_intact should accept a blob whose name is its sha256"
+  assert_eq "bad" "$(blob_is_intact "$bad" && echo ok || echo bad)" "blob_is_intact should reject a blob whose content does not hash to its name"
+  rm -rf "$dir"
+}
+
 test_preset_hf_models_lists_repo_and_tag
 test_hf_include_pattern_matches_tag_or_everything
+test_blob_is_intact_compares_name_with_sha256
 test_model_progress_sums_files
 test_render_substitutes_placeholders
 test_preset_model_names_lists_sections

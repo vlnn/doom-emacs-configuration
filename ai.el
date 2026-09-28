@@ -3,17 +3,22 @@
 (global-auto-revert-mode 1)
 (setq auto-revert-interval 1)
 
+(defconst my/llama-server-host "127.0.0.1:8080")
+
+(defun my/llama-server-url (path)
+  (concat "http://" my/llama-server-host path))
+
 (use-package! aider
   :init
-  (require 'aider-helm)
   (key-chord-define-global "12" 'aider-transient-menu)
   (map! :leader :desc "aider" "1" #'aider-transient-menu)
   :config
   (require 'aider-doom)
-  (setenv "OPENAI_API_BASE" "http://127.0.0.1:8080/v1")
-  (setenv "OPENAI_API_KEY" "llama-server")
   (setq aider-program "cecli"
-        aider-args '("--model" "openai/qwopus-coder"))
+        aider-args (list "--model" "openai/qwopus-coder"
+                         "--openai-api-base" (my/llama-server-url "/v1")
+                         "--openai-api-key" "llama-server"
+                         "--no-show-model-warnings"))
   (set-popup-rule! "^\\*aider"   :quit nil)
   (set-popup-rule! "^\\*Python\\*" :quit nil))
 
@@ -22,7 +27,7 @@
   (ai-code-set-backend 'aider)
   (setq ai-code-menu-layout 'two-columns
         ai-code-auto-test-type 'ask-me)
-  (global-set-key (kbd "C-c a") #'ai-code-menu)
+  (map! "C-c a" #'ai-code-menu)
   (ai-code-prompt-filepath-completion-mode 1)
   (with-eval-after-load 'evil  (ai-code-backends-infra-evil-setup))
   (with-eval-after-load 'magit (ai-code-magit-setup-transients)))
@@ -30,13 +35,8 @@
 (use-package! mindstream
   :config (mindstream-mode))
 
-(defconst my/llama-server-host "127.0.0.1:8080")
-
 (defconst my/llama-server-fallback-models
   '(qwopus-reason qwopus-coder qwopus-fast gpt-oss-20b))
-
-(defun my/llama-server-url (path)
-  (concat "http://" my/llama-server-host path))
 
 (defun my/llama-server-model-ids (json)
   (mapcar (lambda (m) (intern (alist-get 'id m)))
@@ -82,10 +82,8 @@
 (set-popup-rule! "^\\*gptel-magit diff-explain\\*$"
   :side 'right :size 0.4 :select t :quit 'current :ttl nil)
 
-
 (set-popup-rule! "^\\*llama-server\\*$"
   :side 'right :size 0.4 :select t :quit nil :ttl nil)
-
 
 (use-package! opencode
   :init

@@ -14,6 +14,10 @@ require_macos() {
   [[ "$(uname)" == Darwin ]] || { echo "install.sh targets macOS launchd; on Linux write a systemd --user unit instead" >&2; exit 1; }
 }
 
+refuse_root() {
+  [[ "$(id -u)" != 0 ]] || { echo "run install.sh as your own user, not with sudo: the agent lives in ~/Library/LaunchAgents and runs in your GUI session" >&2; exit 1; }
+}
+
 ensure_llama_server_installed() {
   command -v llama-server >/dev/null || brew install llama.cpp
   command -v llama-server
@@ -46,6 +50,7 @@ report() {
 
 main() {
   require_macos
+  refuse_root
   local binary
   binary="$(ensure_llama_server_installed)"
   link_preset

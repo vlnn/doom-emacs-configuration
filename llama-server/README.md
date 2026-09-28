@@ -9,7 +9,8 @@ server for that list at startup, so Emacs never drifts from what is installed.
 ./sync.sh               # compare config.ini with what the server serves
 ./sync.sh --restart     # after editing config.ini
 ./sync.sh --pull        # download every hf= model with the hf CLI (resumable), then restart
-./sync.sh --prefetch    # let the server load each model once (downloads if --pull was skipped)
+./sync.sh --verify      # sha256 every cached blob against its HF hash
+./sync.sh --prefetch    # optional: load each preset once to catch broken sections early
 ./sync.sh --unload-all  # free memory without restarting
 ./test.sh               # unit tests for the shell helpers
 ```

@@ -30,7 +30,7 @@ ensure_hf_cli() {
 pull() {
   local repo="$1" tag="$2"
   echo "pulling $repo ${tag:+($tag)} ..."
-  "$(hf_cli)" download "$repo" --include "$(hf_include_pattern "$tag")" --cache-dir "${LLAMA_MODELS_DIR:-$HOME/.cache/llama.cpp}" >/dev/null
+  HF_HUB_DISABLE_XET=1 "$(hf_cli)" download "$repo" --include "$(hf_include_pattern "$tag")" --cache-dir "${LLAMA_MODELS_DIR:-$HOME/.cache/llama.cpp}" >/dev/null
 }
 
 pull_all() {
@@ -41,6 +41,21 @@ pull_all() {
   echo "downloaded; restarting the router so it picks the files up from the cache"
   restart_agent
   wait_for_server
+}
+
+verify_all() {
+  local blob corrupt=0
+  while IFS= read -r blob; do
+    [[ -n "$blob" ]] || continue
+    printf '%s ... ' "${blob#"$HOME"/}"
+    if blob_is_intact "$blob"; then
+      echo ok
+    else
+      echo CORRUPT
+      corrupt=$((corrupt + 1))
+    fi
+  done < <(lfs_blobs)
+  ((corrupt == 0)) || { echo "$corrupt corrupt blob(s): rm them and run sync.sh --pull" >&2; exit 1; }
 }
 
 unload_all() {
@@ -58,7 +73,8 @@ prefetch_all() {
 main() {
   case "${1:-}" in
     --restart) restart_agent; wait_for_server ;;
-    --pull) pull_all ;;
+    --pull) pull_all; verify_all ;;
+    --verify) verify_all; exit 0 ;;
     --prefetch) prefetch_all ;;
     --unload-all) unload_all ;;
   esac
