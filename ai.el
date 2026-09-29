@@ -78,12 +78,63 @@
 ;;; annotated explanation — SPC o l E
 
 (defconst my/gptel-annotate-directive
-  "Reproduce the given code verbatim. Before each meaningful line, insert one or more comment lines, in the language's own comment syntax, explaining what that line does, numbered 1., 2., ... in order. Keep each comment line under 60 characters; continue onto another comment line rather than exceeding it. For a line doing several things, name them left to right in evaluation order. Output only the annotated code: no prose, no code fences.")
+  "You receive source code, each line prefixed by its number and a colon. For every non-blank line output exactly one line of the form `N: explanation`, N being that line's number, saying what the line does in under 80 characters, naming its steps in evaluation order. In stack languages the top of stack is consumed first. Output nothing else: no code, no prose, no fences.")
+
+(defconst my/gptel-annotate-width 60)
 
 (defun my/gptel-annotate-text ()
   (if (use-region-p)
       (buffer-substring-no-properties (region-beginning) (region-end))
     (thing-at-point 'defun t)))
+
+(defun my/gptel-annotate-number-lines (text)
+  (string-join (seq-map-indexed (lambda (line i) (format "%d: %s" (1+ i) line))
+                                (split-string text "\n"))
+               "\n"))
+
+(defun my/gptel-annotate-parse (response)
+  (let (result)
+    (dolist (line (split-string response "\n" t))
+      (when (string-match "\\`\\s-*\\([0-9]+\\)[.:)]\\s-*\\(.*\\)\\'" line)
+        (push (cons (string-to-number (match-string 1 line))
+                    (string-trim (match-string 2 line)))
+              result)))
+    (nreverse result)))
+
+(defun my/gptel-annotate-explanation (n parsed)
+  (string-join (mapcar #'cdr (seq-filter (lambda (e) (= (car e) n)) parsed)) " "))
+
+(defun my/gptel-annotate-wrap (text)
+  (with-temp-buffer
+    (insert text)
+    (let ((fill-column my/gptel-annotate-width))
+      (fill-region (point-min) (point-max)))
+    (split-string (buffer-string) "\n" t)))
+
+(defun my/gptel-annotate-indentation (line)
+  (if (string-match "\\`\\s-*" line) (match-string 0 line) ""))
+
+(defun my/gptel-annotate-comment-lines (n text indent)
+  (let* ((prefix (concat indent (string-trim (or comment-start "#")) " "))
+         (label (format "%d. " n))
+         (pad (make-string (length label) ?\s))
+         (lines (my/gptel-annotate-wrap text)))
+    (cons (concat prefix label (car lines))
+          (mapcar (lambda (l) (concat prefix pad l)) (cdr lines)))))
+
+(defun my/gptel-annotate-line (line n parsed)
+  (let ((explanation (my/gptel-annotate-explanation n parsed)))
+    (if (string-empty-p explanation)
+        line
+      (string-join (append (my/gptel-annotate-comment-lines
+                            n explanation (my/gptel-annotate-indentation line))
+                           (list line))
+                   "\n"))))
+
+(defun my/gptel-annotate-render (source parsed)
+  (string-join (seq-map-indexed (lambda (line i) (my/gptel-annotate-line line (1+ i) parsed))
+                                (split-string source "\n"))
+               "\n"))
 
 (defun my/gptel-annotate-buffer (mode)
   (with-current-buffer (get-buffer-create "*gptel-annotate*")
@@ -91,41 +142,33 @@
       (erase-buffer)
       (unless (derived-mode-p mode)
         (delay-mode-hooks (funcall mode)))
+      (insert "Explaining...")
       (read-only-mode 1)
       (evil-local-set-key 'normal (kbd "q") #'quit-window))
     (current-buffer)))
 
-(defun my/gptel-annotate-append (buffer text)
+(defun my/gptel-annotate-show (buffer source response)
   (with-current-buffer buffer
     (let ((inhibit-read-only t))
-      (goto-char (point-max))
-      (insert text))))
+      (erase-buffer)
+      (insert (my/gptel-annotate-render source (my/gptel-annotate-parse response))))))
 
-(defun my/gptel-annotate-strip-fences (buffer)
-  (with-current-buffer buffer
-    (let ((inhibit-read-only t))
-      (goto-char (point-min))
-      (flush-lines "^\\s-*```"))))
-
-(defun my/gptel-annotate-callback (response info)
-  (let ((buffer (plist-get info :buffer)))
+(defun my/gptel-annotate-callback (source buffer)
+  (lambda (response info)
     (pcase response
-      ((pred stringp) (my/gptel-annotate-append buffer response))
-      ('t (my/gptel-annotate-strip-fences buffer))
+      ((pred stringp) (my/gptel-annotate-show buffer source response))
       ('nil (message "Annotate failed: %s" (plist-get info :status))))))
 
 (defun my/gptel-annotate ()
   "Show the region or defun at point with a numbered explanation per line."
   (interactive)
-  (let* ((text (my/gptel-annotate-text))
+  (let* ((source (my/gptel-annotate-text))
          (buffer (my/gptel-annotate-buffer major-mode))
          (gptel-model my/llm-fast-model))
     (pop-to-buffer buffer)
-    (gptel-request text
+    (gptel-request (my/gptel-annotate-number-lines source)
       :system my/gptel-annotate-directive
-      :stream t
-      :buffer buffer
-      :callback #'my/gptel-annotate-callback)))
+      :callback (my/gptel-annotate-callback source buffer))))
 
 (set-popup-rule! "^\\*gptel-annotate\\*$"
   :side 'right :size 0.5 :select t :quit t :ttl nil)
@@ -173,4 +216,3 @@
   :config
   (setq opencode-default-model "anthropic/claude-sonnet-4-6")
   (set-popup-rule! "^\\*opencode" :side 'right :size 0.4 :select t :quit nil :ttl nil))
-
