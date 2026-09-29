@@ -1,10 +1,10 @@
 ;;; appearance.el -*- lexical-binding: t; -*-
 
-(setq font-family "DepartureMono Nerd Font Propo")
+(defvar +appearance-font-family "DepartureMono Nerd Font Propo")
 
-(setq doom-font        (font-spec :family font-family :size 13 :weight 'regular)
-      doom-symbol-font (font-spec :family font-family :size 13 :weight 'thin)
-      doom-big-font    (font-spec :family font-family :size 23 :weight 'regular))
+(setq doom-font        (font-spec :family +appearance-font-family :size 13 :weight 'regular)
+      doom-symbol-font (font-spec :family +appearance-font-family :size 13 :weight 'thin)
+      doom-big-font    (font-spec :family +appearance-font-family :size 23 :weight 'regular))
 
 (setq doom-theme 'doom-flatwhite)
 
@@ -17,9 +17,8 @@
 (set-cursor-color "dark blue")
 (setq-default line-spacing 1)
 
-(use-package! hl-line
-  :custom-face
-  (hl-line ((t (:background "#d5f7d5")))))
+(custom-set-faces!
+  '(hl-line :background "#d5f7d5"))
 
 (mouse-avoidance-mode 'animate)
 (setq mouse-avoidance-threshold 0.5)
@@ -27,7 +26,9 @@
 (setq display-line-numbers-type t)
 (setq word-wrap nil)
 
-; (turn-on-solaire-mode)
+(setq frame-resize-pixelwise t
+      window-resize-pixelwise t
+      frame-inhibit-implied-resize t)
 
 (use-package! ultra-scroll
   :init
@@ -35,6 +36,3 @@
         scroll-margin 0)
   :config
   (ultra-scroll-mode 1))
-
-;; Start as big as possible
-;; (add-to-list 'default-frame-alist '(fullscreen . maximized))

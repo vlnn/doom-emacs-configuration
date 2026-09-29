@@ -4,5 +4,5 @@
 # expand-env: ((yas-indent-line 'fixed) (col (current-indentation)))
 # --
 `(make-string col ?\s)`if ${1:condition}:
-`(yas-body (+ col 4))`${2:}
+`(+snippets-body (+ col 4))`${2:}
 $0

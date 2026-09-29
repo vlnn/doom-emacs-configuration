@@ -1,7 +1,5 @@
 ;;; $DOOMDIR/config.el -*- lexical-binding: t; -*-
 
-(setq gc-cons-threshold most-positive-fixnum)
-
 ;; I don't like to comment out a block of lisp with ;
 (defmacro comment (&rest _body)
   "Comment out one or more s-expressions."
@@ -20,7 +18,7 @@
 ;;;   dape         — debugging
 ;;;   dirvish      — file manager
 ;;;   notes        — denote
-;;;   ai           — aider / ai-code / gptel / mindstream
+;;;   ai           — llama-server backend, gptel, aider / ai-code / opencode
 ;;;   forth        — forth-mode + dumb-jump rules
 ;;;   apl          — gnu-apl-mode + ride-apl.el, mirrors the cider setup
 ;;;   casual       — transient menus across modes
@@ -54,6 +52,9 @@
 ;; smartparens is BAD if you have parinfer (e.g. it autocompletes (|)() instead of (|()))
 (remove-hook 'doom-first-buffer-hook #'smartparens-global-mode)
 
+;; AI agents and external tools rewrite files under us; keep buffers fresh.
+(global-auto-revert-mode 1)
+
 ;;; Tiny package configs that don't earn their own file
 
 (use-package! demo-it
@@ -67,7 +68,6 @@
         "<M-down>" #'drag-stuff-down))
 
 (use-package! mini-ontop
-  :ensure t
   :config
   (mini-ontop-mode 1)
   (setq mini-ontop-lines 40))
@@ -75,10 +75,6 @@
 (use-package! expand-region
   :bind (:map evil-visual-state-map
          ("v" . er/expand-region)))
-
-(use-package! casual)
-
-(use-package! ob-duckdb)
 
 (use-package! github-explorer
   :commands (github-explorer)
@@ -104,7 +100,6 @@
         :n "DEL" #'+github-explorer/up))
 
 (use-package! elfeed-score
-  :ensure t
   :config
   (elfeed-score-enable)
   (define-key elfeed-search-mode-map "=" elfeed-score-map))
@@ -128,7 +123,4 @@
   (org-babel-do-load-languages
    'org-babel-load-languages
    '((plantuml . t))))
-(setq frame-resize-pixelwise t
-      window-resize-pixelwise t)
-(setq frame-inhibit-implied-resize t)
 

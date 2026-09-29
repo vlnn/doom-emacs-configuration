@@ -2,4 +2,5 @@
 .ipynb_checkpoints/
 flycheck_*.el
 *.elc
+*.bak
 secrets.el

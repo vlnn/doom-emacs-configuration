@@ -14,11 +14,11 @@
 ;; Move cursor with 'jkl;', not default evil 'hjkl'
 (setq evil-snipe-override-evil-repeat-keys nil)
 
-(with-eval-after-load 'evil-maps
-  (define-key evil-motion-state-map "j"  'evil-backward-char)
-  (define-key evil-motion-state-map "\;" 'evil-forward-char)
-  (define-key evil-motion-state-map "k"  'evil-next-visual-line)
-  (define-key evil-motion-state-map "l"  'evil-previous-visual-line))
+(map! :map evil-motion-state-map
+      "j" #'evil-backward-char
+      ";" #'evil-forward-char
+      "k" #'evil-next-visual-line
+      "l" #'evil-previous-visual-line)
 
 (map! :map evil-window-map
       "j"     #'evil-window-left
@@ -27,11 +27,9 @@
       ";"     #'evil-window-right
       "C-h"   #'+evil/window-move-left
       "C-k"   #'+evil/window-move-down
-      "C-\;"  #'+evil/window-move-right)
+      "C-;"   #'+evil/window-move-right)
 
-(map! :map (minibuffer-mode-map
-            ivy-minibuffer-map
-            vertico-map)
+(map! :map (minibuffer-mode-map vertico-map)
       :g "C-k" #'next-line
       :g "C-l" #'previous-line)
 

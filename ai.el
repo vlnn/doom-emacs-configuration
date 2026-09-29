@@ -1,6 +1,4 @@
 ;;; ai.el -*- lexical-binding: t; -*-
-;; AI assistants want fresh on-disk state; revert buffers automatically.
-(global-auto-revert-mode 1)
 
 ;;; llama-server
 

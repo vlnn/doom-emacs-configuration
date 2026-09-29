@@ -12,7 +12,7 @@
  company-anaconda
  lsp-python-ms       ; prefer lsp-pyright
  nose                ; prefer pytest
- pipenv)             ; prefer poetry
+ pipenv)             ; prefer uv
 
 (package! json-mode :disable t)
 

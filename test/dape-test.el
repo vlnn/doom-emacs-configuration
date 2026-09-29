@@ -1,0 +1,30 @@
+;;; test/dape-test.el -*- lexical-binding: t; -*-
+
+(ert-deftest +dape--test-file-p/recognises-pytest-names ()
+  (pcase-dolist (`(,file . ,expected) '(("test_foo.py" . t)
+                                        ("foo_test.py" . t)
+                                        ("conftest.py" . t)
+                                        ("pkg/tests/test_bar.py" . t)
+                                        ("foo.py" . nil)
+                                        ("testing.py" . nil)
+                                        ("contest.py" . nil)))
+    (ert-info ((format "%s should%s be treated as a test file" file (if expected "" " not")))
+      (should (eq expected (and (+dape--test-file-p file) t))))))
+
+(ert-deftest +dape--pytest-config/passes-targets-as-vector ()
+  (let ((config (+dape--pytest-config "a.py::test_a" "b.py::test_b")))
+    (ert-info ("pytest config should launch the pytest module")
+      (should (equal "pytest" (plist-get config :module))))
+    (ert-info ("pytest config should pass every target as a vector of args")
+      (should (equal ["a.py::test_a" "b.py::test_b"] (plist-get config :args))))))
+
+(ert-deftest +dape--pytest-config/no-targets-gives-empty-args ()
+  (ert-info ("pytest config without targets should pass an empty vector")
+    (should (equal [] (plist-get (+dape--pytest-config) :args)))))
+
+(ert-deftest +dape--program-config/sets-program ()
+  (let ((config (+dape--program-config "/tmp/x.py")))
+    (ert-info ("program config should launch the given file")
+      (should (equal "/tmp/x.py" (plist-get config :program))))
+    (ert-info ("program config should run the adapter through uv")
+      (should (equal "uv" (plist-get config 'command))))))
