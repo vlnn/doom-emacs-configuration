@@ -177,9 +177,15 @@
 
 ;;; gptel-magit — commit messages and diff explanations
 
+(defun my/gptel-magit-require-staged (fn &rest args)
+  (if (string-empty-p (magit-git-output "diff" "--cached"))
+      (user-error "Nothing staged; stage the changes you want described")
+    (apply fn args)))
+
 (after! gptel-magit
   (setq gptel-magit-model my/llm-fast-model
-        gptel-magit-body-length 72))
+        gptel-magit-body-length 72)
+  (advice-add 'gptel-magit--generate :around #'my/gptel-magit-require-staged))
 
 (set-popup-rule! "^\\*gptel-magit diff-explain\\*$"
   :side 'right :size 0.4 :select t :quit 'current :ttl nil)
