@@ -71,7 +71,11 @@
 (after! gptel
   (setq gptel-model 'qwopus-reason
         gptel-include-reasoning 'ignore
-        gptel-backend (my/llama-server-backend))
+        gptel-backend (my/llama-server-backend)
+        gptel-quick-backend gptel-backend
+        gptel-quick-word-count 24
+        gptel-quick-timeout 60
+        gptel-quick-model 'qwopus-coder)
   (setf (alist-get 'review gptel-directives)
         "You review code. Flag non-idiomatic constructs, missing or weak test cases, oversized functions, and asserts lacking explanation strings. Be terse."
         (alist-get 'plan gptel-directives)
@@ -91,3 +95,59 @@
   :config
   (setq opencode-default-model "anthropic/claude-sonnet-4-6")
   (set-popup-rule! "^\\*opencode" :side 'right :size 0.4 :select t :quit nil :ttl nil))
+
+
+(defconst my/gptel-annotate-directive
+  "Reproduce the given code verbatim. Before each meaningful line, insert one or more comment lines, in the language's own comment syntax, explaining what that line does, numbered 1., 2., ... in order. Keep each comment line under 60 characters; continue onto another comment line rather than exceeding it. For a line doing several things, name them left to right in evaluation order. Output only the annotated code: no prose, no code fences.")
+
+(defun my/gptel-annotate-text ()
+  (if (use-region-p)
+      (buffer-substring-no-properties (region-beginning) (region-end))
+    (thing-at-point 'defun t)))
+
+(defun my/gptel-annotate-buffer (mode)
+  (with-current-buffer (get-buffer-create "*gptel-annotate*")
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (unless (derived-mode-p mode) (funcall mode))
+      (read-only-mode 1)
+      (evil-local-set-key 'normal (kbd "q") #'quit-window))
+    (current-buffer)))
+
+(defun my/gptel-annotate-append (buffer text)
+  (with-current-buffer buffer
+    (let ((inhibit-read-only t))
+      (goto-char (point-max))
+      (insert text))))
+
+(defun my/gptel-annotate-strip-fences (buffer)
+  (with-current-buffer buffer
+    (let ((inhibit-read-only t))
+      (goto-char (point-min))
+      (flush-lines "^\\s-*```"))))
+
+(defun my/gptel-annotate-callback (response info)
+  (let ((buffer (plist-get info :buffer)))
+    (pcase response
+      ((pred stringp) (my/gptel-annotate-append buffer response))
+      ('t (my/gptel-annotate-strip-fences buffer))
+      ('nil (message "Annotate failed: %s" (plist-get info :status))))))
+
+(defun my/gptel-annotate ()
+  "Show the region or defun at point with a numbered explanation per line."
+  (interactive)
+  (let* ((text (my/gptel-annotate-text))
+         (buffer (my/gptel-annotate-buffer major-mode))
+         (gptel-backend (or gptel-quick-backend gptel-backend))
+         (gptel-model (or gptel-quick-model gptel-model)))
+    (pop-to-buffer buffer)
+    (gptel-request text
+      :system my/gptel-annotate-directive
+      :stream t
+      :buffer buffer
+      :callback #'my/gptel-annotate-callback)))
+
+(set-popup-rule! "^\\*gptel-annotate\\*$"
+  :side 'right :size 0.5 :select t :quit t :ttl nil)
+
+(map! :leader :desc "Explain annotated" "o l E" #'my/gptel-annotate)
