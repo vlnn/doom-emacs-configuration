@@ -1,4 +1,4 @@
-;;; python.el -*- lexical-binding: t; -*-
+;;; my/python/config.el -*- lexical-binding: t; -*-
 
 (defun +python--run-from-project-root (orig-fun &rest args)
   (let ((default-directory (or (projectile-project-root) default-directory)))
@@ -41,3 +41,5 @@
         lsp-pylsp-plugins-flake8-enabled t
         lsp-pylsp-plugins-black-enabled t
         lsp-pylsp-plugins-isort-enabled t))
+
+(load! "dape")

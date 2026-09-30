@@ -1,4 +1,4 @@
-;;; snippets.el -*- lexical-binding: t; -*-
+;;; my/snippets/config.el -*- lexical-binding: t; -*-
 
 (defun +snippets--indent-of (line)
   (string-match "[^ \t]" line))

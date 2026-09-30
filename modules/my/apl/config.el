@@ -1,4 +1,4 @@
-;;; apl.el -*- lexical-binding: t; -*-
+;;; my/apl/config.el -*- lexical-binding: t; -*-
 
 ;; gnu-apl-mode + ride-apl.el for Dyalog APL, wired the same way the
 ;; (clojure +lsp) module wires cider: major mode with eldoc/imenu,

@@ -1,4 +1,4 @@
-;;; completion.el -*- lexical-binding: t; -*-
+;;; my/editing/completion.el -*- lexical-binding: t; -*-
 
 (setq-default indent-tabs-mode nil)
 (setq-default c-basic-offset 4)

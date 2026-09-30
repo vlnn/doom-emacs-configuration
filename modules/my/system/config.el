@@ -1,4 +1,4 @@
-;;; macos.el -*- lexical-binding: t; -*-
+;;; my/system/config.el -*- lexical-binding: t; -*-
 
 (when (eq system-type 'darwin)
   (setq mac-right-option-modifier 'control
@@ -10,3 +10,9 @@
 
   (when-let* ((bash (executable-find "bash")))
     (setq shell-file-name bash)))
+
+;; machine-local values; git-ignored, see secrets.el.example
+(load! "secrets" doom-user-dir t)
+
+;; AI agents and external tools rewrite files under us; keep buffers fresh.
+(global-auto-revert-mode 1)

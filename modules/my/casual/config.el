@@ -1,4 +1,4 @@
-;;; casual.el -*- lexical-binding: t; -*-
+;;; my/casual/config.el -*- lexical-binding: t; -*-
 
 (after! org-agenda
   (require 'casual-agenda)

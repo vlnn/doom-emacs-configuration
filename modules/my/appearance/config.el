@@ -1,4 +1,4 @@
-;;; appearance.el -*- lexical-binding: t; -*-
+;;; my/appearance/config.el -*- lexical-binding: t; -*-
 
 (defvar +appearance-font-family "DepartureMono Nerd Font Propo")
 
@@ -36,3 +36,12 @@
         scroll-margin 0)
   :config
   (ultra-scroll-mode 1))
+
+(use-package! mini-ontop
+  :config
+  (mini-ontop-mode 1)
+  (setq mini-ontop-lines 40))
+
+(use-package! beacon
+  :config
+  (beacon-mode 1))

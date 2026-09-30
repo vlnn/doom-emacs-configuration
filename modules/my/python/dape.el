@@ -1,4 +1,4 @@
-;;; dape.el -*- lexical-binding: t; -*-
+;;; my/python/dape.el -*- lexical-binding: t; -*-
 
 (add-hook! (python-mode python-ts-mode) (require 'dape))
 

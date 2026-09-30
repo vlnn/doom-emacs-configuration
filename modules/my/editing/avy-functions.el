@@ -1,4 +1,4 @@
-;;; avy-functions.el -*- lexical-binding: t; -*-
+;;; my/editing/avy-functions.el -*- lexical-binding: t; -*-
 
 (defun +avy--restore-window ()
   (select-window (cdr (ring-ref avy-ring 0)))
@@ -34,6 +34,20 @@
     (funcall eval-fn))
   t)
 
+(defun +avy--clojure-p ()
+  (derived-mode-p 'clojure-mode))
+
+(defun +avy--eval-sexp-before-point ()
+  (if (+avy--clojure-p)
+      (cider-eval-last-sexp)
+    (+eval/region (save-excursion (backward-sexp) (point)) (point))))
+
+(defun +avy--eval-defun-at-point ()
+  (if (+avy--clojure-p)
+      (cider-eval-defun-at-point)
+    (cl-destructuring-bind (start . end) (bounds-of-thing-at-point 'defun)
+      (+eval/region start end))))
+
 (defun +avy--lookup-at (pt lookup-fn)
   (save-excursion
     (goto-char pt)
@@ -53,8 +67,8 @@
 (defun avy-action-comment-whole-sexp (pt) (+avy--wrap-in-comment pt 'sexp))
 (defun avy-action-comment-whole-defn (pt) (+avy--wrap-in-comment pt 'defun))
 
-(defun avy-action-clojure-eval-whole-sexp (pt) (+avy--eval-at pt #'cider-eval-last-sexp))
-(defun avy-action-clojure-eval-whole-defn (pt) (+avy--eval-at pt #'cider-eval-defun-at-point))
+(defun avy-action-eval-whole-sexp (pt)  (+avy--eval-at pt #'+avy--eval-sexp-before-point))
+(defun avy-action-eval-whole-defun (pt) (+avy--eval-at pt #'+avy--eval-defun-at-point))
 
 (defun avy-action-lookup-documentation (pt) (+avy--lookup-at pt #'+lookup/documentation))
 (defun avy-action-lookup-references (pt)    (+avy--lookup-at pt #'+lookup/references))

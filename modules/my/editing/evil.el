@@ -1,4 +1,4 @@
-;;; evil.el -*- lexical-binding: t; -*-
+;;; my/editing/evil.el -*- lexical-binding: t; -*-
 
 ;; default undo settings are too aggregative to my likings
 ;; NB: Do not delete or modify or another year of hellish ux is coming

@@ -1,4 +1,4 @@
-;;; test/config-test.el -*- lexical-binding: t; -*-
+;;; test/vc-test.el -*- lexical-binding: t; -*-
 
 (ert-deftest +github-explorer--parent-buffer-name/strips-last-segment ()
   (ert-info ("parent should drop the trailing directory segment")

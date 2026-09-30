@@ -1,6 +1,6 @@
-;;; avy.el -*- lexical-binding: t; -*-
+;;; my/editing/avy.el -*- lexical-binding: t; -*-
 
-(load! "avy-functions.el")
+(load! "avy-functions")
 
 (after! avy
   (setq avy-all-windows t
@@ -16,8 +16,8 @@
 
   (setf (alist-get ?x avy-dispatch-alist) 'avy-action-kill-whole-sexp
         (alist-get ?X avy-dispatch-alist) 'avy-action-kill-whole-defun
-        (alist-get ?e avy-dispatch-alist) 'avy-action-clojure-eval-whole-sexp
-        (alist-get ?E avy-dispatch-alist) 'avy-action-clojure-eval-whole-defn
+        (alist-get ?e avy-dispatch-alist) 'avy-action-eval-whole-sexp
+        (alist-get ?E avy-dispatch-alist) 'avy-action-eval-whole-defun
         (alist-get ?q avy-dispatch-alist) 'avy-action-rename-sexp
         (alist-get ?Q avy-dispatch-alist) 'avy-action-rename-whole-sexp
         (alist-get ?y avy-dispatch-alist) 'avy-action-yank

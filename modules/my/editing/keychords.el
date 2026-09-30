@@ -1,4 +1,4 @@
-;;; keychords.el -*- lexical-binding: t; -*-
+;;; my/editing/keychords.el -*- lexical-binding: t; -*-
 
 (key-chord-mode 1)
 

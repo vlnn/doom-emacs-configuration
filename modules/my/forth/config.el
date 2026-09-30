@@ -1,4 +1,4 @@
-;;; forth.el -*- lexical-binding: t; -*-
+;;; my/forth/config.el -*- lexical-binding: t; -*-
 
 (use-package! forth-mode
   :mode ("\\.fs\\'" . forth-mode)

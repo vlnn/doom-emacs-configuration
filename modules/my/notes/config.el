@@ -1,4 +1,4 @@
-;;; notes.el -*- lexical-binding: t; -*-
+;;; my/notes/config.el -*- lexical-binding: t; -*-
 
 (use-package! denote
   :config

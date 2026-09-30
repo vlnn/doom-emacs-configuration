@@ -195,4 +195,20 @@
 
        :config
        ;;literate
-       (default +bindings +smartparens))
+       (default +bindings +smartparens)
+
+       ;; private modules, modules/my/*; order is load order
+       :my
+       system            ; macOS shell/modifiers, secrets.el, auto-revert
+       appearance        ; fonts, theme, cursor, scrolling
+       editing           ; completion, jkl; evil layout, key chords, avy actions
+       casual            ; transient menus
+       lsp               ; lsp-mode defaults, flycheck, jsonian
+       python            ; uv REPL, pylsp, dape
+       ai                ; llama-server + gptel, annotate, aider, ai-code, opencode
+       notes             ; denote
+       apl               ; gnu-apl-mode + ride-apl
+       forth
+       dirvish
+       vc                ; magit extras, why-this, github-explorer
+       snippets)         ; yasnippet helpers

@@ -1,4 +1,4 @@
-;;; dirvish.el -*- lexical-binding: t; -*-
+;;; my/dirvish/config.el -*- lexical-binding: t; -*-
 
 (after! dirvish
   (setq dirvish-attributes
