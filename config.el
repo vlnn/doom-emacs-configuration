@@ -76,6 +76,16 @@
   :bind (:map evil-visual-state-map
          ("v" . er/expand-region)))
 
+(defun +github-explorer--parent-buffer-name (name)
+  (replace-regexp-in-string "[^/]+/$" "" name))
+
+(defun +github-explorer/up ()
+  (interactive)
+  (let ((parent (+github-explorer--parent-buffer-name (buffer-name))))
+    (if (get-buffer parent)
+        (switch-to-buffer parent)
+      (message "Parent buffer not found"))))
+
 (use-package! github-explorer
   :commands (github-explorer)
   :init
@@ -83,14 +93,6 @@
         (:prefix ("G" . "github")
          :desc "Explore repo" "e" #'github-explorer))
   :config
-  (defun +github-explorer/up ()
-    (interactive)
-    (let* ((name (buffer-name))
-           (parent (replace-regexp-in-string "[^/]+/$" "" name)))
-      (if (get-buffer parent)
-          (switch-to-buffer parent)
-        (message "Parent buffer not found"))))
-
   (map! :map github-explorer-mode-map
         :n "RET" #'github-explorer-at-point
         :n "SPC" #'github-explorer-at-point

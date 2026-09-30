@@ -2,49 +2,49 @@
 
 ;;; llama-server
 
-(defconst my/llama-server-host "127.0.0.1:8080")
-(defconst my/llm-fast-model 'qwopus-coder)
-(defconst my/llm-think-model 'qwopus-reason)
+(defconst +ai-llama-host "127.0.0.1:8080")
+(defconst +ai-fast-model 'qwopus-coder)
+(defconst +ai-think-model 'qwopus-reason)
 
-(defconst my/llama-server-fallback-models
+(defconst +ai-llama-fallback-models
   '(qwopus-reason qwopus-coder qwopus-fast gpt-oss-20b))
 
-(defun my/llama-server-url (path)
-  (concat "http://" my/llama-server-host path))
+(defun +ai--llama-url (path)
+  (concat "http://" +ai-llama-host path))
 
-(defun my/llama-server-model-ids (json)
+(defun +ai--llama-model-ids (json)
   (mapcar (lambda (m) (intern (alist-get 'id m)))
           (alist-get 'data json)))
 
-(defun my/llama-server-fetch-models ()
-  (with-current-buffer (url-retrieve-synchronously (my/llama-server-url "/v1/models") t t 2)
+(defun +ai--llama-fetch-models ()
+  (with-current-buffer (url-retrieve-synchronously (+ai--llama-url "/v1/models") t t 2)
     (goto-char url-http-end-of-headers)
     (let ((json-key-type 'symbol)
           (json-array-type 'list))
-      (my/llama-server-model-ids (json-read)))))
+      (+ai--llama-model-ids (json-read)))))
 
-(defun my/llama-server-models ()
-  (or (ignore-errors (my/llama-server-fetch-models))
-      my/llama-server-fallback-models))
+(defun +ai--llama-models ()
+  (or (ignore-errors (+ai--llama-fetch-models))
+      +ai-llama-fallback-models))
 
-(defun my/llama-server-backend ()
+(defun +ai--llama-backend ()
   (gptel-make-openai "llama-server"
-    :host my/llama-server-host
+    :host +ai-llama-host
     :protocol "http"
     :endpoint "/v1/chat/completions"
     :key "llama-server"
     :stream t
-    :models (my/llama-server-models)))
+    :models (+ai--llama-models)))
 
-(defun my/llama-server-install-backend ()
-  (setq gptel-backend (my/llama-server-backend)
+(defun +ai--install-llama-backend ()
+  (setq gptel-backend (+ai--llama-backend)
         gptel-quick-backend gptel-backend
         gptel-magit-backend gptel-backend))
 
-(defun my/llama-server-refresh-models ()
+(defun +ai/refresh-llama-models ()
   "Re-read the served model list after editing llama-server/config.ini."
   (interactive)
-  (my/llama-server-install-backend)
+  (+ai--install-llama-backend)
   (message "gptel models: %s" (gptel-backend-models gptel-backend)))
 
 (set-popup-rule! "^\\*llama-server\\*$"
@@ -53,10 +53,10 @@
 ;;; gptel
 
 (after! gptel
-  (setq gptel-model my/llm-fast-model
+  (setq gptel-model +ai-fast-model
         gptel-include-reasoning 'ignore
         gptel-rewrite-default-action 'dispatch)
-  (my/llama-server-install-backend)
+  (+ai--install-llama-backend)
   (setf (alist-get 'review gptel-directives)
         "You review code. Flag non-idiomatic constructs, missing or weak test cases, oversized functions, and asserts lacking explanation strings. Be terse."
         (alist-get 'plan gptel-directives)
@@ -69,28 +69,28 @@
 ;;; gptel-quick — SPC o l e
 
 (after! gptel
-  (setq gptel-quick-model my/llm-fast-model
+  (setq gptel-quick-model +ai-fast-model
         gptel-quick-word-count 24
         gptel-quick-timeout 60))
 
 ;;; annotated explanation — SPC o l E
 
-(defconst my/gptel-annotate-directive
+(defconst +ai-annotate-directive
   "You receive source code, each line prefixed by its number and a colon. For every non-blank line output exactly one line of the form `N: explanation`, N being that line's number, saying what the line does in under 80 characters, naming its steps in evaluation order. In stack languages the top of stack is consumed first. Output nothing else: no code, no prose, no fences.")
 
-(defconst my/gptel-annotate-width 60)
+(defconst +ai-annotate-width 60)
 
-(defun my/gptel-annotate-text ()
+(defun +ai--annotate-text ()
   (if (use-region-p)
       (buffer-substring-no-properties (region-beginning) (region-end))
     (thing-at-point 'defun t)))
 
-(defun my/gptel-annotate-number-lines (text)
+(defun +ai--annotate-number-lines (text)
   (string-join (seq-map-indexed (lambda (line i) (format "%d: %s" (1+ i) line))
                                 (split-string text "\n"))
                "\n"))
 
-(defun my/gptel-annotate-parse (response)
+(defun +ai--annotate-parse (response)
   (let (result)
     (dolist (line (split-string response "\n" t))
       (when (string-match "\\`\\s-*\\([0-9]+\\)[.:)]\\s-*\\(.*\\)\\'" line)
@@ -99,42 +99,42 @@
               result)))
     (nreverse result)))
 
-(defun my/gptel-annotate-explanation (n parsed)
+(defun +ai--annotate-explanation (n parsed)
   (string-join (mapcar #'cdr (seq-filter (lambda (e) (= (car e) n)) parsed)) " "))
 
-(defun my/gptel-annotate-wrap (text)
+(defun +ai--annotate-wrap (text)
   (with-temp-buffer
     (insert text)
-    (let ((fill-column my/gptel-annotate-width))
+    (let ((fill-column +ai-annotate-width))
       (fill-region (point-min) (point-max)))
     (split-string (buffer-string) "\n" t)))
 
-(defun my/gptel-annotate-indentation (line)
+(defun +ai--annotate-indentation (line)
   (if (string-match "\\`\\s-*" line) (match-string 0 line) ""))
 
-(defun my/gptel-annotate-comment-lines (n text indent)
+(defun +ai--annotate-comment-lines (n text indent)
   (let* ((prefix (concat indent (string-trim (or comment-start "#")) " "))
          (label (format "%d. " n))
          (pad (make-string (length label) ?\s))
-         (lines (my/gptel-annotate-wrap text)))
+         (lines (+ai--annotate-wrap text)))
     (cons (concat prefix label (car lines))
           (mapcar (lambda (l) (concat prefix pad l)) (cdr lines)))))
 
-(defun my/gptel-annotate-line (line n parsed)
-  (let ((explanation (my/gptel-annotate-explanation n parsed)))
+(defun +ai--annotate-line (line n parsed)
+  (let ((explanation (+ai--annotate-explanation n parsed)))
     (if (string-empty-p explanation)
         line
-      (string-join (append (my/gptel-annotate-comment-lines
-                            n explanation (my/gptel-annotate-indentation line))
+      (string-join (append (+ai--annotate-comment-lines
+                            n explanation (+ai--annotate-indentation line))
                            (list line))
                    "\n"))))
 
-(defun my/gptel-annotate-render (source parsed)
-  (string-join (seq-map-indexed (lambda (line i) (my/gptel-annotate-line line (1+ i) parsed))
+(defun +ai--annotate-render (source parsed)
+  (string-join (seq-map-indexed (lambda (line i) (+ai--annotate-line line (1+ i) parsed))
                                 (split-string source "\n"))
                "\n"))
 
-(defun my/gptel-annotate-buffer (mode)
+(defun +ai--annotate-buffer (mode)
   (with-current-buffer (get-buffer-create "*gptel-annotate*")
     (let ((inhibit-read-only t))
       (erase-buffer)
@@ -145,45 +145,45 @@
       (evil-local-set-key 'normal (kbd "q") #'quit-window))
     (current-buffer)))
 
-(defun my/gptel-annotate-show (buffer source response)
+(defun +ai--annotate-show (buffer source response)
   (with-current-buffer buffer
     (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert (my/gptel-annotate-render source (my/gptel-annotate-parse response))))))
+      (insert (+ai--annotate-render source (+ai--annotate-parse response))))))
 
-(defun my/gptel-annotate-callback (source buffer)
+(defun +ai--annotate-callback (source buffer)
   (lambda (response info)
     (pcase response
-      ((pred stringp) (my/gptel-annotate-show buffer source response))
+      ((pred stringp) (+ai--annotate-show buffer source response))
       ('nil (message "Annotate failed: %s" (plist-get info :status))))))
 
-(defun my/gptel-annotate ()
+(defun +ai/annotate ()
   "Show the region or defun at point with a numbered explanation per line."
   (interactive)
-  (let* ((source (my/gptel-annotate-text))
-         (buffer (my/gptel-annotate-buffer major-mode))
-         (gptel-model my/llm-fast-model))
+  (let* ((source (+ai--annotate-text))
+         (buffer (+ai--annotate-buffer major-mode))
+         (gptel-model +ai-fast-model))
     (pop-to-buffer buffer)
-    (gptel-request (my/gptel-annotate-number-lines source)
-      :system my/gptel-annotate-directive
-      :callback (my/gptel-annotate-callback source buffer))))
+    (gptel-request (+ai--annotate-number-lines source)
+      :system +ai-annotate-directive
+      :callback (+ai--annotate-callback source buffer))))
 
 (set-popup-rule! "^\\*gptel-annotate\\*$"
   :side 'right :size 0.5 :select t :quit t :ttl nil)
 
-(map! :leader :desc "Explain annotated" "o l E" #'my/gptel-annotate)
+(map! :leader :desc "Explain annotated" "o l E" #'+ai/annotate)
 
 ;;; gptel-magit — commit messages and diff explanations
 
-(defun my/gptel-magit-require-staged (fn &rest args)
+(defun +ai--gptel-magit-require-staged (fn &rest args)
   (if (string-empty-p (magit-git-output "diff" "--cached"))
       (user-error "Nothing staged; stage the changes you want described")
     (apply fn args)))
 
 (after! gptel-magit
-  (setq gptel-magit-model my/llm-fast-model
+  (setq gptel-magit-model +ai-fast-model
         gptel-magit-body-length 72)
-  (advice-add 'gptel-magit--generate :around #'my/gptel-magit-require-staged))
+  (advice-add 'gptel-magit--generate :around #'+ai--gptel-magit-require-staged))
 
 (set-popup-rule! "^\\*gptel-magit diff-explain\\*$"
   :side 'right :size 0.4 :select t :quit 'current :ttl nil)
@@ -192,13 +192,12 @@
 
 (use-package! aider
   :init
-  (key-chord-define-global "12" 'aider-transient-menu)
   (map! :leader :desc "aider" "1" #'aider-transient-menu)
   :config
   (require 'aider-doom)
   (setq aider-program "cecli"
-        aider-args (list "--model" (format "openai/%s" my/llm-fast-model)
-                         "--openai-api-base" (my/llama-server-url "/v1")
+        aider-args (list "--model" (format "openai/%s" +ai-fast-model)
+                         "--openai-api-base" (+ai--llama-url "/v1")
                          "--openai-api-key" "llama-server"
                          "--no-show-model-warnings"))
   (set-popup-rule! "^\\*aider"   :quit nil)

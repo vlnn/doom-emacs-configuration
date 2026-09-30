@@ -6,7 +6,7 @@
   (add-to-list 'load-path (expand-file-name "test" root))
   (require 'ert)
   (require 'doom-stubs)
-  (dolist (file '("snippets.el" "dape.el" "ai.el"))
+  (dolist (file '("config.el" "snippets.el" "dape.el" "ai.el"))
     (load (expand-file-name file root) nil t))
   (dolist (test (directory-files (expand-file-name "test" root) t "-test\\.el\\'"))
     (load test nil t))

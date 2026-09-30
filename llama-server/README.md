@@ -19,5 +19,5 @@ Models referenced by `hf =` are downloaded into `~/.cache/llama.cpp` on first
 use (override with `LLAMA_MODELS_DIR=... ./install.sh`). Point a section at a
 local file instead with `model = /path/to/file.gguf`.
 
-Inside Emacs, `M-x my/llama-server-refresh-models` re-reads the list without a
+Inside Emacs, `M-x +ai/refresh-llama-models` re-reads the list without a
 restart. Logs land in `~/Library/Logs/llama-server.log`.

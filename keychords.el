@@ -11,4 +11,5 @@
   (key-chord-define-global "90" 'sp-end-of-sexp)
   (key-chord-define-global "0-" 'sp-end-of-next-sexp)
   (key-chord-define-global "sd" 'basic-save-buffer)
+  (key-chord-define-global "12" 'aider-transient-menu)
   (key-chord-define-global "j;" 'execute-extended-command))

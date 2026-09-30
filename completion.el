@@ -4,14 +4,13 @@
 (setq-default c-basic-offset 4)
 (setq tab-always-indent nil)
 
-(map! :map corfu-map
-      "TAB"     #'corfu-next
-      [tab]     #'corfu-next
-      [backtab] #'corfu-previous)
-
 (after! corfu
   (setq corfu-auto-delay  0
-        corfu-auto-prefix 1))
+        corfu-auto-prefix 1)
+  (map! :map corfu-map
+        "TAB"     #'corfu-next
+        [tab]     #'corfu-next
+        [backtab] #'corfu-previous))
 
 (after! abbrev
   (setq abbrev-file-name (concat doom-user-dir "abbrev_defs")
