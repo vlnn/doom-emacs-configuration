@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Byte-compile every config file with Doom's macros stubbed out.
+# Catches unbound variables, wrong arity and typos in files the ERT
+# tests never load. Exit code is non-zero when the compiler reports an
+# error; warnings are printed but do not fail the run.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+emacs --batch -Q -l test/compile-check.el

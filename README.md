@@ -39,8 +39,13 @@ machine-local values. Missing `secrets.el` is tolerated.
 ## Tests
 
 ```sh
-bin/test          # ERT, plain `emacs --batch`, no Doom needed
+bin/test           # ERT, plain `emacs --batch`, no Doom needed
+bin/compile-check  # byte-compile every config file with Doom macros stubbed
 ```
+
+Both run in GitHub Actions on Emacs 29 and 30 (`.github/workflows/test.yml`);
+the compile check is advisory there. `doom sync && doom doctor` stays a
+local step.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; tests cover the pure functions
