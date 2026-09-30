@@ -52,6 +52,14 @@
 
 ;;; gptel
 
+(defun +ai--text-at-point (&optional whole-defun)
+  "Region when active, else the current line, or the defun when WHOLE-DEFUN."
+  (string-trim-right
+   (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
+         (whole-defun (or (thing-at-point 'defun t) (thing-at-point 'line t)))
+         (t (thing-at-point 'line t)))
+   "\n"))
+
 (after! gptel
   (setq gptel-model +ai-fast-model
         gptel-include-reasoning 'ignore
@@ -72,6 +80,13 @@
   (setq gptel-quick-model +ai-fast-model
         gptel-quick-word-count 24
         gptel-quick-timeout 60))
+
+(defun +ai/quick (&optional whole-defun)
+  "gptel-quick on the region, else the current line (defun with WHOLE-DEFUN)."
+  (interactive "P")
+  (gptel-quick (+ai--text-at-point whole-defun)))
+
+(map! :leader :desc "Explain quickly" "o l e" #'+ai/quick)
 
 
 ;;; annotated explanation — SPC o l E

@@ -1,15 +1,10 @@
 ;;; my/ai/annotate.el -*- lexical-binding: t; -*-
-;; SPC o l E: show the region or defun with a numbered explanation per line.
+;; SPC o l E: show the region (else line; defun with C-u) with a numbered explanation per line.
 
 (defconst +ai-annotate-directive
   "You receive source code, each line prefixed by its number and a colon. For every non-blank line output exactly one line of the form `N: explanation`, N being that line's number, saying what the line does in under 80 characters, naming its steps in evaluation order. In stack languages the top of stack is consumed first. Output nothing else: no code, no prose, no fences.")
 
 (defconst +ai-annotate-width 60)
-
-(defun +ai--annotate-text ()
-  (if (use-region-p)
-      (buffer-substring-no-properties (region-beginning) (region-end))
-    (thing-at-point 'defun t)))
 
 (defun +ai--annotate-number-lines (text)
   (string-join (seq-map-indexed (lambda (line i) (format "%d: %s" (1+ i) line))
@@ -83,10 +78,11 @@
       ((pred stringp) (+ai--annotate-show buffer source response))
       ('nil (message "Annotate failed: %s" (plist-get info :status))))))
 
-(defun +ai/annotate ()
-  "Show the region or defun at point with a numbered explanation per line."
-  (interactive)
-  (let* ((source (+ai--annotate-text))
+(defun +ai/annotate (&optional whole-defun)
+  "Explain the region, else the current line, one line at a time.
+With WHOLE-DEFUN (\[universal-argument]) explain the defun at point."
+  (interactive "P")
+  (let* ((source (+ai--text-at-point whole-defun))
          (buffer (+ai--annotate-buffer major-mode))
          (gptel-model +ai-fast-model))
     (pop-to-buffer buffer)
