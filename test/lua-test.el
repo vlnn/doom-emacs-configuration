@@ -14,10 +14,18 @@
     (ert-info ((format "string literal should escape %s" why))
       (should (equal expected (+lua--string-literal input))))))
 
-(ert-deftest +lua--eval-command/calls-evaluator-with-location ()
-  (ert-info ("eval command should pass code, chunk name and first line to the evaluator or its fallback")
-    (should (equal "(__emacs_eval or __emacs_eval_missing)('return 1', '/p/a.lua', 7)"
-                   (+lua--eval-command "return 1" "/p/a.lua" 7)))))
+(ert-deftest +lua--eval-command/points-evaluator-at-code-file ()
+  (ert-info ("eval command should pass the code file, chunk name and first line to the evaluator")
+    (should (equal "__emacs_eval_file('/tmp/c.lua', '/p/a.lua', 7)"
+                   (+lua--eval-command "/tmp/c.lua" "/p/a.lua" 7)))))
+
+(ert-deftest +lua--unframed-reply/keeps-repl-message-without-prompt ()
+  (let ((reply (+lua--unframed-reply "stdin:1: attempt to call a nil value\nstack traceback:\n\t[C]: in ?\n> ")))
+    (ert-info ("an unframed reply should be an error")
+      (should (eq 'err (plist-get reply :status))))
+    (ert-info ("an unframed reply should keep the REPL's message and drop the prompt line")
+      (should (equal "stdin:1: attempt to call a nil value\nstack traceback:\n\t[C]: in ?"
+                     (plist-get reply :value))))))
 
 (ert-deftest +lua--load-evaluator-command/dofiles-path-and-acknowledges ()
   (ert-info ("load command should dofile the evaluator and end with the reply terminator")
@@ -174,6 +182,39 @@ Like `lua-start-process', an init line is sent without waiting for its prompt."
                        (let ((reply (+lua-test--eval proc code)))
                          (list (plist-get reply :status) (plist-get reply :value)))))))))
 
+(ert-deftest +lua-repl/evaluates-chunks-longer-than-a-tty-line ()
+  (skip-unless (+lua-test--interpreter))
+  (+lua-test--with-repl
+    (let* ((items (mapconcat #'number-to-string (number-sequence 1 2000) ",\n  "))
+           (code (format "local function size()\n  local t = {\n  %s\n  }\n  return #t\nend\nreturn size()" items)))
+      (ert-info ("a chunk bigger than the pty's input line limit should still evaluate")
+        (should (equal "2000"
+                       (plist-get (with-timeout (5 '(:value timed-out)) (+lua-test--eval proc code))
+                                  :value)))))))
+
+(ert-deftest +lua-repl/keeps-command-lines-under-the-macos-tty-limit ()
+  (skip-unless (+lua-test--interpreter))
+  (+lua-test--with-repl
+    (let ((sent nil)
+          (code (concat "return #'" (make-string 5000 ?x) "'")))
+      (advice-add 'process-send-string :before
+                  (lambda (_proc string) (push string sent))
+                  '((name . +lua-test--spy)))
+      (unwind-protect (+lua-test--eval proc code)
+        (advice-remove 'process-send-string '+lua-test--spy))
+      (ert-info ("every line sent to the REPL should stay under macOS's 1024-byte canonical limit")
+        (should (seq-every-p (lambda (s) (< (string-bytes s) 1024)) sent))))))
+
+(ert-deftest +lua-repl/cleans-up-code-files ()
+  (skip-unless (+lua-test--interpreter))
+  (let ((temporary-file-directory (file-name-as-directory (make-temp-file "lua-eval-test" t))))
+    (unwind-protect
+        (+lua-test--with-repl
+          (+lua-test--eval proc "1")
+          (ert-info ("evaluation should not leave code files behind")
+            (should-not (directory-files temporary-file-directory nil "\\.lua\\'"))))
+      (delete-directory temporary-file-directory t))))
+
 (ert-deftest +lua-repl/marks-cycles ()
   (skip-unless (+lua-test--interpreter))
   (+lua-test--with-repl
@@ -236,9 +277,12 @@ Like `lua-start-process', an init line is sent without waiting for its prompt."
 (ert-deftest +lua-repl/survives-an-unloaded-evaluator ()
   (skip-unless (+lua-test--interpreter))
   (+lua-test--with-repl
-    (+lua--eval-in-process proc "__emacs_eval = nil" "/p/a.lua" 1)
+    (+lua--eval-in-process proc "__emacs_eval_file = nil" "/p/a.lua" 1)
     (let ((reply (with-timeout (3 '(:status timed-out)) (+lua-test--eval proc "1"))))
-      (ert-info ("evaluating after the evaluator vanished should report that instead of hanging")
+      (ert-info ("evaluating after the evaluator vanished should report the REPL error instead of hanging")
         (should (eq 'err (plist-get reply :status))))
-      (ert-info ("the missing-evaluator error should say what is wrong")
-        (should (string-match-p "not loaded" (plist-get reply :value)))))))
+      (ert-info ("the REPL error should name the missing evaluator")
+        (should (string-match-p "__emacs_eval_file" (plist-get reply :value)))))
+    (ert-info ("the next eval should reload the evaluator and work again")
+      (should (equal "1" (plist-get (with-timeout (3 '(:value timed-out)) (+lua-test--eval proc "1"))
+                                    :value))))))

@@ -1,7 +1,8 @@
 -- Loaded into the REPL by modules/my/lua/repl.el; replies are framed as
 -- STX status US value ETX so Emacs can split them from printed output.
 -- Emacs treats ETX newline then a prompt as end of reply, so a stray prompt
--- (e.g. from lua-mode's init code) cannot end a redirect early.
+-- (e.g. from lua-mode's init code) cannot end a redirect early. Code comes in
+-- a file because macOS ptys cut input lines at 1024 bytes.
 
 local load_chunk = loadstring or load
 
@@ -134,10 +135,13 @@ local function reply(status, text)
   io.stdout:flush()
 end
 
-function __emacs_eval(code, chunkname, line)
-  reply(run(code, chunkname, line))
+local function read_file(path)
+  local file = assert(io.open(path, "rb"))
+  local code = file:read("*a")
+  file:close()
+  return code
 end
 
-function __emacs_eval_missing()
-  reply("err", "Emacs evaluator is not loaded; restart the REPL")
+function __emacs_eval_file(path, chunkname, line)
+  reply(run(read_file(path), chunkname, line))
 end

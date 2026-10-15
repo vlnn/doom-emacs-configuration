@@ -14,6 +14,11 @@
 
 (defconst +lua--reply-end "\3\n")
 
+(defconst +lua--reply-end-regexp
+  (rx (or "\3" (seq bol (? (+ (not (any " \n"))) ": ") "stdin:" (+ digit) ":" (* anything)))
+      "\n")
+  "End of an evaluator reply, or of an error the REPL itself printed.")
+
 (defvar +lua--last-source-buffer nil)
 
 ;;; Protocol
@@ -29,9 +34,9 @@
 (defun +lua--string-literal (string)
   (concat "'" (replace-regexp-in-string "[\\\\'\"[:cntrl:]]" #'+lua--escape-char string t t) "'"))
 
-(defun +lua--eval-command (code file line)
-  (format "(__emacs_eval or __emacs_eval_missing)(%s, %s, %d)"
-          (+lua--string-literal code) (+lua--string-literal file) line))
+(defun +lua--eval-command (code-file chunk-name line)
+  (format "__emacs_eval_file(%s, %s, %d)"
+          (+lua--string-literal code-file) (+lua--string-literal chunk-name) line))
 
 (defun +lua--load-evaluator-command (path)
   (format "dofile(%s) io.write(%s)"
@@ -43,8 +48,11 @@
           :status (intern (match-string 1 output))
           :value (match-string 2 output))))
 
+(defun +lua--without-prompt-line (output)
+  (replace-regexp-in-string "[^\n]*\\'" "" output))
+
 (defun +lua--unframed-reply (output)
-  (list :stdout "" :status 'err :value (string-trim output)))
+  (list :stdout "" :status 'err :value (string-trim (+lua--without-prompt-line output))))
 
 (defun +lua--reply-text (reply)
   (if (eq (plist-get reply :status) 'err)
@@ -83,7 +91,7 @@
 
 (defun +lua--send-redirected (proc command output)
   "Redirect until a reply terminator and prompt arrive; bare prompts don't count."
-  (let ((comint-prompt-regexp (concat +lua--reply-end comint-prompt-regexp)))
+  (let ((comint-prompt-regexp (concat +lua--reply-end-regexp comint-prompt-regexp)))
     (comint-redirect-send-command-to-process command output proc nil t)))
 
 (defun +lua--redirect (proc command)
@@ -111,13 +119,24 @@
   (list :stdout "" :status 'err
         :value "Lua REPL is busy with an interrupted eval; restart it with +lua/restart-repl"))
 
-(defun +lua--eval-in-process (proc code file line)
+(defun +lua--write-code-file (code)
+  (let ((coding-system-for-write 'utf-8-unix))
+    (make-temp-file "emacs-lua-eval" nil ".lua" code)))
+
+(defun +lua--reply-from (proc output)
+  (or (+lua--parse-reply output)
+      (progn
+        (process-put proc '+lua-evaluator nil)
+        (+lua--unframed-reply output))))
+
+(defun +lua--eval-in-process (proc code chunk-name line)
   (if (+lua--busy-p proc)
       (+lua--busy-reply)
     (+lua--ensure-evaluator proc)
-    (let ((output (+lua--redirect proc (+lua--eval-command code file line))))
-      (or (+lua--parse-reply output)
-          (+lua--unframed-reply output)))))
+    (let ((code-file (+lua--write-code-file code)))
+      (unwind-protect
+          (+lua--reply-from proc (+lua--redirect proc (+lua--eval-command code-file chunk-name line)))
+        (delete-file code-file)))))
 
 (defun +lua--insert-before-prompt (proc text)
   (with-current-buffer (process-buffer proc)
