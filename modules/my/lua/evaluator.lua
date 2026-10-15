@@ -2,7 +2,7 @@
 -- STX status US value ETX so Emacs can split them from printed output.
 -- Emacs treats ETX newline then a prompt as end of reply, so a stray prompt
 -- (e.g. from lua-mode's init code) cannot end a redirect early. Code comes in
--- a file because macOS ptys cut input lines at 1024 bytes.
+-- a file so command lines stay short whatever the REPL reads them from.
 
 local load_chunk = loadstring or load
 
@@ -121,10 +121,32 @@ local function compile(code, chunkname, line)
   return load_chunk(padding .. code, name)
 end
 
+local INTERRUPT_CHECK_EVERY = 100000
+
+local function interrupt_requested()
+  local path = __emacs_interrupt_file
+  local file = path and io.open(path, "rb")
+  if not file then return false end
+  file:close()
+  os.remove(path)
+  return true
+end
+
+local function check_interrupt()
+  if interrupt_requested() then error("interrupted!", 2) end
+end
+
+local function interruptible_pcall(chunk)
+  debug.sethook(check_interrupt, "", INTERRUPT_CHECK_EVERY)
+  local results = pack(pcall(chunk))
+  debug.sethook()
+  return results
+end
+
 local function run(code, chunkname, line)
   local chunk, compile_error = compile(code, chunkname, line)
   if not chunk then return "err", tostring(compile_error) end
-  local results = pack(pcall(chunk))
+  local results = interruptible_pcall(chunk)
   if not results[1] then return "err", tostring(results[2]) end
   local rendered, text = pcall(render_values, results, 2)
   return rendered and "ok" or "err", tostring(text)
@@ -144,4 +166,52 @@ end
 
 function __emacs_eval_file(path, chunkname, line)
   reply(run(read_file(path), chunkname, line))
+end
+
+-- REPL for `lua evaluator.lua INTERRUPT-FILE`: plain io.read, so Lua never
+-- starts its interactive mode (and the readline/libedit it loads there).
+
+local function prompt_for_line(prompt)
+  io.stdout:write(prompt)
+  io.stdout:flush()
+  return io.read("*l")
+end
+
+local function incomplete(compile_error)
+  return compile_error ~= nil and compile_error:find("<eof>'?$") ~= nil
+end
+
+local function read_statement(first_line)
+  local source = first_line
+  while true do
+    local chunk, compile_error = compile(source, "stdin", 1)
+    if chunk or not incomplete(compile_error) then return chunk, compile_error end
+    local more = prompt_for_line(">> ")
+    if not more then return nil, compile_error end
+    source = source .. "\n" .. more
+  end
+end
+
+local function answer_line(line)
+  local chunk, compile_error = read_statement(line)
+  if not chunk then return print(compile_error) end
+  local results = interruptible_pcall(chunk)
+  if not results[1] then return print(tostring(results[2])) end
+  if results.n > 1 then print(render_values(results, 2)) end
+end
+
+local function serve()
+  print(_VERSION)
+  while true do
+    local line = prompt_for_line("> ")
+    if not line then break end
+    local ok, failure = pcall(answer_line, line)
+    if not ok then print(tostring(failure)) end
+  end
+end
+
+local interrupt_file = ...
+if interrupt_file then
+  __emacs_interrupt_file = interrupt_file
+  serve()
 end

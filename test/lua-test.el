@@ -132,10 +132,13 @@
         (accept-process-output proc 0.05)))))
 
 (defmacro +lua-test--with-repl (&rest body)
-  "Run BODY with `proc' bound to a fresh Lua REPL that has the evaluator loaded.
+  "Run BODY with `proc' bound to a fresh Lua REPL started the way lua-mode starts ours.
 Like `lua-start-process', an init line is sent without waiting for its prompt."
   (declare (indent 0))
-  `(let* ((buffer (make-comint-in-buffer "lua-test" nil (+lua-test--interpreter) nil "-i"))
+  `(let* ((interrupt-file (make-temp-name (expand-file-name "lua-test-interrupt" temporary-file-directory)))
+          (buffer (let ((process-connection-type nil))
+                    (apply #'make-comint-in-buffer "lua-test" nil (+lua-test--interpreter) nil
+                           (+lua--repl-switches interrupt-file))))
           (proc (get-buffer-process buffer)))
      (unwind-protect
          (progn
@@ -146,7 +149,44 @@ Like `lua-start-process', an init line is sent without waiting for its prompt."
            (+lua--ensure-evaluator proc)
            ,@body)
        (set-process-query-on-exit-flag proc nil)
-       (kill-buffer buffer))))
+       (kill-buffer buffer)
+       (ignore-errors (delete-file interrupt-file)))))
+
+(defun +lua-test--repl-text (proc)
+  (with-current-buffer (process-buffer proc)
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun +lua-test--type (proc input expected-tail)
+  "Send INPUT as if typed in the REPL and wait until the buffer ends with EXPECTED-TAIL."
+  (process-send-string proc input)
+  (with-timeout (5 nil)
+    (while (not (string-suffix-p expected-tail (+lua-test--repl-text proc)))
+      (accept-process-output proc 0.05)))
+  (+lua-test--repl-text proc))
+
+(ert-deftest +lua--repl-switches/runs-evaluator-as-the-program ()
+  (ert-info ("the REPL should run evaluator.lua as a script with the interrupt file, not lua -i")
+    (should (equal (list +lua-evaluator-file "/tmp/int")
+                   (+lua--repl-switches "/tmp/int")))))
+
+(ert-deftest +lua--interrupt-file/read-from-the-process-command ()
+  (pcase-dolist (`(,command ,expected ,why)
+                 `(((,"lua" ,+lua-evaluator-file "/tmp/int") "/tmp/int" "our REPL")
+                   (("lua" "-i")                             nil        "a stock lua -i REPL")))
+    (ert-info ((format "interrupt file lookup should handle %s" why))
+      (should (equal expected (+lua--interrupt-file-in command))))))
+
+(ert-deftest +lua-repl/answers-typed-lines-like-the-lua-repl ()
+  (skip-unless (+lua-test--interpreter))
+  (+lua-test--with-repl
+    (pcase-dolist (`(,input ,tail ,why)
+                   '(("y = 40\n"                            "> "           "a statement")
+                     ("y + 2\n"                             "42\n> "       "an expression")
+                     ("{1, 'a'}\n"                          "{ 1, \"a\" }\n> " "a table")
+                     ("function g()\n  return 3\nend\ng()\n" "3\n> "        "continuation lines")
+                     ("error('nope')\n"                     "stdin:1: nope\n> " "an error")))
+      (ert-info ((format "typing %s should behave like the Lua REPL" why))
+        (should (string-suffix-p tail (+lua-test--type proc input tail)))))))
 
 (ert-deftest +lua-repl/first-eval-is-not-shifted-by-init-prompt ()
   (skip-unless (+lua-test--interpreter))
@@ -263,16 +303,44 @@ Like `lua-start-process', an init line is sent without waiting for its prompt."
         (+lua-test--eval proc "if jit then jit.off() end while true do end"))
       (should (equal "2" (plist-get (+lua-test--eval proc "1 + 1") :value))))))
 
-(ert-deftest +lua-repl/reports-a-repl-that-ignored-the-interrupt ()
+(ert-deftest +lua-repl/interrupts-repeatedly-without-killing-lua ()
   (skip-unless (+lua-test--interpreter))
   (+lua-test--with-repl
+    (dotimes (attempt 3)
+      (with-timeout (0.5 nil)
+        (+lua-test--eval proc "if jit then jit.off() end while true do end"))
+      (ert-info ((format "Lua should survive interrupt number %d" (1+ attempt)))
+        (should (process-live-p proc)))
+      (ert-info ((format "the REPL should answer after interrupt number %d" (1+ attempt)))
+        (should (equal "2" (plist-get (with-timeout (3 '(:value timed-out)) (+lua-test--eval proc "1 + 1"))
+                                      :value)))))))
+
+(ert-deftest +lua-repl/interrupt-at-idle-keeps-lua-alive ()
+  (skip-unless (+lua-test--interpreter))
+  (+lua-test--with-repl
+    (+lua--request-interrupt proc)
+    (accept-process-output proc 0.2)
+    (ert-info ("interrupting an idle REPL should not kill Lua")
+      (should (process-live-p proc)))
+    (ert-info ("a stale interrupt should not cancel the next eval")
+      (should (equal "1" (plist-get (with-timeout (3 '(:value timed-out)) (+lua-test--eval proc "1"))
+                                    :value))))))
+
+(ert-deftest +lua-repl/reports-a-repl-stuck-in-c-code ()
+  (skip-unless (and (+lua-test--interpreter) (executable-find "sleep")))
+  (+lua-test--with-repl
     (with-timeout (0.5 nil)
-      (+lua-test--eval proc "while true do pcall(function() while true do end end) end"))
+      (+lua-test--eval proc "os.execute('sleep 3')"))
     (let ((reply (with-timeout (3 '(:status timed-out)) (+lua-test--eval proc "1"))))
-      (ert-info ("evaluating while the REPL is stuck should fail fast")
+      (ert-info ("evaluating while Lua is blocked in C should fail fast")
         (should (eq 'err (plist-get reply :status))))
       (ert-info ("the stuck-REPL error should suggest a restart")
-        (should (string-match-p "busy.*restart" (plist-get reply :value)))))))
+        (should (string-match-p "busy.*restart" (plist-get reply :value)))))
+    (sleep-for 3)
+    (accept-process-output proc 0.2)
+    (ert-info ("the REPL should be usable again once the blocking call returns")
+      (should (equal "1" (plist-get (with-timeout (3 '(:value timed-out)) (+lua-test--eval proc "1"))
+                                    :value))))))
 
 (ert-deftest +lua-repl/survives-an-unloaded-evaluator ()
   (skip-unless (+lua-test--interpreter))

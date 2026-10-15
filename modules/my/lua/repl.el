@@ -21,6 +21,27 @@
 
 (defvar +lua--last-source-buffer nil)
 
+(defvar +lua-interrupt-file
+  (expand-file-name (format "emacs-lua-interrupt-%d" (emacs-pid)) temporary-file-directory))
+
+(defun +lua--repl-switches (interrupt-file)
+  (list +lua-evaluator-file interrupt-file))
+
+(defun +lua--interrupt-file-in (command)
+  (cadr (member +lua-evaluator-file command)))
+
+(defun +lua--interrupt-file (proc)
+  (+lua--interrupt-file-in (process-command proc)))
+
+(defun +lua--request-interrupt (proc)
+  (if-let ((file (+lua--interrupt-file proc)))
+      (write-region "" nil file nil 'silent)
+    (interrupt-process proc)))
+
+(defun +lua--clear-interrupt (proc)
+  (when-let ((file (+lua--interrupt-file proc)))
+    (ignore-errors (delete-file file))))
+
 ;;; Protocol
 
 (defun +lua--escape-char (char)
@@ -69,7 +90,7 @@
     (accept-process-output proc 0.05)))
 
 (defun +lua--abandon-redirect (proc)
-  (interrupt-process proc)
+  (+lua--request-interrupt proc)
   (with-timeout (1 nil)
     (+lua--await-redirect proc))
   (unless comint-redirect-completed
@@ -133,6 +154,7 @@
   (if (+lua--busy-p proc)
       (+lua--busy-reply)
     (+lua--ensure-evaluator proc)
+    (+lua--clear-interrupt proc)
     (let ((code-file (+lua--write-code-file code)))
       (unwind-protect
           (+lua--reply-from proc (+lua--redirect proc (+lua--eval-command code-file chunk-name line)))
@@ -165,8 +187,10 @@
     (+lua-repl-mode +1)))
 
 (defun +lua--start-repl ()
-  (let ((default-directory (+lua--project-root)))
-    (lua-start-process))
+  (let ((default-directory (+lua--project-root))
+        (process-connection-type nil))
+    (apply #'lua-start-process nil nil nil (+lua--repl-switches +lua-interrupt-file)))
+  (display-buffer lua-process-buffer)
   lua-process)
 
 (defun +lua--live-process ()
@@ -207,6 +231,13 @@
   (interactive)
   (lua-kill-process)
   (+lua/switch-to-repl))
+
+(defun +lua/interrupt ()
+  "Interrupt the code running in the Lua REPL."
+  (interactive)
+  (if (process-live-p lua-process)
+      (+lua--request-interrupt lua-process)
+    (user-error "No Lua REPL is running")))
 
 (defun +lua/clear-repl ()
   "Clear the Lua REPL output."

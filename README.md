@@ -21,7 +21,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode |
 | `notes` | denote, ob-duckdb |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
-| `lua` | lua-mode REPL with inline results (`evaluator.lua`), cider-shaped localleader, busted runners |
+| `lua` | lua-mode REPL run by `evaluator.lua` (not `lua -i`) with inline results, file-based interrupts, cider-shaped localleader, busted runners |
 | `dirvish` | dired/dirvish |
 | `vc` | magit-todos, magit-delta, why-this, github-explorer |
 | `snippets` | yasnippet helpers (`+snippets-body`); snippet files stay in `snippets/` |
