@@ -21,6 +21,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode |
 | `notes` | denote, ob-duckdb |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
+| `lua` | lua-mode REPL with inline results (`evaluator.lua`), cider-shaped localleader, busted runners |
 | `dirvish` | dired/dirvish |
 | `vc` | magit-todos, magit-delta, why-this, github-explorer |
 | `snippets` | yasnippet helpers (`+snippets-body`); snippet files stay in `snippets/` |
@@ -49,7 +50,9 @@ local step.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; tests cover the pure functions
-(`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`).
+(`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`, `+lua--*`).
+The `+lua-repl/*` tests drive a real `lua -i` through comint and are skipped
+when no Lua interpreter is on `PATH`.
 
 ## Local models
 

@@ -209,6 +209,7 @@
        notes             ; denote
        apl               ; gnu-apl-mode + ride-apl
        forth
+       lua               ; cider-style REPL eval, busted
        dirvish
        vc                ; magit extras, why-this, github-explorer
        snippets)         ; yasnippet helpers
