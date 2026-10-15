@@ -3,7 +3,16 @@
 -- Emacs treats ETX newline then a prompt as end of reply, so a stray prompt
 -- (e.g. from lua-mode's init code) cannot end a redirect early. Code comes in
 -- a file so command lines stay short whatever the REPL reads them from.
+-- Library functions are captured here because evaluated code (a game's
+-- `debug = false`, a custom print) may replace the globals.
 
+local assert, error, getmetatable, ipairs, next, pcall, rawget, select, tostring, type =
+      assert, error, getmetatable, ipairs, next, pcall, rawget, select, tostring, type
+local format, rep = string.format, string.rep
+local concat, sort = table.concat, table.sort
+local open, lines, stdout = io.open, io.lines, io.stdout
+local remove = os.remove
+local sethook = debug.sethook
 local load_chunk = loadstring or load
 
 local STX, US, ETX = "\2", "\31", "\3"
@@ -20,7 +29,7 @@ local function pack(...)
 end
 
 local function quote_string(s)
-  return (string.format("%q", s):gsub("\\\n", "\\n"))
+  return (format("%q", s):gsub("\\\n", "\\n"))
 end
 
 local function is_identifier(key)
@@ -48,7 +57,7 @@ local function record_keys(t, n)
     local in_sequence = type(key) == "number" and key >= 1 and key <= n and key % 1 == 0
     if not in_sequence then keys[#keys + 1] = key end
   end
-  table.sort(keys, key_less)
+  sort(keys, key_less)
   return keys
 end
 
@@ -77,10 +86,10 @@ end
 
 local function layout_table(entries, indent)
   if #entries == 0 then return "{}" end
-  local inline = "{ " .. table.concat(entries, ", ") .. " }"
+  local inline = "{ " .. concat(entries, ", ") .. " }"
   if #indent + #inline <= WIDTH and not inline:find("\n") then return inline end
   local child_indent = indent .. "  "
-  return "{\n" .. child_indent .. table.concat(entries, ",\n" .. child_indent) .. "\n" .. indent .. "}"
+  return "{\n" .. child_indent .. concat(entries, ",\n" .. child_indent) .. "\n" .. indent .. "}"
 end
 
 local function render_table(t, indent, path)
@@ -105,16 +114,17 @@ local function render_values(results, first)
   for i = first, results.n do
     rendered[#rendered + 1] = render(results[i], "", {})
   end
-  return table.concat(rendered, ", ")
+  return concat(rendered, ", ")
 end
 
 local function as_expression(code)
-  -- select keeps a top-level error() out of tail position, where LuaJIT drops its location
-  return "return select(1, " .. code:gsub("[%s;]+$", "") .. "\n)"
+  -- passing code to an identity function keeps a top-level error() out of tail
+  -- position, where LuaJIT drops its location, without relying on any global
+  return "return (function(...) return ... end)(" .. code:gsub("[%s;]+$", "") .. "\n)"
 end
 
 local function compile(code, chunkname, line)
-  local padding = string.rep("\n", line - 1)
+  local padding = rep("\n", line - 1)
   local name = "@" .. chunkname
   local expression = load_chunk(padding .. as_expression(code), name)
   if expression then return expression end
@@ -122,13 +132,17 @@ local function compile(code, chunkname, line)
 end
 
 local INTERRUPT_CHECK_EVERY = 100000
+local interrupt_file
+
+local function set_interrupt_file(path)
+  interrupt_file = path
+end
 
 local function interrupt_requested()
-  local path = __emacs_interrupt_file
-  local file = path and io.open(path, "rb")
+  local file = interrupt_file and open(interrupt_file, "rb")
   if not file then return false end
   file:close()
-  os.remove(path)
+  remove(interrupt_file)
   return true
 end
 
@@ -137,9 +151,9 @@ local function check_interrupt()
 end
 
 local function interruptible_pcall(chunk)
-  debug.sethook(check_interrupt, "", INTERRUPT_CHECK_EVERY)
+  sethook(check_interrupt, "", INTERRUPT_CHECK_EVERY)
   local results = pack(pcall(chunk))
-  debug.sethook()
+  sethook()
   return results
 end
 
@@ -153,65 +167,82 @@ local function run(code, chunkname, line)
 end
 
 local function reply(status, text)
-  io.stdout:write(STX, status, US, text, ETX, "\n")
-  io.stdout:flush()
+  stdout:write(STX, status, US, text, ETX, "\n")
+  stdout:flush()
 end
 
 local function read_file(path)
-  local file = assert(io.open(path, "rb"))
+  local file = assert(open(path, "rb"))
   local code = file:read("*a")
   file:close()
   return code
 end
 
-function __emacs_eval_file(path, chunkname, line)
-  reply(run(read_file(path), chunkname, line))
+local function run_file(path, chunkname, line)
+  return run(read_file(path), chunkname, line)
 end
 
--- REPL for `lua evaluator.lua INTERRUPT-FILE`: plain io.read, so Lua never
--- starts its interactive mode (and the readline/libedit it loads there).
+function __emacs_eval_file(path, chunkname, line)
+  local ok, status, text = pcall(run_file, path, chunkname, line)
+  if ok then return reply(status, text) end
+  reply("err", tostring(status))
+end
 
-local function prompt_for_line(prompt)
-  io.stdout:write(prompt)
-  io.stdout:flush()
-  return io.read("*l")
+-- REPL fed one line at a time, by `lua evaluator.lua INTERRUPT-FILE` (plain
+-- io.lines, so Lua never loads readline/libedit) or by love-repl.lua per frame.
+
+local function write_prompt(prompt)
+  stdout:write(prompt)
+  stdout:flush()
+end
+
+local function say(text)
+  stdout:write(text, "\n")
 end
 
 local function incomplete(compile_error)
   return compile_error ~= nil and compile_error:find("<eof>'?$") ~= nil
 end
 
-local function read_statement(first_line)
-  local source = first_line
-  while true do
-    local chunk, compile_error = compile(source, "stdin", 1)
-    if chunk or not incomplete(compile_error) then return chunk, compile_error end
-    local more = prompt_for_line(">> ")
-    if not more then return nil, compile_error end
-    source = source .. "\n" .. more
-  end
+local function answer(chunk, compile_error)
+  if not chunk then return say(compile_error) end
+  local results = interruptible_pcall(chunk)
+  if not results[1] then return say(tostring(results[2])) end
+  if results.n > 1 then say(render_values(results, 2)) end
 end
 
-local function answer_line(line)
-  local chunk, compile_error = read_statement(line)
-  if not chunk then return print(compile_error) end
-  local results = interruptible_pcall(chunk)
-  if not results[1] then return print(tostring(results[2])) end
-  if results.n > 1 then print(render_values(results, 2)) end
+local function new_session()
+  local pending
+  return function(line)
+    local source = pending and (pending .. "\n" .. line) or line
+    local chunk, compile_error = compile(source, "stdin", 1)
+    if not chunk and incomplete(compile_error) then
+      pending = source
+      return write_prompt(">> ")
+    end
+    pending = nil
+    local ok, failure = pcall(answer, chunk, compile_error)
+    if not ok then say(tostring(failure)) end
+    write_prompt("> ")
+  end
 end
 
 local function serve()
-  print(_VERSION)
-  while true do
-    local line = prompt_for_line("> ")
-    if not line then break end
-    local ok, failure = pcall(answer_line, line)
-    if not ok then print(tostring(failure)) end
-  end
+  say(_VERSION)
+  write_prompt("> ")
+  local feed = new_session()
+  for line in lines() do feed(line) end
 end
 
-local interrupt_file = ...
-if interrupt_file then
-  __emacs_interrupt_file = interrupt_file
+local script_interrupt_file = ...
+if script_interrupt_file then
+  set_interrupt_file(script_interrupt_file)
   serve()
 end
+
+return {
+  new_session = new_session,
+  say = say,
+  set_interrupt_file = set_interrupt_file,
+  write_prompt = write_prompt,
+}

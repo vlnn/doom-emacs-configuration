@@ -17,10 +17,12 @@ jobs:
       - uses: purcell/setup-emacs@master
         with:
           version: ${{ matrix.emacs }}
-      - run: sudo apt-get update && sudo apt-get install -y ${{ matrix.lua }}
+      - run: sudo apt-get update && sudo apt-get install -y ${{ matrix.lua }} love xvfb
       - run: bin/test
         env:
           LUA: ${{ matrix.lua }}
+          SDL_AUDIODRIVER: dummy
+          ALSOFT_DRIVERS: "null"
       - name: byte-compile check (warnings only)
         run: bin/compile-check
         continue-on-error: true

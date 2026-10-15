@@ -21,7 +21,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode |
 | `notes` | denote, ob-duckdb |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
-| `lua` | lua-mode REPL run by `evaluator.lua` (not `lua -i`) with inline results, file-based interrupts, cider-shaped localleader, busted runners |
+| `lua` | lua-mode REPL run by `evaluator.lua` (not `lua -i`) with inline results, file-based interrupts, cider-shaped localleader, busted runners; LÖVE games run the REPL in-game |
 | `dirvish` | dired/dirvish |
 | `vc` | magit-todos, magit-delta, why-this, github-explorer |
 | `snippets` | yasnippet helpers (`+snippets-body`); snippet files stay in `snippets/` |
@@ -31,6 +31,20 @@ reverse, and `doom sync` drops its packages with it.
 
 Naming follows Doom: `+scope/command` (interactive), `+scope--helper`
 (private), `+scope-var`.
+
+## LÖVE
+
+`love.*` only exists inside a running game, so a LÖVE project needs this line
+at the top of its `conf.lua` (`M-x +lua/add-love-hook` puts it there):
+
+```lua
+if os.getenv("EMACS_LOVE_REPL") then dofile(os.getenv("EMACS_LOVE_REPL")) end
+```
+
+It does nothing unless Emacs started the game. With it in place, `SPC m '` or
+any eval starts the game as the REPL: evals run between frames on the main
+thread, and the game's output shows up in `*lua*`. `+lua-love-command` says how
+to run LÖVE.
 
 ## Secrets
 

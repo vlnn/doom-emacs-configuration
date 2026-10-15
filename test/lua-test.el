@@ -28,9 +28,13 @@
                      (plist-get reply :value))))))
 
 (ert-deftest +lua--load-evaluator-command/dofiles-path-and-acknowledges ()
-  (ert-info ("load command should dofile the evaluator and end with the reply terminator")
-    (should (equal "dofile('/x/evaluator.lua') io.write('\\003\\n')"
-                   (+lua--load-evaluator-command "/x/evaluator.lua")))))
+  (pcase-dolist (`(,interrupt-file ,expected ,why)
+                 '(("/tmp/int" "dofile('/x/evaluator.lua').set_interrupt_file('/tmp/int') io.write('\\003\\n')"
+                    "the REPL's interrupt file")
+                   (nil        "dofile('/x/evaluator.lua').set_interrupt_file(nil) io.write('\\003\\n')"
+                    "no interrupt file for a stock lua -i")))
+    (ert-info ((format "load command should dofile the evaluator, hand it %s and end with the reply terminator" why))
+      (should (equal expected (+lua--load-evaluator-command "/x/evaluator.lua" interrupt-file))))))
 
 (ert-deftest +lua--parse-reply/splits-output-from-value ()
   (pcase-dolist (`(,raw ,expected ,why)
@@ -254,6 +258,16 @@ Like `lua-start-process', an init line is sent without waiting for its prompt."
           (ert-info ("evaluation should not leave code files behind")
             (should-not (directory-files temporary-file-directory nil "\\.lua\\'"))))
       (delete-directory temporary-file-directory t))))
+
+(ert-deftest +lua-repl/survives-code-that-clobbers-standard-globals ()
+  (skip-unless (+lua-test--interpreter))
+  (+lua-test--with-repl
+    (+lua-test--eval proc "debug, print, io, os, string, table, tostring, pcall, select, error = false")
+    (ert-info ("evaluating after the standard globals were overwritten should still answer")
+      (should (equal "2" (plist-get (with-timeout (3 '(:value timed-out)) (+lua-test--eval proc "1 + 1"))
+                                    :value))))
+    (ert-info ("typed lines should still be answered after the standard globals were overwritten")
+      (should (string-suffix-p "3\n> " (+lua-test--type proc "1 + 2\n" "3\n> "))))))
 
 (ert-deftest +lua-repl/marks-cycles ()
   (skip-unless (+lua-test--interpreter))

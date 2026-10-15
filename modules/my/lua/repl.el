@@ -31,7 +31,8 @@
   (cadr (member +lua-evaluator-file command)))
 
 (defun +lua--interrupt-file (proc)
-  (+lua--interrupt-file-in (process-command proc)))
+  (or (process-get proc '+lua-interrupt-file)
+      (+lua--interrupt-file-in (process-command proc))))
 
 (defun +lua--request-interrupt (proc)
   (if-let ((file (+lua--interrupt-file proc)))
@@ -59,9 +60,11 @@
   (format "__emacs_eval_file(%s, %s, %d)"
           (+lua--string-literal code-file) (+lua--string-literal chunk-name) line))
 
-(defun +lua--load-evaluator-command (path)
-  (format "dofile(%s) io.write(%s)"
-          (+lua--string-literal path) (+lua--string-literal +lua--reply-end)))
+(defun +lua--load-evaluator-command (path interrupt-file)
+  (format "dofile(%s).set_interrupt_file(%s) io.write(%s)"
+          (+lua--string-literal path)
+          (if interrupt-file (+lua--string-literal interrupt-file) "nil")
+          (+lua--string-literal +lua--reply-end)))
 
 (defun +lua--parse-reply (output)
   (when (string-match +lua--reply-regexp output)
@@ -133,7 +136,7 @@
 
 (defun +lua--ensure-evaluator (proc)
   (unless (process-get proc '+lua-evaluator)
-    (+lua--redirect proc (+lua--load-evaluator-command +lua-evaluator-file))
+    (+lua--redirect proc (+lua--load-evaluator-command +lua-evaluator-file (+lua--interrupt-file proc)))
     (process-put proc '+lua-evaluator t)))
 
 (defun +lua--busy-reply ()
@@ -186,10 +189,27 @@
   (with-current-buffer lua-process-buffer
     (+lua-repl-mode +1)))
 
-(defun +lua--start-repl ()
-  (let ((default-directory (+lua--project-root))
+(defconst +lua-prompt-regexp "[^\n]*\\(>[\t ]+\\)+$"
+  "lua-mode's default `lua-prompt-regexp', for REPLs lua-mode did not start.")
+
+(defun +lua--adopt-repl (proc)
+  (setq lua-process proc
+        lua-process-buffer (process-buffer proc))
+  (with-current-buffer lua-process-buffer
+    (setq-local comint-prompt-regexp +lua-prompt-regexp)
+    (+lua-repl-mode +1)))
+
+(defun +lua--start-plain-repl (root)
+  (let ((default-directory root)
         (process-connection-type nil))
     (apply #'lua-start-process nil nil nil (+lua--repl-switches +lua-interrupt-file)))
+  lua-process)
+
+(defun +lua--start-repl ()
+  (let ((root (+lua--project-root)))
+    (if (+lua--love-hooked-p root)
+        (+lua--start-love-repl root)
+      (+lua--start-plain-repl root)))
   (display-buffer lua-process-buffer)
   lua-process)
 

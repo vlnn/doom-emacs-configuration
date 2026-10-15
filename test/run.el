@@ -13,7 +13,8 @@
                   "modules/my/ai/annotate.el"
                   "modules/my/vc/config.el"
                   "modules/my/lua/repl.el"
-                  "modules/my/lua/busted.el"))
+                  "modules/my/lua/busted.el"
+                  "modules/my/lua/love.el"))
     (load (expand-file-name file root) nil t))
   (dolist (test (directory-files (expand-file-name "test" root) t "-test\\.el\\'"))
     (load test nil t))

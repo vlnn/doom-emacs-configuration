@@ -5,6 +5,7 @@
 
 (load! "repl")
 (load! "busted")
+(load! "love")
 
 (after! lua-mode
   (set-repl-handler! 'lua-mode #'+lua/open-project-repl
