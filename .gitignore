@@ -1,6 +1,7 @@
 .aider*
 .ipynb_checkpoints/
 flycheck_*.el
+custom.el
 *.elc
 *.bak
 secrets.el
