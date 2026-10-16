@@ -353,13 +353,25 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
           ((null files) (+ai-trust--record-review dir root files) t)
           (t (+ai-trust--review agent root dir reason files review)))))
 
-(defun +ai/pi ()
-  "Start or focus this project's pilish session, reviewing the repo first when due."
+(defun +ai--insert-draft-if-empty (draft)
+  (when (and draft (string-blank-p (buffer-string)))
+    (erase-buffer)
+    (insert draft)))
+
+(defun +ai--prefill-pilish-input (draft)
+  (with-current-buffer (window-buffer (selected-window))
+    (when (derived-mode-p 'pilish-input-mode)
+      (+ai--insert-draft-if-empty draft))))
+
+(defun +ai/pi (&optional draft)
+  "Start or focus this project's pilish session, reviewing the repo first when due.
+DRAFT, when given, fills an empty pilish input buffer."
   (interactive)
   (let ((root (+ai--project-root)))
     (when (+ai-trust--ensure 'pi root)
       (let ((default-directory root))
-        (pilish)))))
+        (pilish)
+        (+ai--prefill-pilish-input draft)))))
 
 (defun +ai/hax ()
   "Start or focus hax in eat at the project root, reviewing the repo first when due."

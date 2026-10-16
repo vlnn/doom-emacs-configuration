@@ -174,3 +174,15 @@
   (ert-info ("hax-buffer-name should use the project directory name")
     (should (equal "*hax:doom-emacs-configuration*"
                    (+ai--hax-buffer-name "/home/u/src/doom-emacs-configuration/")))))
+
+(ert-deftest +ai--insert-draft-if-empty/never-clobbers-a-draft ()
+  (pcase-dolist (`(,existing ,draft ,expected ,why)
+                 '(("" "/feature X" "/feature X" "fill an empty input")
+                   ("  \n" "/feature X" "/feature X" "treat whitespace as empty")
+                   ("my own words" "/feature X" "my own words" "keep a draft already typed")
+                   ("" nil "" "do nothing without a draft")))
+    (with-temp-buffer
+      (insert existing)
+      (+ai--insert-draft-if-empty draft)
+      (ert-info ((format "insert-draft-if-empty should %s" why))
+        (should (equal expected (buffer-string)))))))
