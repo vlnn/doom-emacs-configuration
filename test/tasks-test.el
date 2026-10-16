@@ -63,10 +63,10 @@
         (should (equal expected (+tasks--task-for-branch branch)))))))
 
 (ert-deftest +tasks--branch-row/marks-missing-task ()
-  (pcase-dolist (`(,task . ,expected) '(("Add X" . "| feat/x | 2 days ago | Add X |")
-                                        (nil . "| feat/x | 2 days ago | NONE |")))
+  (pcase-dolist (`(,task . ,expected) '(("Add X" . "| feat/x | 2 days ago | Add X | ahead 2 |")
+                                        (nil . "| feat/x | 2 days ago | NONE | ahead 2 |")))
     (ert-info ((format "branch-row with task %S should be %S" task expected))
-      (should (equal expected (+tasks--branch-row "feat/x" "2 days ago" task))))))
+      (should (equal expected (+tasks--branch-row "feat/x" "2 days ago" task "ahead 2"))))))
 
 (ert-deftest +tasks--skeleton/declares-flow-keywords-and-archive ()
   (let ((skeleton (+tasks--skeleton)))
@@ -108,8 +108,8 @@
 
 (ert-deftest +tasks--branch-table/no-trailing-newline ()
   (ert-info ("branch-table should end on the last row so the block has no blank line before #+END:")
-    (should (equal "| Branch | Last commit | Task |\n|-\n| feat/x | now | NONE |"
-                   (+tasks--branch-table '("| feat/x | now | NONE |"))))))
+    (should (equal "| Branch | Last commit | Task | State |\n|-\n| feat/x | now | NONE | merged |"
+                   (+tasks--branch-table '("| feat/x | now | NONE | merged |"))))))
 
 (ert-deftest +tasks--slug/lowercase-ascii-words-cut-at-word ()
   (pcase-dolist (`(,heading . ,expected)
@@ -201,3 +201,70 @@
       (ert-info ("agenda-files should list a tasks.org once even when projectile knows it by two paths")
         (should (equal 1 (length (+tasks--agenda-files nil (list real link
                                                                   (concat real "./"))))))))))
+
+;;; review, test, done
+
+(ert-deftest +tasks--state-cell/flags-merged-ahead-and-stale ()
+  (pcase-dolist (`(,merged ,ahead ,task-state ,expected)
+                 '((t 0 "REVIEW" "merged")
+                   (nil 3 "GREEN" "ahead 3")
+                   (nil 1 nil "ahead 1")
+                   (t 0 "DONE" "DONE! delete branch")
+                   (nil 2 "DONE" "DONE! ahead 2")))
+    (ert-info ((format "state-cell merged=%s ahead=%s task=%s should be %S" merged ahead task-state expected))
+      (should (equal expected (+tasks--state-cell merged ahead task-state))))))
+
+(ert-deftest +tasks--default-branch-from/prefers-origin-head ()
+  (pcase-dolist (`(,origin-head ,locals ,expected)
+                 '(("refs/remotes/origin/develop" ("main" "develop") "develop")
+                   (nil ("master") "master")
+                   (nil ("main" "master") "main")
+                   (nil () "main")))
+    (ert-info ((format "default-branch-from %S %S should be %s" origin-head locals expected))
+      (should (equal expected (+tasks--default-branch-from origin-head locals))))))
+
+(ert-deftest +tasks--test-command/uses-a-just-test-recipe ()
+  (pcase-dolist (`(,justfile . ,expected) '(("test:\n\tpytest\n" . "just test")
+                                            ("check:\n\truff\n\ntest *args:\n\tpytest {{args}}\n" . "just test")
+                                            ("testing:\n\techo\n" . nil)
+                                            ("check:\n\truff\n" . nil)
+                                            (nil . nil)))
+    (ert-info ((format "test-command for justfile %S should be %S" justfile expected))
+      (should (equal expected (+tasks--test-command justfile))))))
+
+(ert-deftest +tasks--merge-message/names-branch-and-task ()
+  (ert-info ("merge-message should name the branch and the task heading")
+    (should (equal "Merge feat/x: Unify menus" (+tasks--merge-message "feat/x" "Unify menus")))))
+
+(ert-deftest +tasks--review-prompt/carries-accept-and-diff ()
+  (let ((prompt (+tasks--review-prompt "one entry point" "diff --git a/x b/x")))
+    (pcase-dolist (`(,needle . ,why) '(("one entry point" . "state the acceptance criterion")
+                                       ("diff --git a/x b/x" . "include the diff")))
+      (ert-info ((format "review-prompt should %s" why))
+        (should (string-search needle prompt))))))
+
+(ert-deftest +tasks--exclude-lines/adds-only-missing-entries ()
+  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive"))
+                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive"))
+                                            ("tasks.org\ntasks.org_archive\n" . ())))
+    (ert-info ((format "exclude-lines for %S should be %S" existing expected))
+      (should (equal expected (+tasks--exclude-lines existing))))))
+
+(ert-deftest +tasks--branch-task/returns-heading-state-and-position ()
+  (+tasks-test--in-tasks-buffer "** DONE Shipped\n:PROPERTIES:\n:BRANCH: feat/shipped\n:END:\n"
+    (pcase-let ((`(,heading ,state ,pos) (+tasks--branch-task "feat/shipped")))
+      (ert-info ("branch-task should give the linked task's heading and state")
+        (should (equal '("Shipped" "DONE") (list heading state))))
+      (ert-info ("branch-task should give the linked task's position")
+        (goto-char pos)
+        (should (equal "Shipped" (org-get-heading t t t t)))))
+    (ert-info ("branch-task should be nil for an unlinked branch")
+      (should-not (+tasks--branch-task "feat/other")))))
+
+(ert-deftest +tasks/menu-file/binds-the-work-keys ()
+  (require 'transient)
+  (load (expand-file-name "modules/my/tasks/menu.el" default-directory) nil t)
+  (pcase-dolist (`(,key . ,command) '(("r" . +tasks/review) ("R" . +tasks/ai-review)
+                                      ("t" . +tasks/test) ("d" . +tasks/done)))
+    (ert-info ((format "menu key %s should run %s" key command))
+      (should (eq command (plist-get (nth 2 (transient-get-suffix '+tasks-transient key)) :command))))))

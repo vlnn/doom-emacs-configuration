@@ -71,6 +71,33 @@
 
 ;;; branches dynamic block
 
+(defun +tasks--git-ok-p (&rest args)
+  (zerop (apply #'call-process "git" nil nil nil args)))
+
+(defun +tasks--git-lines (&rest args)
+  "Stdout lines of git ARGS, or nil when git fails."
+  (with-temp-buffer
+    (when (zerop (apply #'call-process "git" nil (list t nil) nil args))
+      (split-string (buffer-string) "\n" t))))
+
+(defun +tasks--default-branch-from (origin-head locals)
+  (cond (origin-head (string-remove-prefix "refs/remotes/origin/" origin-head))
+        ((member "main" locals) "main")
+        ((member "master" locals) "master")
+        (t "main")))
+
+(defun +tasks--default-branch ()
+  (+tasks--default-branch-from
+   (car (+tasks--git-lines "symbolic-ref" "-q" "refs/remotes/origin/HEAD"))
+   (+tasks--git-lines "branch" "--format=%(refname:short)")))
+
+(defun +tasks--merged-p (branch main)
+  (or (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main)
+      (+tasks--git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main))))
+
+(defun +tasks--ahead (branch main)
+  (string-to-number (or (car (+tasks--git-lines "rev-list" "--count" (concat main ".." branch))) "0")))
+
 (defun +tasks--branch-patterns (prefixes)
   (mapcar (lambda (prefix) (concat prefix "*")) prefixes))
 
@@ -84,26 +111,43 @@
                  "--format=%(refname:short)\t%(committerdate:relative)"
                  (+tasks--branch-patterns prefixes))))
 
-(defun +tasks--heading-if-on-branch (branch)
-  (when (and (org-get-todo-state)
-             (equal branch (org-entry-get nil "BRANCH")))
-    (org-get-heading t t t t)))
+(defun +tasks--task-if-on-branch (branch)
+  (when-let* ((state (org-get-todo-state)))
+    (when (equal branch (org-entry-get nil "BRANCH"))
+      (list (org-get-heading t t t t) state (point)))))
 
-(defun +tasks--task-for-branch (branch)
+(defun +tasks--branch-task (branch)
+  "The task linked to BRANCH in the current buffer, as (HEADING STATE POS)."
   (save-restriction
     (widen)
-    (car (delq nil (org-map-entries (lambda () (+tasks--heading-if-on-branch branch)))))))
+    (car (delq nil (org-map-entries (lambda () (+tasks--task-if-on-branch branch)))))))
 
-(defun +tasks--branch-row (branch age task)
-  (format "| %s | %s | %s |" branch age (or task "NONE")))
+(defun +tasks--task-for-branch (branch)
+  (car (+tasks--branch-task branch)))
+
+(defun +tasks--state-cell (merged ahead task-state)
+  (let ((progress (if merged "merged" (format "ahead %d" ahead))))
+    (cond ((not (equal task-state "DONE")) progress)
+          (merged "DONE! delete branch")
+          (t (concat "DONE! " progress)))))
+
+(defun +tasks--branch-row (branch age task state)
+  (format "| %s | %s | %s | %s |" branch age (or task "NONE") state))
 
 (defun +tasks--branch-table (rows)
-  (string-join (cons "| Branch | Last commit | Task |\n|-" rows) "\n"))
+  (string-join (cons "| Branch | Last commit | Task | State |\n|-" rows) "\n"))
+
+(defun +tasks--branch-row-for (branch age main)
+  (pcase-let ((`(,heading ,state ,_) (+tasks--branch-task branch)))
+    (+tasks--branch-row branch age heading
+                        (+tasks--state-cell (+tasks--merged-p branch main)
+                                            (+tasks--ahead branch main)
+                                            state))))
 
 (defun +tasks--branch-rows (prefixes)
-  (mapcar (pcase-lambda (`(,branch . ,age))
-            (+tasks--branch-row branch age (+tasks--task-for-branch branch)))
-          (+tasks--git-branches prefixes)))
+  (let ((main (+tasks--default-branch)))
+    (mapcar (pcase-lambda (`(,branch . ,age)) (+tasks--branch-row-for branch age main))
+            (+tasks--git-branches prefixes))))
 
 (defun org-dblock-write:branches (_params)
   (insert (+tasks--branch-table (+tasks--branch-rows +tasks-branch-prefixes)))
@@ -142,7 +186,31 @@
     (when (file-exists-p file)
       (user-error "%s already exists" file))
     (with-temp-file file (insert (+tasks--skeleton)))
+    (+tasks--exclude-from-git)
     (find-file file)))
+
+(defun +tasks--excluded-files ()
+  (list +tasks-file-name (concat +tasks-file-name "_archive")))
+
+(defun +tasks--exclude-lines (existing)
+  (seq-difference (+tasks--excluded-files) (split-string existing "\n" t)))
+
+(defun +tasks--exclude-file ()
+  (when-let* ((path (car (+tasks--git-lines "rev-parse" "--git-path" "info/exclude"))))
+    (expand-file-name path)))
+
+(defun +tasks--exclude-from-git ()
+  "Keep tasks.org and its archive out of git via .git/info/exclude."
+  (when-let* ((file (+tasks--exclude-file)))
+    (let ((missing (+tasks--exclude-lines (if (file-exists-p file) (+tasks--read-file file) ""))))
+      (when missing
+        (make-directory (file-name-directory file) t)
+        (write-region (concat (mapconcat #'identity missing "\n") "\n") nil file t)))))
+
+(defun +tasks--read-file (file)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (buffer-string)))
 
 (defconst +tasks--capture-template
   '("pi" "Project idea" entry
@@ -277,9 +345,6 @@
   (let ((accept (string-trim (read-string (format "ACCEPT for \"%s\" (one testable line): " heading)))))
     (unless (string-empty-p accept) accept)))
 
-(defun +tasks--git-ok-p (&rest args)
-  (zerop (apply #'call-process "git" nil nil nil args)))
-
 (defun +tasks--checkout-branch (branch)
   (unless (if (+tasks--git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/heads/" branch))
               (+tasks--git-ok-p "switch" branch)
@@ -356,6 +421,196 @@ Uses the IDEA or TODO at point in tasks.org, otherwise asks for one."
   (unless (fboundp '+tasks-transient)
     (load (expand-file-name "menu" +tasks--dir) nil t))
   (call-interactively #'+tasks-transient))
+
+;;; review, test, done
+
+(defun +tasks--task-plist ()
+  (list :buffer (current-buffer)
+        :heading (org-get-heading t t t t)
+        :branch (org-entry-get nil "BRANCH")
+        :accept (org-entry-get nil "ACCEPT")))
+
+(defun +tasks--linked-task-at-point ()
+  (when (and (+tasks--tasks-file-p buffer-file-name)
+             (derived-mode-p 'org-mode)
+             (not (org-before-first-heading-p)))
+    (save-excursion
+      (org-back-to-heading t)
+      (when (org-entry-get nil "BRANCH")
+        (+tasks--task-plist)))))
+
+(defun +tasks--task-on-current-branch ()
+  (when-let* ((branch (car (+tasks--git-lines "branch" "--show-current"))))
+    (with-current-buffer (+tasks--tasks-buffer)
+      (when-let* ((task (+tasks--branch-task branch)))
+        (save-excursion
+          (goto-char (nth 2 task))
+          (+tasks--task-plist))))))
+
+(defun +tasks--linked-p (entry)
+  (save-excursion
+    (goto-char (cdr entry))
+    (org-entry-get nil "BRANCH")))
+
+(defun +tasks--pick-linked-task ()
+  (with-current-buffer (+tasks--tasks-buffer)
+    (let ((tasks (seq-filter #'+tasks--linked-p (+tasks--open-tasks org-not-done-keywords))))
+      (unless tasks
+        (user-error "No open task with a :BRANCH: in %s" buffer-file-name))
+      (save-excursion
+        (goto-char (cdr (assoc (completing-read "Task: " tasks nil t) tasks)))
+        (+tasks--task-plist)))))
+
+(defun +tasks--work-task ()
+  "The task to review, test or finish: at point, on the current branch, or picked."
+  (or (+tasks--linked-task-at-point)
+      (+tasks--task-on-current-branch)
+      (+tasks--pick-linked-task)))
+
+(defun +tasks--task-root (task)
+  (buffer-local-value 'default-directory (plist-get task :buffer)))
+
+(defun +tasks--range (main branch)
+  (format "%s...%s" main branch))
+
+(defun +tasks/review ()
+  "Show the task branch's whole diff against the default branch, with its ACCEPT."
+  (interactive)
+  (let* ((task (+tasks--work-task))
+         (default-directory (+tasks--task-root task)))
+    (magit-diff-range (+tasks--range (+tasks--default-branch) (plist-get task :branch)))
+    (message "ACCEPT: %s" (or (plist-get task :accept) "(none set)"))))
+
+(defun +tasks--review-prompt (accept diff)
+  (format "Acceptance criterion: %s
+
+Review this diff against it: what does not serve the criterion, missing or weak tests, risky changes.
+
+%s" (or accept "(none set)") diff))
+
+(defun +tasks--review-buffer (branch)
+  (with-current-buffer (get-buffer-create (format "*tasks-review:%s*" branch))
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (format "Reviewing %s on %s...\n\n" branch (or (bound-and-true-p +ai-fast-model) "gptel"))))
+    (current-buffer)))
+
+(defun +tasks--review-callback (buffer)
+  (lambda (response info)
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (insert (if (stringp response)
+                    response
+                  (format "Review failed: %s" (plist-get info :status))))))))
+
+(defun +tasks/ai-review ()
+  "Ask the local model, fresh, to review the task branch against its ACCEPT."
+  (interactive)
+  (require 'gptel)
+  (let* ((task (+tasks--work-task))
+         (default-directory (+tasks--task-root task))
+         (branch (plist-get task :branch))
+         (diff (string-join (+tasks--git-lines "diff" (+tasks--range (+tasks--default-branch) branch)) "\n"))
+         (buffer (+tasks--review-buffer branch))
+         (gptel-model (or (bound-and-true-p +ai-fast-model) gptel-model)))
+    (pop-to-buffer buffer)
+    (gptel-request (+tasks--review-prompt (plist-get task :accept) diff)
+      :system (alist-get 'review gptel-directives)
+      :callback (+tasks--review-callback buffer))))
+
+(defun +tasks--test-command (justfile-text)
+  (when (and justfile-text (string-match-p "^test\\_>[^:\n]*:" justfile-text))
+    "just test"))
+
+(defun +tasks--justfile-text (root)
+  (when-let* ((file (seq-find #'file-exists-p
+                              (mapcar (lambda (name) (expand-file-name name root))
+                                      '("justfile" "Justfile" ".justfile")))))
+    (+tasks--read-file file)))
+
+(defun +tasks--project-test-command (root)
+  (+tasks--test-command (+tasks--justfile-text root)))
+
+(defun +tasks/test ()
+  "Run the project's tests: `just test' when the justfile has it, else projectile."
+  (interactive)
+  (let* ((default-directory (+tasks--project-root))
+         (command (+tasks--project-test-command default-directory)))
+    (if command
+        (compile command)
+      (call-interactively #'projectile-test-project))))
+
+(defun +tasks--merge-message (branch heading)
+  (format "Merge %s: %s" branch heading))
+
+(defun +tasks--dirty-p ()
+  (+tasks--git-lines "status" "--porcelain" "--untracked-files=no"))
+
+(defun +tasks--switch (branch)
+  (unless (+tasks--git-ok-p "switch" branch)
+    (user-error "git could not switch to %s" branch)))
+
+(defun +tasks--run-tests-or-confirm (root)
+  (if-let* ((command (+tasks--project-test-command root)))
+      (let ((buffer (get-buffer-create "*tasks-done-tests*")))
+        (with-current-buffer buffer (erase-buffer))
+        (message "Running %s..." command)
+        (unless (zerop (call-process-shell-command command nil buffer))
+          (display-buffer buffer)
+          (user-error "%s failed; nothing merged" command)))
+    (unless (y-or-n-p "No `just test' recipe; merge without running tests? ")
+      (user-error "Stopped before merging"))))
+
+(defun +tasks--catch-up (branch main)
+  (when (and (not (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main))
+             (+tasks--git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main)))
+    (unless (+tasks--git-ok-p "merge" "--ff-only" (concat "origin/" main))
+      (user-error "%s is merged on origin, but %s cannot fast-forward to it" branch main))))
+
+(defun +tasks--merge (branch main heading)
+  (+tasks--switch main)
+  (+tasks--catch-up branch main)
+  (unless (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main)
+    (unless (+tasks--git-ok-p "merge" "--no-ff" "-m" (+tasks--merge-message branch heading) branch)
+      (user-error "Merging %s stopped; finish it in magit, then run done again" branch))))
+
+(defun +tasks--delete-local-branch (branch)
+  "Delete BRANCH once HEAD contains it; plain -d also wants its upstream to."
+  (unless (and (+tasks--git-ok-p "merge-base" "--is-ancestor" branch "HEAD")
+               (+tasks--git-ok-p "branch" "-D" branch))
+    (user-error "%s is not merged into HEAD; kept it" branch)))
+
+(defun +tasks--delete-branch (branch)
+  (+tasks--delete-local-branch branch)
+  (when (and (+tasks--git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/remotes/origin/" branch))
+             (y-or-n-p (format "Also delete origin/%s? " branch)))
+    (+tasks--git-ok-p "push" "origin" "--delete" branch)))
+
+(defun +tasks--mark-done (branch buffer)
+  (with-current-buffer buffer
+    (goto-char (nth 2 (+tasks--branch-task branch)))
+    (org-todo "DONE")
+    (+tasks/refresh-branches)
+    (save-buffer)))
+
+(defun +tasks/done ()
+  "Test the task's branch, merge it --no-ff, delete it and mark the task DONE."
+  (interactive)
+  (let* ((task (+tasks--work-task))
+         (branch (plist-get task :branch))
+         (default-directory (+tasks--task-root task))
+         (main (+tasks--default-branch)))
+    (when (+tasks--dirty-p)
+      (user-error "Commit or stash your changes first"))
+    (+tasks--switch branch)
+    (+tasks--run-tests-or-confirm default-directory)
+    (+tasks--merge branch main (plist-get task :heading))
+    (+tasks--delete-branch branch)
+    (+tasks--mark-done branch (plist-get task :buffer))
+    (when (fboundp 'magit-refresh-all)
+      (magit-refresh-all))
+    (message "%s merged into %s; task done" branch main)))
 
 ;;; tasks.org buffers
 

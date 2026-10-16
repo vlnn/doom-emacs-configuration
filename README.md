@@ -70,14 +70,19 @@ Reviewed commits are kept in `doom-cache-dir`.
 ## Tasks
 
 Each repo in the agent flow keeps a `tasks.org` at its root; `M-x +tasks/init`
-writes the skeleton. `SPC 5` (and `SPC m w` inside `tasks.org`) opens the
-tasks menu:
+writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
+`.git/info/exclude`, so they stay out of git without touching `.gitignore`.
+`SPC 5` (and `SPC m w` inside `tasks.org`) opens the tasks menu:
 
 | key | does |
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
 | `s` | start the IDEA/TODO at point (or pick one): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile under `* Active`, then open pi with `/feature <heading>` in an empty input (also on the kill ring) |
 | `a` | set `:ACCEPT:` |
+| `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed |
+| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*` |
+| `t` | `just test` when the justfile has a `test` recipe, else projectile's test command |
+| `d` | done: refuse if dirty, run tests on the branch (stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, delete the branch (asks about `origin`), mark DONE. Nothing is pushed |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |
 | `o` / `f` | Board agenda / visit `tasks.org` |
@@ -88,6 +93,11 @@ replaced: on every agenda command it is reset to `org-directory` plus the
 `tasks.org` of each known projectile project (remote projects skipped).
 `+tasks-branch-prefixes` (default `("feat/")`, safe as a dir-local) picks the
 branches the block lists; with more than one prefix, `start` asks which.
+
+The block's State column reads `ahead N` (commits not on main), `merged`, or
+`DONE! …` once the task is done; `DONE! delete branch` marks leftovers. Main
+is `origin/HEAD`, else `main`, else `master`. `r`, `R`, `t` and `d` act on the
+linked row or task at point, else the task on the current branch, else ask.
 
 ## Local models
 
