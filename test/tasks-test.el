@@ -63,8 +63,8 @@
         (should (equal expected (+tasks--task-for-branch branch)))))))
 
 (ert-deftest +tasks--branch-row/marks-missing-task ()
-  (pcase-dolist (`(,task . ,expected) '(("Add X" . "| feat/x | 2 days ago | Add X |\n")
-                                        (nil . "| feat/x | 2 days ago | NONE |\n")))
+  (pcase-dolist (`(,task . ,expected) '(("Add X" . "| feat/x | 2 days ago | Add X |")
+                                        (nil . "| feat/x | 2 days ago | NONE |")))
     (ert-info ((format "branch-row with task %S should be %S" task expected))
       (should (equal expected (+tasks--branch-row "feat/x" "2 days ago" task))))))
 
@@ -85,3 +85,109 @@
                                          ((feat) . nil)))
     (ert-info ((format "%S should%s be a safe prefix list" value (if expected "" " not")))
       (should (eq expected (+tasks--string-list-p value))))))
+
+(defmacro +tasks-test--in-tasks-buffer (extra &rest body)
+  "Run BODY in an org buffer holding the skeleton with EXTRA appended under * Ideas."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (insert (replace-regexp-in-string "^\\* Ideas\n" (concat "* Ideas\n" ,extra) (+tasks--skeleton)))
+     (org-mode)
+     (goto-char (point-min))
+     ,@body))
+
+(defun +tasks-test--goto-heading (title)
+  (goto-char (point-min))
+  (re-search-forward (concat "^\\*+ .*" (regexp-quote title))))
+
+(ert-deftest +tasks--task-for-branch/ignores-structural-headings ()
+  (with-temp-buffer
+    (insert "#+TODO: IDEA TODO | DONE\n* Branches\n:PROPERTIES:\n:BRANCH: feat/n\n:END:\n")
+    (org-mode)
+    (ert-info ("task-for-branch should only match headings that carry a TODO keyword")
+      (should-not (+tasks--task-for-branch "feat/n")))))
+
+(ert-deftest +tasks--branch-table/no-trailing-newline ()
+  (ert-info ("branch-table should end on the last row so the block has no blank line before #+END:")
+    (should (equal "| Branch | Last commit | Task |\n|-\n| feat/x | now | NONE |"
+                   (+tasks--branch-table '("| feat/x | now | NONE |"))))))
+
+(ert-deftest +tasks--slug/lowercase-ascii-words-cut-at-word ()
+  (pcase-dolist (`(,heading . ,expected)
+                 '(("Radically simplify wisp flow unifying the menus over different scenarios"
+                    . "radically-simplify-wisp-flow-unifying")
+                   ("Run REPL inside LÖVE games!" . "run-repl-inside-love-games")
+                   ("  Fix: off-by-one in #42  " . "fix-off-by-one-in-42")
+                   ("Supercalifragilisticexpialidociousnessandthensomemore" . "supercalifragilisticexpialidociousnessan")))
+    (ert-info ((format "slug of %S should be %S" heading expected))
+      (should (equal expected (+tasks--slug heading))))))
+
+(ert-deftest +tasks--branch-name/joins-prefix-and-slug ()
+  (ert-info ("branch-name should prepend the prefix to the heading's slug")
+    (should (equal "fix/broken-capture" (+tasks--branch-name "fix/" "Broken capture")))))
+
+(ert-deftest +tasks--branch-title/turns-branch-back-into-words ()
+  (pcase-dolist (`(,branch . ,expected) '(("feat/menu-unify" . "menu unify")
+                                          ("fix/x" . "x")
+                                          ("other" . "other")))
+    (ert-info ((format "branch-title of %s should be %S" branch expected))
+      (should (equal expected (+tasks--branch-title branch '("feat/" "fix/")))))))
+
+(ert-deftest +tasks--row-branch/reads-data-rows-only ()
+  (pcase-dolist (`(,line . ,expected) '(("| feat/x | 2 days ago | NONE |" . "feat/x")
+                                        ("| Branch | Last commit | Task |" . nil)
+                                        ("|--------+-------------+------|" . nil)
+                                        ("plain text" . nil)))
+    (ert-info ((format "row-branch of %S should be %S" line expected))
+      (should (equal expected (+tasks--row-branch line))))))
+
+(ert-deftest +tasks--tasks-file-p/matches-tasks-org-only ()
+  (pcase-dolist (`(,file . ,expected) '(("/r/tasks.org" . t) ("/r/notes.org" . nil) (nil . nil)))
+    (ert-info ((format "tasks-file-p %S should be %S" file expected))
+      (should (eq expected (+tasks--tasks-file-p file))))))
+
+(ert-deftest +tasks--open-tasks/lists-ideas-and-todos ()
+  (+tasks-test--in-tasks-buffer "** IDEA First\n** DONE Old\n"
+    (save-excursion (re-search-forward "^\\* Active\n") (insert "** TODO Second\n"))
+    (ert-info ("open-tasks should list IDEA and TODO headings with their positions")
+      (should (equal '("First" "Second") (mapcar #'car (+tasks--open-tasks)))))))
+
+(ert-deftest +tasks--start-entry/promotes-links-and-refiles ()
+  (+tasks-test--in-tasks-buffer "** IDEA Unify menus\n"
+    (+tasks-test--goto-heading "Unify menus")
+    (+tasks--start-entry "feat/unify-menus" "one entry point")
+    (+tasks-test--goto-heading "Unify menus")
+    (pcase-dolist (`(,actual ,expected ,why)
+                   `((,(org-get-todo-state) "TODO" "switch IDEA to TODO")
+                     (,(org-entry-get nil "BRANCH") "feat/unify-menus" "set the branch")
+                     (,(org-entry-get nil "ACCEPT") "one entry point" "set the acceptance line")
+                     (,(org-entry-get nil "MODEL") "local" "default the model to local")
+                     (,(save-excursion (org-up-heading-safe) (org-get-heading t t t t)) "Active" "refile under Active")))
+      (ert-info ((format "start-entry should %s" why))
+        (should (equal expected actual))))))
+
+(ert-deftest +tasks--start-entry/keeps-existing-model-and-accept ()
+  (+tasks-test--in-tasks-buffer "** TODO Keep\n:PROPERTIES:\n:MODEL: claude\n:ACCEPT: old\n:END:\n"
+    (+tasks-test--goto-heading "Keep")
+    (+tasks--start-entry "feat/keep" nil)
+    (+tasks-test--goto-heading "Keep")
+    (ert-info ("start-entry should not overwrite a model or acceptance line already set")
+      (should (equal '("claude" "old") (list (org-entry-get nil "MODEL") (org-entry-get nil "ACCEPT")))))))
+
+(ert-deftest +tasks--insert-idea/adds-linked-idea-under-ideas ()
+  (+tasks-test--in-tasks-buffer ""
+    (+tasks--insert-idea "menu unify" "feat/menu-unify")
+    (+tasks-test--goto-heading "menu unify")
+    (ert-info ("insert-idea should create an IDEA carrying the branch under * Ideas")
+      (should (equal '("IDEA" "feat/menu-unify" "Ideas")
+                     (list (org-get-todo-state) (org-entry-get nil "BRANCH")
+                           (save-excursion (org-up-heading-safe) (org-get-heading t t t t))))))))
+
+(ert-deftest +tasks--feature-prompt/names-the-heading ()
+  (ert-info ("feature-prompt should be the /feature command for the task")
+    (should (equal "/feature Unify menus" (+tasks--feature-prompt "Unify menus")))))
+
+(ert-deftest +tasks/menu-file/defines-the-transient ()
+  (require 'transient)
+  (load (expand-file-name "modules/my/tasks/menu.el" default-directory) nil t)
+  (ert-info ("menu.el should define the +tasks-transient prefix")
+    (should (commandp '+tasks-transient))))
