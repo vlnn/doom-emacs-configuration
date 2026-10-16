@@ -139,3 +139,16 @@
   :config
   (setq opencode-default-model "anthropic/claude-sonnet-4-6")
   (set-popup-rule! "^\\*opencode" :side 'right :size 0.4 :select t :quit nil :ttl nil))
+
+(use-package! pilish
+  :commands (pilish)
+  :init
+  (setq pilish-project-trust-policy 'default))
+
+(set-popup-rule! "^\\*pilish-" :ignore t)
+
+(load! "trust")
+
+(map! :leader
+      :desc "pi"  "3" #'+ai/pi
+      :desc "hax" "4" #'+ai/hax)
