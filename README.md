@@ -81,7 +81,7 @@ writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 | `a` | set `:ACCEPT:` |
 | `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed |
 | `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*` |
-| `t` | `just test` when the justfile has a `test` recipe, else projectile's test command |
+| `t` | `just test` when the justfile has a `test` recipe and `just` is installed, else projectile's test command (says so when `just` is missing) |
 | `d` | done: refuse if dirty, run tests on the branch (stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, delete the branch (asks about `origin`), mark DONE. Nothing is pushed |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |

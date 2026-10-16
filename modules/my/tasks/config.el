@@ -544,7 +544,8 @@ Review this diff against it: what does not serve the criterion, missing or weak 
       :callback (+tasks--review-callback buffer))))
 
 (defun +tasks--test-command (justfile-text)
-  (when (and justfile-text (string-match-p "^test\\_>[^:\n]*:" justfile-text))
+  (when (and justfile-text
+             (string-match-p "^@?test\\(?:[ \t][^:\n]*\\)?:\\(?:[^=]\\|$\\)" justfile-text))
     "just test"))
 
 (defun +tasks--justfile-text (root)
@@ -553,11 +554,26 @@ Review this diff against it: what does not serve the criterion, missing or weak 
                                       '("justfile" "Justfile" ".justfile")))))
     (+tasks--read-file file)))
 
+(defun +tasks--choose-test-command (recipe-p just-p projectile-command)
+  (if (and recipe-p just-p) "just test" projectile-command))
+
+(defun +tasks--projectile-test-command (root)
+  (when (fboundp 'projectile-test-command)
+    (let ((command (ignore-errors (projectile-test-command root))))
+      (and (stringp command) command))))
+
+(defun +tasks--warn-missing-just (recipe-p just-p)
+  (when (and recipe-p (not just-p))
+    (message "justfile has a test recipe but `just' is not on exec-path; using projectile's test command")))
+
 (defun +tasks--project-test-command (root)
-  (+tasks--test-command (+tasks--justfile-text root)))
+  (let ((recipe-p (+tasks--test-command (+tasks--justfile-text root)))
+        (just-p (executable-find "just")))
+    (+tasks--warn-missing-just recipe-p just-p)
+    (+tasks--choose-test-command recipe-p just-p (+tasks--projectile-test-command root))))
 
 (defun +tasks/test ()
-  "Run the project's tests: `just test' when the justfile has it, else projectile."
+  "Run the project's tests: `just test' when available, else projectile's command."
   (interactive)
   (let* ((default-directory (+tasks--project-root))
          (command (+tasks--project-test-command default-directory)))
@@ -583,7 +599,7 @@ Review this diff against it: what does not serve the criterion, missing or weak 
         (unless (zerop (call-process-shell-command command nil buffer))
           (display-buffer buffer)
           (user-error "%s failed; nothing merged" command)))
-    (unless (y-or-n-p "No `just test' recipe; merge without running tests? ")
+    (unless (y-or-n-p "No test command found; merge without running tests? ")
       (user-error "Stopped before merging"))))
 
 (defun +tasks--catch-up (branch main)
