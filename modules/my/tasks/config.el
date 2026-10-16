@@ -40,8 +40,9 @@
   (expand-file-name +tasks-file-name root))
 
 (defun +tasks--project-files (roots)
-  (seq-filter #'file-exists-p
-              (mapcar #'+tasks--project-file (seq-remove #'file-remote-p roots))))
+  (seq-uniq (mapcar #'file-truename
+                    (seq-filter #'file-exists-p
+                                (mapcar #'+tasks--project-file (seq-remove #'file-remote-p roots))))))
 
 (defun +tasks--agenda-files (base roots)
   (seq-uniq (append base (+tasks--project-files roots))))

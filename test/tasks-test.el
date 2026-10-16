@@ -191,3 +191,13 @@
   (load (expand-file-name "modules/my/tasks/menu.el" default-directory) nil t)
   (ert-info ("menu.el should define the +tasks-transient prefix")
     (should (commandp '+tasks-transient))))
+
+(ert-deftest +tasks--agenda-files/one-entry-per-file-across-spellings ()
+  (+tasks-test--with-projects '("real")
+    (let ((real (expand-file-name "real/" root))
+          (link (expand-file-name "link/" root)))
+      (+tasks-test--touch (expand-file-name "tasks.org" real))
+      (make-symbolic-link (directory-file-name real) (directory-file-name link))
+      (ert-info ("agenda-files should list a tasks.org once even when projectile knows it by two paths")
+        (should (equal 1 (length (+tasks--agenda-files nil (list real link
+                                                                  (concat real "./"))))))))))
