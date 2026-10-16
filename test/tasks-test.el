@@ -111,6 +111,48 @@
     (should (equal "| Branch | Last commit | Task | State |\n|-\n| feat/x | now | NONE | merged |"
                    (+tasks--branch-table '("| feat/x | now | NONE | merged |"))))))
 
+(defconst +tasks-test--aligned
+  (concat "| Branch | Last commit | Task | State  |\n"
+          "|--------+-------------+------+--------|\n"
+          "| feat/x | now         | NONE | merged |"))
+
+(defmacro +tasks-test--with-block (body-text &rest body)
+  "Run BODY in an org buffer whose branches block holds BODY-TEXT, rows stubbed."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (insert "* Branches\n#+BEGIN: branches\n" ,body-text "\n#+END:\n")
+     (org-mode)
+     (set-buffer-modified-p nil)
+     (cl-letf (((symbol-function '+tasks--branch-rows)
+                (lambda (_) '("| feat/x | now | NONE | merged |"))))
+       ,@body)))
+
+(defun +tasks-test--block-body ()
+  (goto-char (point-min))
+  (re-search-forward "^#\\+BEGIN: branches\n")
+  (buffer-substring (point) (progn (re-search-forward "\n#\\+END:") (match-beginning 0))))
+
+(ert-deftest +tasks--aligned-table/aligns-outside-the-buffer ()
+  (ert-info ("aligned-table should return the org-aligned table without a trailing newline")
+    (should (equal +tasks-test--aligned
+                   (+tasks--aligned-table '("| feat/x | now | NONE | merged |"))))))
+
+(ert-deftest +tasks/refresh-branches/leaves-an-up-to-date-block-alone ()
+  (+tasks-test--with-block +tasks-test--aligned
+    (+tasks/refresh-branches)
+    (ert-info ("refresh-branches should not touch the buffer when the table is unchanged")
+      (should-not (buffer-modified-p)))))
+
+(ert-deftest +tasks/refresh-branches/rewrites-a-stale-block ()
+  (+tasks-test--with-block "| old | row |"
+    (+tasks/refresh-branches)
+    (ert-info ("refresh-branches should replace a stale block with the aligned table")
+      (should (equal +tasks-test--aligned (+tasks-test--block-body))))
+    (ert-info ("the rewritten rows should parse as table rows of the block")
+      (goto-char (point-min))
+      (re-search-forward "^| feat/x")
+      (should (eq 'table-row (org-element-type (org-element-at-point)))))))
+
 (ert-deftest +tasks--slug/lowercase-ascii-words-cut-at-word ()
   (pcase-dolist (`(,heading . ,expected)
                  '(("Radically simplify wisp flow unifying the menus over different scenarios"

@@ -149,9 +149,19 @@
     (mapcar (pcase-lambda (`(,branch . ,age)) (+tasks--branch-row-for branch age main))
             (+tasks--git-branches prefixes))))
 
+(defun +tasks--aligned-table (rows)
+  (with-temp-buffer
+    (insert (+tasks--branch-table rows))
+    (delay-mode-hooks (org-mode))
+    (goto-char (point-min))
+    (org-table-align)
+    (string-trim-right (buffer-string))))
+
+(defun +tasks--current-table ()
+  (+tasks--aligned-table (+tasks--branch-rows +tasks-branch-prefixes)))
+
 (defun org-dblock-write:branches (_params)
-  (insert (+tasks--branch-table (+tasks--branch-rows +tasks-branch-prefixes)))
-  (org-table-align))
+  (insert (+tasks--current-table)))
 
 (defun +tasks--row-branch (line)
   (when (string-match "\\`|[[:blank:]]*\\([^|[:blank:]]+\\)[[:blank:]]*|" line)
@@ -159,14 +169,28 @@
       (unless (or (equal cell "Branch") (string-prefix-p "-" cell))
         cell))))
 
+(defun +tasks--block-body-bounds ()
+  "Bounds of the branches block body, rows plus their final newline."
+  (goto-char (point-min))
+  (when (re-search-forward "^[ \t]*#\\+BEGIN: branches.*\n" nil t)
+    (let ((start (point)))
+      (when (re-search-forward "^[ \t]*#\\+END:" nil t)
+        (cons start (match-beginning 0))))))
+
+(defun +tasks--replace-body (bounds text)
+  "Swap in TEXT and drop the element cache, which misparses large table rewrites."
+  (unless (equal text (buffer-substring-no-properties (car bounds) (cdr bounds)))
+    (goto-char (car bounds))
+    (delete-region (car bounds) (cdr bounds))
+    (insert text)
+    (org-element-cache-reset)))
+
 (defun +tasks/refresh-branches ()
   "Update the branches block of the current tasks.org."
   (interactive)
   (save-excursion
-    (goto-char (point-min))
-    (when (re-search-forward "^[ \t]*#\\+BEGIN: branches" nil t)
-      (beginning-of-line)
-      (org-update-dblock))))
+    (when-let ((bounds (+tasks--block-body-bounds)))
+      (+tasks--replace-body bounds (concat (+tasks--current-table) "\n")))))
 
 ;;; capture and init
 
