@@ -18,8 +18,9 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode |
+| `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el` |
 | `notes` | denote, ob-duckdb |
+| `tasks` | per-repo `tasks.org`: agenda views, `branches` block, `p i` idea capture, `+tasks/init` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
 | `dirvish` | dired/dirvish |
 | `vc` | magit-todos, magit-delta, why-this, github-explorer |
@@ -49,7 +50,30 @@ local step.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; tests cover the pure functions
-(`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`).
+(`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
+`+tasks--*`, `+ai-trust--*`).
+
+## Coding agents
+
+`SPC 3` starts [pilish](https://github.com/dnouri/pilish) (pi in Emacs) at the
+project root; `SPC 4` starts [hax](https://github.com/OleksandrChekhovskyi/hax)
+in eat, if it is on `PATH`. Both first go through `modules/my/ai/trust.el`:
+before the first start in a repo, when pi has no trust decision for it, and
+after someone else commits to what an agent reads (`.pi/`, `.agents/skills`,
+any `AGENTS.md`, the `justfile`), a report lists those files and flags risky
+lines. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
+with `pilish-project-trust-policy` `'default`, so that file decides what loads.
+Reviewed commits are kept in `doom-cache-dir`.
+
+## Tasks
+
+Each repo in the agent flow keeps a `tasks.org` at its root; `M-x +tasks/init`
+writes the skeleton. `org-agenda-files` is extended, not replaced: on every
+agenda command it is reset to `org-directory` plus the `tasks.org` of each
+known projectile project (remote projects skipped). `SPC o A b`, `w`, `r` give
+the Board, Last week and Needs review views. `+tasks-branch-prefixes`
+(default `("feat/")`, safe as a dir-local) picks the branches the `branches`
+block lists.
 
 ## Local models
 
