@@ -207,6 +207,7 @@
        python            ; uv REPL, pylsp, dape
        ai                ; llama-server + gptel, annotate, aider, ai-code, opencode
        notes             ; denote
+       tasks             ; tasks.org agenda views, branches block, idea capture
        apl               ; gnu-apl-mode + ride-apl
        forth
        dirvish
