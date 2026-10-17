@@ -197,3 +197,81 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
         (ert-info ((format "unpark should return to %s when the plan is %s" expected
                            (cond ((null plan-text) "not written") ((equal expected "RED") "approved") (t "unapproved"))))
           (should (equal (list expected nil) (+tasks-test--state-of (current-buffer) "Thing"))))))))
+
+;;; review and done read the plan
+
+(ert-deftest +tasks--plan-tick-count/counts-checked-tests ()
+  (pcase-dolist (`(,text . ,expected) `((,+tasks-plan-test--written . (1 . 2))
+                                        (,(concat +tasks-plan-test--written "- [ ] an open item\n") . (1 . 2))
+                                        ("# Plan\n\n## Tests, in order\n\n## Open\n" . (0 . 0))))
+    (ert-info ((format "tick-count should be %S, counting only the boxes under Tests" expected))
+      (should (equal expected (+tasks--plan-tick-count text))))))
+
+(ert-deftest +tasks--plan-open-items/lists-the-bullets-under-open ()
+  (ert-info ("open-items should be empty for a plan whose Open section has no bullet")
+    (should-not (+tasks--plan-open-items +tasks-plan-test--written)))
+  (ert-info ("open-items should list each bullet under Open, and nothing from other sections")
+    (should (equal '("- which backend?" "- naming")
+                   (+tasks--plan-open-items (concat +tasks-plan-test--written "- which backend?\n- naming\n")))))
+  (ert-info ("open-items should be nil without a plan")
+    (should-not (+tasks--plan-open-items nil))))
+
+(ert-deftest +tasks--review-prompt/carries-the-plan-when-there-is-one ()
+  (let ((with-plan (+tasks--review-prompt "it works" "diff --git a/x b/x" +tasks-plan-test--written))
+        (without (+tasks--review-prompt "it works" "diff --git a/x b/x" nil)))
+    (ert-info ("review-prompt should put the plan the agent committed to before the diff")
+      (should (< (string-search "Plan the agent committed to:" with-plan)
+                 (string-search "## Decisions" with-plan)
+                 (string-search "diff --git" with-plan))))
+    (ert-info ("review-prompt with a plan should ask about departures from it")
+      (should (string-search "departs from the plan" with-plan)))
+    (ert-info ("review-prompt without a plan should read as before")
+      (should-not (string-search "Plan the agent committed to:" without))
+      (should (string-search "diff --git a/x b/x" without)))))
+
+(ert-deftest +tasks--review-message/adds-the-tick-count-after-the-guard-note ()
+  (ert-info ("review-message should end with the tick count when there is a plan")
+    (should (equal "ACCEPT: it works\nTouches agent guards: AGENTS.md\nplan: 1/2 tests ticked"
+                   (+tasks--review-message "it works" "Touches agent guards: AGENTS.md" +tasks-plan-test--written))))
+  (ert-info ("review-message should say nothing about a plan when there is none")
+    (should (equal "ACCEPT: it works" (+tasks--review-message "it works" nil nil)))))
+
+(defmacro +tasks-plan-test--done-with-plan (plan-text force &rest body)
+  "Run (+tasks/done FORCE) on feat/x, whose worktree holds PLAN-TEXT; BODY sees `repo', `tree', `buffer'."
+  (declare (indent 2))
+  `(+tasks-test--in-git-repo
+    (let* ((repo default-directory)
+           (tree (+tasks--add-worktree repo "feat/x"))
+           (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+      (unwind-protect
+          (progn
+            (let ((default-directory tree))
+              (+tasks-test--commit-file "feature.txt" "done"))
+            (with-temp-file (expand-file-name "PLAN.md" tree) (insert ,plan-text))
+            (+tasks-test--write-active-task buffer "Ship it" "feat/x")
+            (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Ship it")))
+                      ((symbol-function '+tasks--project-test-command) (lambda (_) "true"))
+                      ((symbol-function 'message) #'ignore))
+              ,@body))
+        (with-current-buffer buffer (set-buffer-modified-p nil))
+        (kill-buffer buffer)))))
+
+(ert-deftest +tasks/done/refuses-while-the-plan-has-open-items ()
+  (+tasks-plan-test--done-with-plan (concat +tasks-plan-test--written "- which backend?\n") nil
+    (ert-info ("done should stop, listing the open items, while the plan's Open section has a bullet")
+      (should (string-search "which backend?" (cadr (should-error (+tasks/done) :type 'user-error)))))
+    (ert-info ("a refused done should merge nothing")
+      (should-not (file-exists-p (expand-file-name "feature.txt" repo))))))
+
+(ert-deftest +tasks/done/merges-with-a-prefix-arg-despite-open-items ()
+  (+tasks-plan-test--done-with-plan (concat +tasks-plan-test--written "- which backend?\n") t
+    (+tasks/done t)
+    (ert-info ("done with a prefix argument should merge even with open items")
+      (should (file-exists-p (expand-file-name "feature.txt" repo))))))
+
+(ert-deftest +tasks/done/merges-a-planned-branch-with-nothing-open ()
+  (+tasks-plan-test--done-with-plan +tasks-plan-test--approved nil
+    (+tasks/done)
+    (ert-info ("done should merge a planned branch whose Open section is bare, and take PLAN.md away with the worktree")
+      (should (file-exists-p (expand-file-name "feature.txt" repo)))
+      (should-not (file-exists-p tree)))))
