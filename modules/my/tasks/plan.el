@@ -212,15 +212,19 @@ change that passes, tick it. Finish with a summary of the diff and how
 (defun +tasks--read-approval ()
   (read-char-choice "Approve this plan? (y, n, e to edit) " '(?y ?n ?e)))
 
-(defun +tasks--send-reread-on-save (task)
-  (lambda () (+tasks--send-to-session task +tasks--plan-reread-line)))
+(defvar-local +tasks--plan-task nil
+  "The task whose PLAN.md this buffer edits.")
+
+(defun +tasks--send-reread-h ()
+  (+tasks--send-to-session +tasks--plan-task +tasks--plan-reread-line))
 
 (defun +tasks--edit-plan (task worktree)
   "Open PLAN.md writable; each save asks pi to read it again."
   (let ((buffer (+tasks--plan-buffer worktree)))
     (with-current-buffer buffer
       (read-only-mode -1)
-      (add-hook 'after-save-hook (+tasks--send-reread-on-save task) nil t))
+      (setq +tasks--plan-task task)
+      (add-hook 'after-save-hook #'+tasks--send-reread-h nil t))
     (pop-to-buffer buffer)))
 
 (defun +tasks--refuse-plan (task)

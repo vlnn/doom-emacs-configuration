@@ -464,3 +464,23 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
           (should (string-prefix-p "Plan approved:" (plist-get (cdr handed) :draft))))
         (ert-info ("y should not also send the line into the session it just stopped")
           (should-not sent))))))
+
+(ert-deftest +tasks--edit-plan/sends-one-reread-per-save-however-often-e-is-pressed ()
+  (+tasks-plan-test--with-worktree +tasks-plan-test--written
+    (let ((task (list :branch "feat/x"))
+          sent)
+      (cl-letf (((symbol-function '+tasks--task-worktree-of) (lambda (_) tree))
+                ((symbol-function '+ai--send-pilish-input) (lambda (line &optional _) (push line sent)))
+                ((symbol-function 'pop-to-buffer) #'ignore))
+        (+tasks--edit-plan task tree)
+        (+tasks--edit-plan task tree)
+        (let ((plan (get-file-buffer (+tasks--plan-file tree))))
+          (unwind-protect
+              (progn
+                (with-current-buffer plan
+                  (goto-char (point-max))
+                  (insert "- x\n")
+                  (save-buffer))
+                (ert-info ("a second e should not double the reread line sent on save")
+                  (should (= 1 (length sent)))))
+            (kill-buffer plan)))))))
