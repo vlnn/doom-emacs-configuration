@@ -88,14 +88,15 @@ Empty, it is `org-directory', as Doom's default would have it."
                  ,@(when leaves-only '((org-agenda-skip-function #'+tasks--skip-unless-leaf))))))
 
 (defconst +tasks--board-stages
-  '(("WAIT" "Waiting: on something outside the repo")
-    ("REVIEW" "Review: needs you")
-    ("GREEN" "Green: tests pass, review it")
-    ("RED" "Red: pi is working")
-    ("PLAN" "Plan: just started")
+  '(("IDEA" "Ideas" t)
     ("TODO" "Ready" t)
-    ("IDEA" "Ideas" t))
-  "The board's blocks, nearest to done first: STATE HEADER [LEAVES-ONLY].")
+    ("PLAN" "Plan: just started")
+    ("RED" "Red: pi is working")
+    ("GREEN" "Green: tests pass, review it")
+    ("REVIEW" "Review: needs you")
+    ("WAIT" "Waiting: on something outside the repo")
+    ("DONE|DROPPED" "Done: archive when ready"))
+  "The board's blocks in pipeline order: STATE HEADER [LEAVES-ONLY].")
 
 (defconst +tasks--agenda-custom-commands
   `(("b" "Board" ,(mapcar (lambda (stage) (apply #'+tasks--board-block stage)) +tasks--board-stages))

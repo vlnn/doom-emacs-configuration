@@ -1208,10 +1208,10 @@
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
 
-(ert-deftest +tasks--agenda-custom-commands/board-walks-the-stages-nearest-done-first ()
+(ert-deftest +tasks--agenda-custom-commands/board-walks-the-pipeline-top-down ()
   (let ((board (cadr (cdr (assoc "b" +tasks--agenda-custom-commands)))))
-    (ert-info ("the board should show one block per stage, from what needs you down to raw ideas")
-      (should (equal '("WAIT" "REVIEW" "GREEN" "RED" "PLAN" "TODO" "IDEA")
+    (ert-info ("the board should read as the pipeline, ideas at the top, finished work piling at the bottom")
+      (should (equal '("IDEA" "TODO" "PLAN" "RED" "GREEN" "REVIEW" "WAIT" "DONE|DROPPED")
                      (mapcar #'cadr board))))
     (ert-info ("the board should keep ready tasks and ideas to leaves")
       (should (equal '(t t)
