@@ -405,3 +405,102 @@
   (load (expand-file-name "modules/my/tasks/menu.el" default-directory) nil t)
   (ert-info ("menu key c should resume the task's branch and session")
     (should (eq '+tasks/resume (plist-get (nth 2 (transient-get-suffix '+tasks-transient "c")) :command)))))
+
+;;; idea trees
+
+(defconst +tasks-test--tree
+  "** IDEA Standalone\n** IDEA Parent\n*** IDEA Middle\n**** IDEA Deep\n*** IDEA Shallow\n*** DONE Finished\n")
+
+(ert-deftest +tasks--has-open-descendant-p/sees-open-children-only ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (pcase-dolist (`(,title . ,expected) '(("Parent" . t) ("Middle" . t) ("Deep" . nil)
+                                           ("Shallow" . nil) ("Standalone" . nil)))
+      (+tasks-test--goto-heading title)
+      (ert-info ((format "%s should%s have an open descendant" title (if expected "" " not")))
+        (should (eq expected (and (+tasks--has-open-descendant-p) t)))))))
+
+(ert-deftest +tasks--task-path/joins-task-ancestors ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (+tasks-test--goto-heading "Deep")
+    (ert-info ("task-path should list task ancestors, stopping at the structural heading")
+      (should (equal "Parent / Middle / Deep" (+tasks--task-path))))))
+
+(ert-deftest +tasks--startable-tasks/leaves-deepest-first-per-tree ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (ert-info ("startable-tasks should keep file order of trees and put deeper leaves first within a tree")
+      (should (equal '("Standalone" "Parent / Middle / Deep" "Parent / Shallow")
+                     (mapcar #'car (+tasks--startable-tasks)))))))
+
+(ert-deftest +tasks--startable-tasks/limits-to-subtree ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (+tasks-test--goto-heading "Middle")
+    (ert-info ("startable-tasks within the tree should only offer leaves under point, with full paths")
+      (should (equal '("Parent / Middle / Deep")
+                     (mapcar #'car (+tasks--startable-tasks t)))))))
+
+(ert-deftest +tasks--start-entry/refiles-whole-tree-keeping-shape ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (+tasks-test--goto-heading "Deep")
+    (+tasks--start-entry "feat/deep" "deep works")
+    (+tasks-test--goto-heading "Deep")
+    (pcase-dolist (`(,actual ,expected ,why)
+                   `((,(org-get-todo-state) "TODO" "promote only the started leaf")
+                     (,(org-entry-get nil "BRANCH") "feat/deep" "link the leaf to its branch")
+                     (,(+tasks--task-path) "Parent / Middle / Deep" "keep the leaf inside its tree")
+                     (,(progn (+tasks-test--goto-heading "Parent")
+                              (save-excursion (org-up-heading-safe) (org-get-heading t t t t)))
+                      "Active" "move the tree root under Active")
+                     (,(org-get-todo-state) "IDEA" "leave ancestors as ideas")))
+      (ert-info ((format "start-entry on a nested idea should %s" why))
+        (should (equal expected actual))))))
+
+(ert-deftest +tasks--insert-child-idea/appends-last-child ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (+tasks-test--goto-heading "Parent")
+    (+tasks--insert-child-idea "Later")
+    (+tasks-test--goto-heading "Later")
+    (ert-info ("insert-child-idea should add an IDEA one level below the task, after its children")
+      (should (equal '("IDEA" 3 "Parent" "Finished")
+                     (list (org-get-todo-state) (org-current-level)
+                           (save-excursion (org-up-heading-safe) (org-get-heading t t t t))
+                           (save-excursion (org-backward-heading-same-level 1) (org-get-heading t t t t))))))))
+
+(ert-deftest +tasks-file-mode/blocks-closing-parents-with-open-children ()
+  (pcase-dolist (`(,child . ,expected) '(("IDEA" . t) ("DONE" . nil)))
+    (+tasks-test--in-tasks-buffer (format "** TODO Parent\n*** %s Child\n" child)
+      (+tasks-file-mode 1)
+      (+tasks-test--goto-heading "Parent")
+      (ert-info ((format "a parent with a %s child should%s be blocked" child (if expected "" " not")))
+        (should (eq expected (and (org-entry-blocked-p) t)))))))
+
+(ert-deftest +tasks--skip-unless-leaf/skips-to-first-child ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (pcase-dolist (`(,title . ,expected) '(("Parent" . "Middle") ("Deep" . nil)))
+      (+tasks-test--goto-heading title)
+      (beginning-of-line)
+      (ert-info ((format "agenda skip at %s should %s" title (if expected (concat "resume at " expected) "keep it")))
+        (should (equal expected
+                       (when-let* ((pos (+tasks--skip-unless-leaf)))
+                         (save-excursion (goto-char pos) (org-get-heading t t t t)))))))))
+
+(ert-deftest +tasks--in-order/keeps-candidate-order ()
+  (let ((table (+tasks--in-order '("b" "a"))))
+    (ert-info ("in-order should tell completion UIs not to re-sort candidates")
+      (should (eq #'identity (completion-metadata-get (completion-metadata "" table nil)
+                                                      'display-sort-function))))
+    (ert-info ("in-order should still complete like a plain list")
+      (should (equal '("b" "a") (all-completions "" table))))))
+
+(ert-deftest +tasks--feature-prompt/names-parents-of-nested-tasks ()
+  (pcase-dolist (`(,parents ,expected ,why)
+                 '(("Parent / Middle" "/feature Deep\n\nPART OF: Parent / Middle\n\nACCEPT: works" "name the parents before ACCEPT")
+                   (nil "/feature Deep\n\nACCEPT: works" "say nothing about parents of a top-level task")))
+    (ert-info ((format "feature-prompt should %s" why))
+      (should (equal expected (+tasks--feature-prompt "Deep" "works" parents))))))
+
+(ert-deftest +tasks--task-parents/joins-task-ancestors-only ()
+  (+tasks-test--in-tasks-buffer +tasks-test--tree
+    (pcase-dolist (`(,title . ,expected) '(("Deep" . "Parent / Middle") ("Standalone" . nil)))
+      (+tasks-test--goto-heading title)
+      (ert-info ((format "task-parents of %s should be %S" title expected))
+        (should (equal expected (+tasks--task-parents)))))))

@@ -59,8 +59,10 @@
 
 (defconst +tasks--agenda-custom-commands
   '(("b" "Board" ((todo "PLAN|RED|GREEN|REVIEW" ((org-agenda-overriding-header "In flight")))
-                  (todo "TODO" ((org-agenda-overriding-header "Ready")))
-                  (todo "IDEA" ((org-agenda-overriding-header "Ideas")))))
+                  (todo "TODO" ((org-agenda-overriding-header "Ready")
+                                (org-agenda-skip-function #'+tasks--skip-unless-leaf)))
+                  (todo "IDEA" ((org-agenda-overriding-header "Ideas")
+                                (org-agenda-skip-function #'+tasks--skip-unless-leaf)))))
     ("w" "Last week" agenda ""
      ((org-agenda-span 7)
       (org-agenda-start-day "-7d")
@@ -289,9 +291,87 @@
 (defun +tasks--branch-title (branch prefixes)
   (string-replace "-" " " (+tasks--strip-prefix branch prefixes)))
 
-(defun +tasks--feature-prompt (heading &optional accept)
+(defun +tasks--feature-prompt (heading &optional accept parents)
   (concat (format "/feature %s" heading)
+          (if parents (format "\n\nPART OF: %s" parents) "")
           (if accept (format "\n\nACCEPT: %s" accept) "")))
+
+(defun +tasks--has-open-descendant-p ()
+  (save-excursion
+    (org-back-to-heading t)
+    (let ((end (save-excursion (org-end-of-subtree t t))))
+      (cl-loop while (and (outline-next-heading) (< (point) end))
+               thereis (member (org-get-todo-state) org-not-done-keywords)))))
+
+(defun +tasks--skip-unless-leaf ()
+  (when (+tasks--has-open-descendant-p)
+    (save-excursion (outline-next-heading) (point))))
+
+(defun +tasks--task-ancestor-p ()
+  (save-excursion (and (org-up-heading-safe) (org-get-todo-state))))
+
+(defun +tasks--goto-tree-root ()
+  (org-back-to-heading t)
+  (while (+tasks--task-ancestor-p)
+    (org-up-heading-safe)))
+
+(defun +tasks--ancestor-titles ()
+  (save-excursion
+    (org-back-to-heading t)
+    (let (titles)
+      (while (+tasks--task-ancestor-p)
+        (org-up-heading-safe)
+        (push (org-get-heading t t t t) titles))
+      titles)))
+
+(defun +tasks--task-parents ()
+  (when-let* ((titles (+tasks--ancestor-titles)))
+    (string-join titles " / ")))
+
+(defun +tasks--task-path ()
+  (string-join (append (+tasks--ancestor-titles)
+                       (list (save-excursion (org-back-to-heading t) (org-get-heading t t t t))))
+               " / "))
+
+(defun +tasks--startable-entry ()
+  (when (and (member (org-get-todo-state) +tasks-start-states)
+             (not (+tasks--has-open-descendant-p)))
+    (list (+tasks--task-path) (point) (org-current-level)
+          (save-excursion (+tasks--goto-tree-root) (point)))))
+
+(defun +tasks--tree-then-deepest-p (a b)
+  (pcase-let ((`(,_ ,_ ,level-a ,root-a) a)
+              (`(,_ ,_ ,level-b ,root-b) b))
+    (or (< root-a root-b)
+        (and (= root-a root-b) (> level-a level-b)))))
+
+(defun +tasks--subtree-bounds ()
+  (save-excursion
+    (org-back-to-heading t)
+    (cons (point) (org-end-of-subtree t t))))
+
+(defun +tasks--within-p (bounds entry)
+  (or (null bounds)
+      (<= (car bounds) (nth 1 entry) (1- (cdr bounds)))))
+
+(defun +tasks--startable-tasks (&optional within-tree)
+  "Leaf IDEA/TODO tasks as (PATH . POS): trees in file order, deepest leaves first.
+With WITHIN-TREE, only leaves in the subtree at point."
+  (let ((bounds (and within-tree (+tasks--subtree-bounds))))
+    (save-restriction
+      (widen)
+      (mapcar (pcase-lambda (`(,path ,pos . ,_)) (cons path pos))
+              (sort (seq-filter (apply-partially #'+tasks--within-p bounds)
+                                (delq nil (org-map-entries #'+tasks--startable-entry)))
+                    #'+tasks--tree-then-deepest-p)))))
+
+(defun +tasks--insert-child-idea (title)
+  "Add an IDEA TITLE as the last child of the heading at point."
+  (org-back-to-heading t)
+  (let ((stars (make-string (1+ (org-current-level)) ?*)))
+    (org-end-of-subtree t t)
+    (unless (bolp) (insert "\n"))
+    (insert stars " IDEA " title "\n")))
 
 (defun +tasks--task-entry (states)
   (when (member (org-get-todo-state) states)
@@ -328,13 +408,14 @@
     (org-entry-put nil property value)))
 
 (defun +tasks--start-entry (branch accept)
-  "Link the task at point to BRANCH, make it a TODO and move it under * Active."
+  "Link the task at point to BRANCH, make it a TODO and move its tree under * Active."
   (org-back-to-heading t)
   (org-entry-put nil "BRANCH" branch)
   (+tasks--put-missing "ACCEPT" accept)
   (+tasks--put-missing "MODEL" "local")
   (when (equal (org-get-todo-state) "IDEA")
     (org-todo "TODO"))
+  (+tasks--goto-tree-root)
   (+tasks--move-under "Active"))
 
 (defun +tasks--insert-idea (title branch)
@@ -355,12 +436,35 @@
       (when (member (org-get-todo-state) states)
         (cons (current-buffer) (point))))))
 
+(defun +tasks--in-order (candidates)
+  "Completion table over CANDIDATES that completion UIs must not re-sort."
+  (lambda (string pred action)
+    (if (eq action 'metadata)
+        '(metadata (display-sort-function . identity) (cycle-sort-function . identity))
+      (complete-with-action action candidates string pred))))
+
+(defun +tasks--read-task (buffer tasks what)
+  (unless tasks
+    (user-error "No %s task in %s" what (buffer-file-name buffer)))
+  (cons buffer (cdr (assoc (completing-read "Task: " (+tasks--in-order tasks) nil t) tasks))))
+
 (defun +tasks--pick-task (states)
-  (let* ((buffer (+tasks--tasks-buffer))
-         (tasks (with-current-buffer buffer (+tasks--open-tasks states))))
-    (unless tasks
-      (user-error "No %s task in %s" (string-join states "/") (buffer-file-name buffer)))
-    (cons buffer (cdr (assoc (completing-read "Task: " tasks nil t) tasks)))))
+  (let ((buffer (+tasks--tasks-buffer)))
+    (+tasks--read-task buffer (with-current-buffer buffer (+tasks--open-tasks states))
+                       (string-join states "/"))))
+
+(defun +tasks--task-to-start ()
+  "The leaf at point, a leaf under the parent at point, or a picked leaf."
+  (pcase (+tasks--task-at-point +tasks-start-states)
+    (`(,buffer . ,pos)
+     (save-excursion
+       (goto-char pos)
+       (if (+tasks--has-open-descendant-p)
+           (+tasks--read-task buffer (+tasks--startable-tasks t) "leaf IDEA/TODO")
+         (cons buffer pos))))
+    (_ (let ((buffer (+tasks--tasks-buffer)))
+         (+tasks--read-task buffer (with-current-buffer buffer (+tasks--startable-tasks))
+                            "leaf IDEA/TODO")))))
 
 (defun +tasks--chosen-task (&optional states)
   (let ((states (or states +tasks-start-states)))
@@ -408,10 +512,11 @@
 
 (defun +tasks/start ()
   "Branch, link, promote and refile a task, then open pi on it.
-Uses the IDEA or TODO at point in tasks.org, otherwise asks for one.
+Only leaves start: on a parent with open sub-tasks, asks for one of its
+leaves; elsewhere, asks for any leaf, deepest first within each tree.
 Nothing changes until the repo review lets pi start."
   (interactive)
-  (pcase-let ((`(,buffer . ,pos) (+tasks--chosen-task)))
+  (pcase-let ((`(,buffer . ,pos) (+tasks--task-to-start)))
     (with-current-buffer buffer
       (goto-char pos)
       (let* ((marker (point-marker))
@@ -419,7 +524,8 @@ Nothing changes until the repo review lets pi start."
              (branch (read-string "Branch: " (+tasks--proposed-branch heading)))
              (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading))))
         (+tasks--hand-off (+tasks--project-root)
-                          :draft (+tasks--feature-prompt heading (or accept (org-entry-get nil "ACCEPT")))
+                          :draft (+tasks--feature-prompt heading (or accept (org-entry-get nil "ACCEPT"))
+                                                         (+tasks--task-parents))
                           :prepare (lambda () (+tasks--start-at marker branch accept))
                           :session branch
                           :model (or (org-entry-get nil "MODEL") "local"))))))
@@ -448,6 +554,18 @@ Nothing changes until the repo review lets pi start."
         (goto-char (cdr (assoc choice tasks)))
         (org-entry-put nil "BRANCH" branch)))
     (+tasks/refresh-branches)))
+
+(defun +tasks/sub-idea ()
+  "Add an IDEA under the open task at point, or under a picked one."
+  (interactive)
+  (pcase-let ((`(,buffer . ,pos) (or (+tasks--task-at-point org-not-done-keywords)
+                                     (with-current-buffer (+tasks--tasks-buffer)
+                                       (+tasks--pick-task org-not-done-keywords)))))
+    (with-current-buffer buffer
+      (goto-char pos)
+      (let ((parent (org-get-heading t t t t)))
+        (+tasks--insert-child-idea (read-string (format "Sub-idea of \"%s\": " parent))))
+      (save-buffer))))
 
 (defun +tasks/idea ()
   "Capture an idea into this project's tasks.org."
@@ -696,12 +814,24 @@ Review this diff against it: what does not serve the criterion, missing or weak 
       (+tasks/refresh-branches)
     (error (message "branches block not refreshed: %s" (error-message-string err)))))
 
+(defun +tasks--block-parents (arg)
+  "With ARG > 0, keep a task open while it has open sub-tasks, in this buffer only."
+  (if (> arg 0)
+      (progn
+        (setq-local org-enforce-todo-dependencies t)
+        (add-hook 'org-blocker-hook #'org-block-todo-from-children-or-siblings-or-parent nil t))
+    (kill-local-variable 'org-enforce-todo-dependencies)
+    (remove-hook 'org-blocker-hook #'org-block-todo-from-children-or-siblings-or-parent t)))
+
 (define-minor-mode +tasks-file-mode
-  "Branch refresh on save and the tasks menu for a project's tasks.org."
+  "Branch refresh on save, parent blocking and the tasks menu for a project's tasks.org."
   :keymap (make-sparse-keymap)
   (if +tasks-file-mode
-      (add-hook 'before-save-hook #'+tasks--refresh-on-save nil t)
-    (remove-hook 'before-save-hook #'+tasks--refresh-on-save t)))
+      (progn
+        (add-hook 'before-save-hook #'+tasks--refresh-on-save nil t)
+        (+tasks--block-parents 1))
+    (remove-hook 'before-save-hook #'+tasks--refresh-on-save t)
+    (+tasks--block-parents -1)))
 
 (defun +tasks--project-category (file)
   (file-name-nondirectory (directory-file-name (file-name-directory file))))

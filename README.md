@@ -84,7 +84,8 @@ writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 | key | does |
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
-| `s` | start the IDEA/TODO at point (or pick one): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile under `* Active`, then open a pi session named after the branch, on the task's `:MODEL:`, with `/feature <heading>` and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
+| `I` | add a sub-IDEA under the open task at point (or a picked one) |
+| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile its whole tree under `* Active`, then open a pi session named after the branch, on the task's `:MODEL:`, with `/feature <heading>`, a `PART OF:` line for nested tasks and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
 | `c` | continue a started task: switch to its `:BRANCH:` and focus its pi session |
 | `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
 | `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed |
@@ -104,6 +105,16 @@ file's agenda category is its repo name.
 branches the block lists; with more than one prefix, `start` asks which.
 `:MODEL:` maps to pi flags through `+ai-pi-model-args` (`local`, `claude`);
 they apply when a task's session starts.
+
+Ideas nest: a sub-heading with a TODO keyword is a part of its parent, and
+the deepest open ones go first. Only leaves (no open sub-task) start; pickers
+list trees in file order with each tree's deepest leaves first, and the
+Board's Ready/Ideas sections skip parents until their children close. In
+`tasks.org` a parent cannot be marked DONE or DROPPED while a sub-task is open
+(`org-enforce-todo-dependencies`, buffer-local); `:NOBLOCKING: t` on a heading
+opts out. Starting a leaf moves its whole tree, ancestors still IDEA, under
+`* Active`; each leaf gets its own branch, and a parent becomes startable once
+its parts are closed.
 
 The block's State column reads `ahead N` (commits not on main), `merged`, or
 `DONE! …` once the task is done; `DONE! delete branch` marks leftovers. Main
