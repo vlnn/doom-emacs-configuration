@@ -532,14 +532,25 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
     (with-current-buffer buffer (set-buffer-modified-p nil))
     (kill-buffer buffer)))
 
+(defun +ai--signal-group (pid signal)
+  (zerop (call-process "kill" nil nil nil (concat "-" signal) "--" (format "-%d" pid))))
+
+(defun +ai--kill-process-tree (process)
+  "End PROCESS and everything it started: TERM to its group, then KILL to what remains."
+  (when (process-live-p process)
+    (let ((pid (process-id process)))
+      (set-process-query-on-exit-flag process nil)
+      (+ai--signal-group pid "TERM")
+      (sleep-for 0.2)
+      (+ai--signal-group pid "KILL")
+      (delete-process process))))
+
 (defun +ai--stop-pilish-session (root &optional session)
   "End the pi SESSION running in ROOT: its process, chat and input buffers. Nil without one."
   (when-let* ((chat (+ai--pilish-session root session)))
     (let ((process (buffer-local-value 'pilish--process chat))
           (input (buffer-local-value 'pilish--input-buffer chat)))
-      (when (process-live-p process)
-        (set-process-query-on-exit-flag process nil)
-        (delete-process process))
+      (+ai--kill-process-tree process)
       (+ai--kill-buffer-quietly input)
       (+ai--kill-buffer-quietly chat)
       t)))

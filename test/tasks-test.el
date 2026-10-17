@@ -1461,3 +1461,24 @@
                 (buffer-string))))
     (ert-info ("the menu should bind x to aborting the task")
       (should (string-search "(\"x\" \"abort: drop branch, worktree, back to ready\" +tasks/abort)" text)))))
+
+(ert-deftest +tasks/abort/keeps-the-dropped-commits-under-a-backup-ref ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo)))
+          tip)
+     (unwind-protect
+         (progn
+           (let ((default-directory tree))
+             (+tasks-test--commit-file "half.txt" "unfinished")
+             (setq tip (car (+tasks--git-lines "rev-parse" "HEAD"))))
+           (+tasks-test--write-active-task buffer "Risky idea" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Risky idea")))
+                     ((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                     ((symbol-function 'message) #'ignore))
+             (+tasks/abort))
+           (ert-info ("abort should park the branch tip under refs/aborted so the agent's work can still be read")
+             (should (equal tip (car (+tasks--git-lines "rev-parse" "refs/aborted/feat/x"))))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))

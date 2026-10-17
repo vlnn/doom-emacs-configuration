@@ -1191,7 +1191,12 @@ A task's run leaves it GREEN or RED when it finishes."
   (unless (+tasks--git-ok-p "worktree" "remove" "--force" tree)
     (user-error "git could not remove %s" tree)))
 
+(defun +tasks--backup-ref (branch)
+  (concat "refs/aborted/" branch))
+
 (defun +tasks--drop-branch (branch)
+  "Delete BRANCH, keeping its tip under refs/aborted/ so the dropped work can still be read."
+  (+tasks--git-ok-p "update-ref" (+tasks--backup-ref branch) branch)
   (unless (+tasks--git-ok-p "branch" "-D" branch)
     (user-error "git could not delete %s" branch)))
 
@@ -1225,7 +1230,7 @@ Keeps ACCEPT and MODEL. Refuses a branch main already contains; that is done's j
       (when buffer-file-name (save-buffer)))
     (when (fboundp 'magit-refresh-all)
       (magit-refresh-all))
-    (message "%s dropped; task back to %s" branch
+    (message "%s dropped (tip kept at %s); task back to %s" branch (+tasks--backup-ref branch)
              (with-current-buffer (plist-get task :buffer)
                (save-excursion (goto-char (plist-get task :marker)) (org-get-todo-state))))))
 
