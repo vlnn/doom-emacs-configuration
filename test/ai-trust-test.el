@@ -76,6 +76,17 @@
      (ert-info ("a CLAUDE.md committed since the review should show among the changed agent inputs")
        (should (equal '("CLAUDE.md") (+ai-trust--changed-files root reviewed)))))))
 
+(ert-deftest +ai-trust--git/keeps-stderr-out-of-results ()
+  (+ai-trust-test--in-temp-dir
+   (ert-info ("git's errors and warnings should never pass for output, here outside a repo")
+     (should-not (+ai-trust--git root "rev-parse" "--git-common-dir")))))
+
+(ert-deftest +ai-trust--git/returns-stdout-lines ()
+  (+ai-trust-test--in-temp-dir
+   (call-process "git" nil nil nil "-C" root "init" "-q")
+   (ert-info ("git helper should return git's output lines")
+     (should (equal '("true") (+ai-trust--git root "rev-parse" "--is-inside-work-tree"))))))
+
 ;;; pattern flags
 
 (ert-deftest +ai-trust--line-flags/labels-risky-lines ()

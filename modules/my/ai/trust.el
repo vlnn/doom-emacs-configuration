@@ -2,6 +2,7 @@
 ;; SPC 3 / SPC 4: review what a repo can feed an agent before pi or hax starts there.
 
 (require 'cl-lib)
+(require 'json)
 
 (defvar pilish-project-trust-policy)
 (defvar pilish-extra-args)
@@ -154,7 +155,6 @@
 
 (defun +ai-trust--parse-store (text)
   "Decisions in TEXT as ((PATH . t|:false|:null) ...), or :invalid."
-  (require 'json)
   (let ((parsed (condition-case nil
                     (let ((json-object-type 'alist)
                           (json-key-type 'string)
@@ -188,7 +188,6 @@
   (pcase decision ('t "true") (:false "false") (_ "null")))
 
 (defun +ai-trust--serialize-store (store)
-  (require 'json)
   (if (null store)
       "{}\n"
     (concat "{\n"
@@ -264,7 +263,12 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 ;;; git
 
 (defun +ai-trust--git (root &rest args)
-  (apply #'process-lines-ignore-status "git" "-C" root args))
+  "Stdout lines of git ARGS in ROOT, whatever its exit status; git's stderr never mixes in."
+  (with-temp-buffer
+    (apply #'call-process "git" nil (list t nil) nil "-C" root args)
+    (let ((output (string-remove-suffix "\n" (buffer-string))))
+      (unless (string-empty-p output)
+        (split-string output "\n")))))
 
 (defun +ai-trust--git-ok-p (root &rest args)
   (zerop (apply #'call-process "git" nil nil nil "-C" root args)))
