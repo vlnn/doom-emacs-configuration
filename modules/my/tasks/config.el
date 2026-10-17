@@ -19,7 +19,7 @@
   "Agenda entry points that refresh `org-agenda-files' first.")
 
 (defconst +tasks--skeleton-text
-  "#+TODO: IDEA(i) TODO(t) PLAN(p!) RED(r!) GREEN(g!) REVIEW(v!) | DONE(d!) DROPPED(x@)
+  "#+TODO: IDEA(i) TODO(t) PLAN(p!) RED(r!) GREEN(g!) REVIEW(v!) WAIT(w!) | DONE(d!) DROPPED(x@)
 #+COLUMNS: %45ITEM %8TODO %18BRANCH %7MODEL %12CLOSED
 #+PROPERTY: MODEL_ALL local claude
 #+ARCHIVE: %s_archive::* Archived
@@ -74,12 +74,31 @@ Empty, it is `org-directory', as Doom's default would have it."
   (dolist (command +tasks-agenda-commands)
     (advice-add command :before #'+tasks--refresh-agenda-files)))
 
+(defconst +tasks--board-prefix-format '((todo . " %-12:c %-24(+tasks--agenda-prefix)")))
+
+(defun +tasks--agenda-prefix ()
+  "What the board shows before a task: why it waits, else its branch, else nothing."
+  (or (and (equal (org-get-todo-state) "WAIT") (org-entry-get nil "REASON"))
+      (org-entry-get nil "BRANCH")
+      ""))
+
+(defun +tasks--board-block (state header &optional leaves-only)
+  `(todo ,state ((org-agenda-overriding-header ,header)
+                 (org-agenda-prefix-format ',+tasks--board-prefix-format)
+                 ,@(when leaves-only '((org-agenda-skip-function #'+tasks--skip-unless-leaf))))))
+
+(defconst +tasks--board-stages
+  '(("WAIT" "Waiting: on something outside the repo")
+    ("REVIEW" "Review: needs you")
+    ("GREEN" "Green: tests pass, review it")
+    ("RED" "Red: pi is working")
+    ("PLAN" "Plan: just started")
+    ("TODO" "Ready" t)
+    ("IDEA" "Ideas" t))
+  "The board's blocks, nearest to done first: STATE HEADER [LEAVES-ONLY].")
+
 (defconst +tasks--agenda-custom-commands
-  '(("b" "Board" ((todo "PLAN|RED|GREEN|REVIEW" ((org-agenda-overriding-header "In flight")))
-                  (todo "TODO" ((org-agenda-overriding-header "Ready")
-                                (org-agenda-skip-function #'+tasks--skip-unless-leaf)))
-                  (todo "IDEA" ((org-agenda-overriding-header "Ideas")
-                                (org-agenda-skip-function #'+tasks--skip-unless-leaf)))))
+  `(("b" "Board" ,(mapcar (lambda (stage) (apply #'+tasks--board-block stage)) +tasks--board-stages))
     ("w" "Last week" agenda ""
      ((org-agenda-span 7)
       (org-agenda-start-day "-7d")
@@ -284,7 +303,7 @@ Empty, it is `org-directory', as Doom's default would have it."
 
 (defconst +tasks-start-states '("IDEA" "TODO"))
 
-(defconst +tasks-in-flight-states '("TODO" "PLAN" "RED" "GREEN" "REVIEW"))
+(defconst +tasks-in-flight-states '("PLAN" "RED" "GREEN" "REVIEW" "WAIT"))
 
 (defconst +tasks--new-idea "[new idea named after the branch]")
 
@@ -458,8 +477,7 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (org-entry-put nil "BRANCH" branch)
   (+tasks--put-missing "ACCEPT" accept)
   (+tasks--put-missing "MODEL" "local")
-  (when (equal (org-get-todo-state) "IDEA")
-    (org-todo "TODO"))
+  (org-todo "PLAN")
   (+tasks--goto-tree-root)
   (+tasks--move-under "Active"))
 
@@ -675,10 +693,58 @@ Nothing changes until the repo review lets pi start."
     (load (expand-file-name "menu" +tasks--dir) nil t))
   (call-interactively #'+tasks-transient))
 
+;;; stages
+
+(defun +tasks--keep-reason (state reason)
+  (if (equal state "WAIT")
+      (when reason (org-entry-put nil "REASON" reason))
+    (org-entry-delete nil "REASON")))
+
+(defun +tasks--enter-state (state &optional reason)
+  (org-back-to-heading t)
+  (+tasks--keep-reason state reason)
+  (org-todo state))
+
+(cl-defun +tasks--set-state (task state &key reason)
+  "Move TASK to STATE in its own buffer; REASON stays as :REASON: while it waits."
+  (with-current-buffer (plist-get task :buffer)
+    (save-excursion
+      (goto-char (plist-get task :marker))
+      (+tasks--enter-state state reason))
+    (when buffer-file-name
+      (save-buffer))))
+
+(defun +tasks--ask-wait-reason ()
+  "After a state change by hand: ask why a task waits, forget why once it moves on."
+  (if (equal org-state "WAIT")
+      (unless (org-entry-get nil "REASON")
+        (org-entry-put nil "REASON" (read-string "Waiting on: ")))
+    (org-entry-delete nil "REASON")))
+
+(defun +tasks/wait ()
+  "Park the task on something outside the repo, saying what."
+  (interactive)
+  (let ((task (+tasks--work-task)))
+    (+tasks--set-state task "WAIT" :reason (read-string (format "%s waits on: " (plist-get task :heading))))))
+
+(defun +tasks--test-verdict (compilation-message)
+  (if (string-prefix-p "finished" compilation-message) "GREEN" "RED"))
+
+(defvar-local +tasks--compiled-task nil
+  "The task whose tests this compilation buffer runs.")
+
+(defun +tasks--mark-compiled-tests (buffer compilation-message)
+  (when-let* ((task (buffer-local-value '+tasks--compiled-task buffer))
+              ((buffer-live-p (plist-get task :buffer))))
+    (+tasks--set-state task (+tasks--test-verdict compilation-message))))
+
+(add-hook 'compilation-finish-functions #'+tasks--mark-compiled-tests)
+
 ;;; review, test, done
 
 (defun +tasks--task-plist ()
   (list :buffer (current-buffer)
+        :marker (point-marker)
         :heading (org-get-heading t t t t)
         :branch (org-entry-get nil "BRANCH")
         :accept (org-entry-get nil "ACCEPT")
@@ -786,6 +852,7 @@ run act on with your rights, in the second.")
          (main (+tasks--default-branch))
          (branch (plist-get task :branch)))
     (magit-diff-range (+tasks--range main branch))
+    (+tasks--set-state task "REVIEW")
     (message "%s" (+tasks--review-message (plist-get task :accept)
                                           (+tasks--guard-note (+tasks--changed-files main branch))))))
 
@@ -831,6 +898,7 @@ Review this diff against it: what does not serve the criterion, missing or weak 
          (diff (string-join (+tasks--git-lines "diff" (+tasks--range main branch)) "\n"))
          (buffer (+tasks--review-buffer branch (+tasks--guard-note (+tasks--changed-files main branch))))
          (gptel-model (or (bound-and-true-p +ai-fast-model) gptel-model)))
+    (+tasks--set-state task "REVIEW")
     (pop-to-buffer buffer)
     (gptel-request (+tasks--review-prompt (plist-get task :accept) diff)
       :system (alist-get 'review gptel-directives)
@@ -882,19 +950,28 @@ Review this diff against it: what does not serve the criterion, missing or weak 
 (defun +tasks--shell-line (argv)
   (mapconcat #'shell-quote-argument argv " "))
 
-(defun +tasks--test-root ()
-  "The task worktree when point is on a linked task in tasks.org, else the current project."
-  (or (when-let* ((task (+tasks--linked-task-at-point)))
-        (+tasks--branch-worktree-in (+tasks--task-root task) (plist-get task :branch)))
+(defun +tasks--task-worktree-of (task)
+  (+tasks--branch-worktree-in (+tasks--task-root task) (plist-get task :branch)))
+
+(defun +tasks--test-root (&optional task)
+  "TASK's worktree, by default the task at point in tasks.org, else the current project."
+  (or (when-let* ((task (or task (+tasks--linked-task-at-point))))
+        (+tasks--task-worktree-of task))
       (+tasks--project-root)))
 
+(defun +tasks--compile-tests (task root command)
+  (with-current-buffer (compile (+tasks--shell-line (+tasks--test-argv root command)))
+    (setq +tasks--compiled-task task)))
+
 (defun +tasks/test ()
-  "Run the tests of the task at point, or of this project, in the agent jail."
+  "Run the tests of the task at point, or of this project, in the agent jail.
+A task's run leaves it GREEN or RED when it finishes."
   (interactive)
-  (let* ((default-directory (+tasks--test-root))
+  (let* ((task (+tasks--linked-task-at-point))
+         (default-directory (+tasks--test-root task))
          (command (+tasks--project-test-command default-directory)))
     (if command
-        (compile (+tasks--shell-line (+tasks--test-argv default-directory command)))
+        (+tasks--compile-tests task default-directory command)
       (call-interactively #'projectile-test-project))))
 
 (defun +tasks--merge-message (branch heading)
@@ -980,6 +1057,14 @@ Review this diff against it: what does not serve the criterion, missing or weak 
     (+tasks/refresh-branches)
     (save-buffer)))
 
+(defmacro +tasks--or-set-state (task state &rest body)
+  "Run BODY; should it stop with a user error, leave TASK in STATE, the error as the reason."
+  (declare (indent 2))
+  `(condition-case err
+       (progn ,@body)
+     (user-error (+tasks--set-state ,task ,state :reason (error-message-string err))
+                 (signal (car err) (cdr err)))))
+
 (defun +tasks/done ()
   "Test the task's branch in its worktree, merge it --no-ff, remove both and mark the task DONE."
   (interactive)
@@ -993,8 +1078,10 @@ Review this diff against it: what does not serve the criterion, missing or weak 
     (when (and tree (+tasks--worktree-dirty-p tree))
       (user-error "Commit or remove the uncommitted work in %s first" tree))
     (+tasks--confirm-guarded branch (+tasks--changed-files main branch))
-    (+tasks--test-branch default-directory branch tree)
-    (+tasks--merge branch main (plist-get task :heading))
+    (+tasks--or-set-state task "RED"
+      (+tasks--test-branch default-directory branch tree))
+    (+tasks--or-set-state task "WAIT"
+      (+tasks--merge branch main (plist-get task :heading)))
     (when tree
       (+tasks--remove-worktree tree))
     (+tasks--delete-branch branch)
@@ -1026,8 +1113,10 @@ Review this diff against it: what does not serve the criterion, missing or weak 
   (if +tasks-file-mode
       (progn
         (add-hook 'before-save-hook #'+tasks--refresh-on-save nil t)
+        (add-hook 'org-after-todo-state-change-hook #'+tasks--ask-wait-reason nil t)
         (+tasks--block-parents 1))
     (remove-hook 'before-save-hook #'+tasks--refresh-on-save t)
+    (remove-hook 'org-after-todo-state-change-hook #'+tasks--ask-wait-reason t)
     (+tasks--block-parents -1)))
 
 (defun +tasks--project-category (file)

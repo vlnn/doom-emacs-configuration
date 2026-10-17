@@ -9,7 +9,8 @@
     ("I" "sub-idea under task" +tasks/sub-idea)
     ("s" "start leaf: worktree, TODO, Active, pi" +tasks/start)
     ("c" "continue: worktree, pi session" +tasks/resume)
-    ("a" "set ACCEPT" +tasks/accept)]
+    ("a" "set ACCEPT" +tasks/accept)
+    ("w" "wait: park with a reason" +tasks/wait)]
    ["Work"
     ("r" "review diff" +tasks/review)
     ("R" "AI review vs ACCEPT" +tasks/ai-review)

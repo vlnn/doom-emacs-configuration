@@ -126,7 +126,7 @@
 (ert-deftest +tasks--skeleton/declares-flow-keywords-and-archive ()
   (let ((skeleton (+tasks--skeleton)))
     (pcase-dolist (`(,needle . ,why)
-                   '(("#+TODO: IDEA(i) TODO(t) PLAN(p!) RED(r!) GREEN(g!) REVIEW(v!) | DONE(d!) DROPPED(x@)" . "declare the flow keywords")
+                   '(("#+TODO: IDEA(i) TODO(t) PLAN(p!) RED(r!) GREEN(g!) REVIEW(v!) WAIT(w!) | DONE(d!) DROPPED(x@)" . "declare the flow keywords, WAIT included")
                      ("#+ARCHIVE: %s_archive::* Archived" . "archive per file")
                      ("\n* Ideas\n" . "have the Ideas heading capture writes to")
                      ("#+BEGIN: branches\n#+END:" . "carry the branches block")))
@@ -254,7 +254,7 @@
     (+tasks--start-entry "feat/unify-menus" "one entry point")
     (+tasks-test--goto-heading "Unify menus")
     (pcase-dolist (`(,actual ,expected ,why)
-                   `((,(org-get-todo-state) "TODO" "switch IDEA to TODO")
+                   `((,(org-get-todo-state) "PLAN" "switch IDEA to PLAN, the first in-flight stage")
                      (,(org-entry-get nil "BRANCH") "feat/unify-menus" "set the branch")
                      (,(org-entry-get nil "ACCEPT") "one entry point" "set the acceptance line")
                      (,(org-entry-get nil "MODEL") "local" "default the model to local")
@@ -309,7 +309,7 @@
     (+tasks-test--goto-heading "Keep me")
     (+tasks--start-entry "feat/keep-me" "it stays")
     (ert-info ("start-entry should refile the task under a * Active heading that carries tags")
-      (should (string-match-p "^\\* Active :work:\n\\*\\* TODO Keep me" (buffer-string))))))
+      (should (string-match-p "^\\* Active :work:\n\\*\\* PLAN Keep me" (buffer-string))))))
 
 (ert-deftest +tasks--start-entry/leaves-active-tasks-in-place-under-a-cookie ()
   (+tasks-test--in-tasks-buffer ""
@@ -318,7 +318,7 @@
     (+tasks-test--goto-heading "First")
     (+tasks--start-entry "feat/first" "it works")
     (ert-info ("start-entry should not reorder a task that already sits under * Active [0/2]")
-      (should (string-match-p "TODO First\\(.\\|\n\\)*TODO Second" (buffer-string))))))
+      (should (string-match-p "PLAN First\\(.\\|\n\\)*TODO Second" (buffer-string))))))
 
 (ert-deftest +tasks--insert-idea/adds-linked-idea-under-ideas ()
   (+tasks-test--in-tasks-buffer ""
@@ -363,11 +363,11 @@
       (should (equal "/r/" (plist-get (cdr launched) :review-root))))))
 
 (ert-deftest +tasks--open-tasks/in-flight-states ()
-  (+tasks-test--in-tasks-buffer "** IDEA Idle\n"
+  (+tasks-test--in-tasks-buffer "** IDEA Idle\n** TODO Ready\n"
     (save-excursion (re-search-forward "^\\* Active\n")
-                    (insert "** RED Failing\n** GREEN Passing\n** DONE Shipped\n"))
-    (ert-info ("open-tasks with the in-flight states should skip ideas and finished work")
-      (should (equal '("Failing" "Passing") (mapcar #'car (+tasks--open-tasks +tasks-in-flight-states)))))))
+                    (insert "** RED Failing\n** GREEN Passing\n** WAIT Blocked\n** DONE Shipped\n"))
+    (ert-info ("open-tasks with the in-flight states should skip ideas, ready tasks and finished work")
+      (should (equal '("Failing" "Passing" "Blocked") (mapcar #'car (+tasks--open-tasks +tasks-in-flight-states)))))))
 
 (ert-deftest +tasks/menu-file/defines-the-transient ()
   (require 'transient)
@@ -594,7 +594,7 @@
     (+tasks--start-entry "feat/deep" "deep works")
     (+tasks-test--goto-heading "Deep")
     (pcase-dolist (`(,actual ,expected ,why)
-                   `((,(org-get-todo-state) "TODO" "promote only the started leaf")
+                   `((,(org-get-todo-state) "PLAN" "promote only the started leaf")
                      (,(org-entry-get nil "BRANCH") "feat/deep" "link the leaf to its branch")
                      (,(+tasks--task-path) "Parent / Middle / Deep" "keep the leaf inside its tree")
                      (,(progn (+tasks-test--goto-heading "Parent")
@@ -797,7 +797,7 @@
     (+tasks-test--jail-on
      (cl-letf (((symbol-function '+tasks--project-root) (lambda () temporary-file-directory))
                ((symbol-function '+tasks--project-test-command) (lambda (_) "bin/test"))
-               ((symbol-function 'compile) (lambda (command &rest _) (setq compiled command))))
+               ((symbol-function 'compile) (lambda (command &rest _) (setq compiled command) (current-buffer))))
        (+tasks/test)))
     (ert-info ("SPC 5 t should run the jailed command as one shell-quoted line")
       (should (string-prefix-p "sandbox-exec -f /p/agent.sb " compiled))
@@ -1025,9 +1025,222 @@
            (ert-info ("start should leave the main checkout, the config Emacs loads, on main")
              (should (equal "main" (+tasks-test--current-branch repo))))
            (ert-info ("start should still link and promote the task")
-             (should (equal '("TODO" "feat/fix-it")
+             (should (equal '("PLAN" "feat/fix-it")
                             (with-current-buffer buffer
                               (+tasks-test--goto-heading "Fix it")
                               (list (org-get-todo-state) (org-entry-get nil "BRANCH")))))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
+
+;;; stages: the commands move tasks along the board
+
+(defun +tasks-test--state-of (buffer heading)
+  (with-current-buffer buffer
+    (+tasks-test--goto-heading heading)
+    (list (org-get-todo-state) (org-entry-get nil "REASON"))))
+
+(ert-deftest +tasks--start-entry/promotes-a-ready-todo-to-plan ()
+  (+tasks-test--in-tasks-buffer "** TODO Ready one\n"
+    (+tasks-test--goto-heading "Ready one")
+    (+tasks--start-entry "feat/ready-one" nil)
+    (ert-info ("start-entry should move a ready TODO into PLAN too, so TODO only ever means ready")
+      (should (equal "PLAN" (car (+tasks-test--state-of (current-buffer) "Ready one")))))))
+
+(ert-deftest +tasks--set-state/moves-the-task-and-keeps-a-wait-reason ()
+  (pcase-dolist (`(,state ,reason ,expected ,why)
+                 '(("RED" nil ("RED" nil) "switch to the state")
+                   ("WAIT" "upstream fix" ("WAIT" "upstream fix") "keep the reason while waiting")))
+    (+tasks-test--in-tasks-buffer "** PLAN Thing\n"
+      (+tasks-test--goto-heading "Thing")
+      (+tasks--set-state (+tasks--task-plist) state :reason reason)
+      (ert-info ((format "set-state should %s" why))
+        (should (equal expected (+tasks-test--state-of (current-buffer) "Thing")))))))
+
+(ert-deftest +tasks--set-state/drops-the-reason-when-the-task-stops-waiting ()
+  (+tasks-test--in-tasks-buffer "** WAIT Thing\n:PROPERTIES:\n:REASON: upstream fix\n:END:\n"
+    (+tasks-test--goto-heading "Thing")
+    (+tasks--set-state (+tasks--task-plist) "RED")
+    (ert-info ("set-state should drop a stale reason once the task is moving again")
+      (should (equal '("RED" nil) (+tasks-test--state-of (current-buffer) "Thing"))))))
+
+(ert-deftest +tasks--set-state/moves-the-task-wherever-point-is ()
+  (+tasks-test--in-tasks-buffer "** PLAN First\n** PLAN Second\n"
+    (+tasks-test--goto-heading "Second")
+    (let ((task (+tasks--task-plist)))
+      (goto-char (point-min))
+      (+tasks--set-state task "GREEN"))
+    (ert-info ("set-state should act on the task it was given, not on the heading at point")
+      (should (equal '("PLAN" "GREEN")
+                     (list (car (+tasks-test--state-of (current-buffer) "First"))
+                           (car (+tasks-test--state-of (current-buffer) "Second"))))))))
+
+(ert-deftest +tasks-file-mode/asks-why-when-you-wait-by-hand ()
+  (+tasks-test--in-tasks-buffer "** RED Thing\n"
+    (+tasks-file-mode 1)
+    (+tasks-test--goto-heading "Thing")
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "waiting on a decision")))
+      (org-todo "WAIT"))
+    (ert-info ("entering WAIT by hand should ask for and store the reason")
+      (should (equal '("WAIT" "waiting on a decision") (+tasks-test--state-of (current-buffer) "Thing"))))
+    (+tasks-test--goto-heading "Thing")
+    (org-todo "RED")
+    (ert-info ("leaving WAIT by hand should clear the reason")
+      (should (equal '("RED" nil) (+tasks-test--state-of (current-buffer) "Thing"))))))
+
+(ert-deftest +tasks-file-mode/keeps-a-reason-the-flow-already-gave ()
+  (+tasks-test--in-tasks-buffer "** RED Thing\n"
+    (+tasks-file-mode 1)
+    (+tasks-test--goto-heading "Thing")
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) (error "should not ask"))))
+      (+tasks--set-state (+tasks--task-plist) "WAIT" :reason "main cannot fast-forward"))
+    (ert-info ("an automatic WAIT should not ask again for a reason it already has")
+      (should (equal "main cannot fast-forward" (cadr (+tasks-test--state-of (current-buffer) "Thing")))))))
+
+(ert-deftest +tasks/wait/parks-the-task-with-your-reason ()
+  (+tasks-test--in-tasks-buffer "** GREEN Thing\n"
+    (+tasks-test--goto-heading "Thing")
+    (cl-letf (((symbol-function '+tasks--work-task) (let ((task (+tasks--task-plist))) (lambda () task)))
+              ((symbol-function 'read-string) (lambda (&rest _) "needs the API key")))
+      (+tasks/wait))
+    (ert-info ("SPC 5 w should move the task to WAIT with the reason you give")
+      (should (equal '("WAIT" "needs the API key") (+tasks-test--state-of (current-buffer) "Thing"))))))
+
+(ert-deftest +tasks--test-verdict/reads-the-compilation-outcome ()
+  (pcase-dolist (`(,msg . ,expected) '(("finished\n" . "GREEN")
+                                       ("exited abnormally with code 1\n" . "RED")
+                                       ("interrupt\n" . "RED")))
+    (ert-info ((format "a run ending %S should leave the task %s" msg expected))
+      (should (equal expected (+tasks--test-verdict msg))))))
+
+(ert-deftest +tasks--mark-compiled-tests/moves-the-tested-task ()
+  (+tasks-test--in-tasks-buffer "** PLAN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (+tasks-test--goto-heading "Thing")
+    (let ((task (+tasks--task-plist)))
+      (with-temp-buffer
+        (setq-local +tasks--compiled-task task)
+        (+tasks--mark-compiled-tests (current-buffer) "finished\n")))
+    (ert-info ("a compilation started by SPC 5 t should move its task on finishing")
+      (should (equal "GREEN" (car (+tasks-test--state-of (current-buffer) "Thing")))))))
+
+(ert-deftest +tasks--mark-compiled-tests/ignores-other-compilations ()
+  (+tasks-test--in-tasks-buffer "** PLAN Thing\n"
+    (with-temp-buffer
+      (+tasks--mark-compiled-tests (current-buffer) "finished\n"))
+    (ert-info ("a compilation that no task started should change nothing")
+      (should (equal "PLAN" (car (+tasks-test--state-of (current-buffer) "Thing")))))))
+
+(ert-deftest +tasks--mark-compiled-tests/lets-a-killed-tasks-buffer-go ()
+  (let ((task (with-temp-buffer (insert "* PLAN Gone\n") (org-mode) (goto-char (point-min)) (+tasks--task-plist))))
+    (with-temp-buffer
+      (setq-local +tasks--compiled-task task)
+      (ert-info ("a run finishing after tasks.org was killed should not error in the compilation hook")
+        (should-not (+tasks--mark-compiled-tests (current-buffer) "finished\n"))))))
+
+(ert-deftest +tasks/test/remembers-the-task-in-the-compilation-buffer ()
+  (+tasks-test--in-tasks-buffer "** PLAN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (+tasks-test--goto-heading "Thing")
+    (let ((task (+tasks--task-plist))
+          (compilation (generate-new-buffer "*compilation*")))
+      (unwind-protect
+          (progn
+            (cl-letf (((symbol-function '+tasks--linked-task-at-point) (lambda () task))
+                      ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) temporary-file-directory))
+                      ((symbol-function '+tasks--project-test-command) (lambda (_) "bin/test"))
+                      ((symbol-function '+ai--jailed) (lambda (_root command &rest _) command))
+                      ((symbol-function 'compile) (lambda (&rest _) compilation)))
+              (+tasks/test))
+            (ert-info ("SPC 5 t should leave the task in the compilation buffer for the finish hook")
+              (should (eq task (buffer-local-value '+tasks--compiled-task compilation))))
+            (ert-info ("SPC 5 t should hook the finish function that moves the task")
+              (should (memq #'+tasks--mark-compiled-tests compilation-finish-functions))))
+        (kill-buffer compilation)))))
+
+(ert-deftest +tasks/review/moves-the-task-to-review ()
+  (+tasks-test--in-tasks-buffer "** GREEN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (+tasks-test--goto-heading "Thing")
+    (cl-letf (((symbol-function '+tasks--work-task) (let ((task (+tasks--task-plist))) (lambda () task)))
+              ((symbol-function '+tasks--default-branch) (lambda () "main"))
+              ((symbol-function '+tasks--changed-files) #'ignore)
+              ((symbol-function 'magit-diff-range) #'ignore)
+              ((symbol-function 'message) #'ignore))
+      (+tasks/review))
+    (ert-info ("opening the review diff should move the task to REVIEW")
+      (should (equal "REVIEW" (car (+tasks-test--state-of (current-buffer) "Thing")))))))
+
+(ert-deftest +tasks/done/leaves-a-failing-branch-red ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+     (unwind-protect
+         (progn
+           (+tasks-test--write-active-task buffer "Ship it" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Ship it")))
+                     ((symbol-function '+tasks--project-test-command) (lambda (_) "false"))
+                     ((symbol-function 'display-buffer) #'ignore)
+                     ((symbol-function 'message) #'ignore))
+             (should-error (+tasks/done) :type 'user-error))
+           (ert-info ("done should mark a task RED when its tests fail, and merge nothing")
+             (should (equal "RED" (car (+tasks-test--state-of buffer "Ship it"))))
+             (should (file-exists-p tree))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks/done/parks-a-task-whose-merge-it-cannot-finish ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+     (unwind-protect
+         (progn
+           (let ((default-directory tree))
+             (+tasks-test--commit-file "feature.txt" "done"))
+           (+tasks-test--write-active-task buffer "Ship it" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Ship it")))
+                     ((symbol-function '+tasks--project-test-command) (lambda (_) "true"))
+                     ((symbol-function '+tasks--catch-up)
+                      (lambda (branch main) (user-error "%s is merged on origin, but %s cannot fast-forward to it" branch main)))
+                     ((symbol-function 'message) #'ignore))
+             (should-error (+tasks/done) :type 'user-error))
+           (ert-info ("done should park a task it cannot merge in WAIT, with the obstacle as the reason")
+             (should (equal '("WAIT" "feat/x is merged on origin, but main cannot fast-forward to it")
+                            (+tasks-test--state-of buffer "Ship it")))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks--agenda-custom-commands/board-walks-the-stages-nearest-done-first ()
+  (let ((board (cadr (cdr (assoc "b" +tasks--agenda-custom-commands)))))
+    (ert-info ("the board should show one block per stage, from what needs you down to raw ideas")
+      (should (equal '("WAIT" "REVIEW" "GREEN" "RED" "PLAN" "TODO" "IDEA")
+                     (mapcar #'cadr board))))
+    (ert-info ("the board should keep ready tasks and ideas to leaves")
+      (should (equal '(t t)
+                     (mapcar (lambda (state)
+                               (and (alist-get 'org-agenda-skip-function
+                                               (nth 1 (assoc state (mapcar #'cdr board))))
+                                    t))
+                             '("TODO" "IDEA")))))))
+
+(ert-deftest +tasks--agenda-custom-commands/board-settings-survive-the-agenda-eval ()
+  (let ((board (cadr (cdr (assoc "b" +tasks--agenda-custom-commands)))))
+    (dolist (block board)
+      (pcase-dolist (`(,variable ,form) (nth 2 block))
+        (ert-info ((format "the %s block's %s should evaluate as the agenda evaluates settings" (cadr block) variable))
+          (should (eval form t)))))
+    (ert-info ("the board's prefix format should come out as the alist the agenda wants")
+      (should (equal +tasks--board-prefix-format
+                     (eval (cadr (assq 'org-agenda-prefix-format (nth 2 (car board)))) t))))))
+
+(ert-deftest +tasks--agenda-prefix/shows-the-branch-or-the-wait-reason ()
+  (+tasks-test--in-tasks-buffer "** WAIT Parked\n:PROPERTIES:\n:BRANCH: feat/parked\n:REASON: API key\n:END:\n** RED Running\n:PROPERTIES:\n:BRANCH: feat/running\n:END:\n** IDEA Loose\n"
+    (pcase-dolist (`(,heading . ,expected) '(("Parked" . "API key") ("Running" . "feat/running") ("Loose" . "")))
+      (+tasks-test--goto-heading heading)
+      (ert-info ((format "the board prefix of %s should read %S" heading expected))
+        (should (equal expected (+tasks--agenda-prefix)))))))
+
+(ert-deftest +tasks/menu-file/binds-wait ()
+  (let ((text (with-temp-buffer
+                (insert-file-contents (expand-file-name "modules/my/tasks/menu.el" default-directory))
+                (buffer-string))))
+    (ert-info ("the menu should bind w to parking a task with a reason")
+      (should (string-search "(\"w\" \"wait: park with a reason\" +tasks/wait)" text)))))
