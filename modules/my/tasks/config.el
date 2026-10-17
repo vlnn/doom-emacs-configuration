@@ -677,10 +677,30 @@ Nothing changes until the repo review lets pi start."
   (interactive)
   (org-capture nil "pi"))
 
+(defvar +tasks-board-scope 'all
+  "Which projects the board shows: `all', or `project' for the one it is opened from.")
+
+(defun +tasks--project-filter (root)
+  (list (concat "+" (+tasks--project-category (+tasks--project-file root)))))
+
+(defun +tasks--board-filter (scope root)
+  (when (eq scope 'project)
+    (+tasks--project-filter root)))
+
 (defun +tasks/board ()
-  "Open the Board agenda view."
+  "Open the Board agenda view, narrowed to this project when `+tasks-board-scope' says so."
   (interactive)
-  (org-agenda nil "b"))
+  (let ((filter (+tasks--board-filter +tasks-board-scope (+tasks--project-root))))
+    (org-agenda nil "b")
+    (org-agenda-filter-show-all-cat)
+    (when filter
+      (org-agenda-filter-apply filter 'category))))
+
+(defun +tasks/toggle-board-scope ()
+  "Flip the board between this project's tasks and every project's, and show it."
+  (interactive)
+  (setq +tasks-board-scope (if (eq +tasks-board-scope 'all) 'project 'all))
+  (+tasks/board))
 
 (defun +tasks/open ()
   "Visit this project's tasks.org."

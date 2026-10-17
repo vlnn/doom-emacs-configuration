@@ -21,4 +21,5 @@
     ("b" "refresh block" +tasks/refresh-branches)]
    ["View"
     ("o" "board" +tasks/board)
+    ("O" "board: this project / all" +tasks/toggle-board-scope)
     ("f" "tasks.org" +tasks/open)]])
