@@ -170,16 +170,43 @@ that is the config Emacs loads: a restart mid-task never loads the agent's code.
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
 | `I` | add a sub-IDEA under the open task at point (or a picked one) |
-| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create `feat/<slug>` in a new worktree, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile its whole tree under `* Active`, then open a pi session in that worktree, named after the branch, on the task's `:MODEL:`, with `/feature <heading>`, a `PART OF:` line for nested tasks and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled or `tasks.org` has no top-level `Active` heading (tags, cookies and a priority on it are fine); a task already linked keeps its `:BRANCH:` |
+| `n` | next: do whatever moves the task at point (or the board row at point) one stage on — see the stage table below; a heading without a keyword is refused |
+| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create `feat/<slug>` in a new worktree, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA/TODO → PLAN, refile its whole tree under `* Active`, then open a pi session in that worktree, named after the branch, on the task's `:MODEL:`, with `/feature <heading>`, a `PART OF:` line for nested tasks and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled or `tasks.org` has no top-level `Active` heading (tags, cookies and a priority on it are fine); a task already linked keeps its `:BRANCH:` |
 | `c` | continue a started task: open its worktree (adding one for a branch without) and focus its pi session |
 | `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
-| `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) |
-| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first |
-| `t` | run the tests of the tree at hand in the jail: the task's worktree on a task in `tasks.org`, else the current project. The command is that tree's: `just test` when its justfile has a `test` recipe and `just` is installed, else projectile's test command with that tree's dir-locals applied (so a committed `.dir-locals.el` setting `projectile-project-test-cmd` works from any buffer); says so when `just` is missing |
-| `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Nothing is pushed; quit the task's pi session afterwards |
+| `w` | wait: park the task on something outside the repo, asking why; the reason is kept in `:REASON:` and shown on the Board until the task moves again |
+| `r` | magit diff `main...feat/x` for the task, task → REVIEW; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) |
+| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first; task → REVIEW |
+| `t` | run the tests of the tree at hand in the jail: the task's worktree on a task in `tasks.org`, else the current project. The command is that tree's: `just test` when its justfile has a `test` recipe and `just` is installed, else projectile's test command with that tree's dir-locals applied (so a committed `.dir-locals.el` setting `projectile-project-test-cmd` works from any buffer); says so when `just` is missing. A task's run leaves it GREEN or RED when the compilation finishes |
+| `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Failing tests leave the task RED; a merge that cannot finish (main cannot fast-forward to origin, conflicts) leaves it WAIT with the obstacle as `:REASON:`. Nothing is pushed; quit the task's pi session afterwards |
+| `x` | abort: throw the agent's work away. Asks, naming how many commits go; ends the task's pi session and every process it started; removes the worktree, uncommitted files included; deletes the branch, keeping its tip at `refs/aborted/<branch>` for reading; returns the heading to the state it was started from (its own state log, else TODO), dropping `:BRANCH:` and `:REASON:`, keeping `:ACCEPT:` and `:MODEL:`. Refuses a branch main already contains: that is `d`'s job |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |
-| `o` / `f` | Board agenda / visit `tasks.org` |
+| `o` / `O` / `f` | Board agenda / flip the Board between this project and every project (the agenda's category filter; `|` clears it) / visit `tasks.org` |
+
+### Stages
+
+The keywords are the pipeline, and the commands move tasks along it; typing a
+keyword by hand works too (`SPC m t`), but then nothing else happens.
+
+| state | means | set by | `n` does |
+|---|---|---|---|
+| `IDEA` | captured, not committed to | `i`, `I`, `l` | `s` |
+| `TODO` | ready: a leaf you intend to start | you | `s` |
+| `PLAN` | started: worktree, branch, pi session exist | `s`, `n` on WAIT | `t` |
+| `RED` | last test run failed | `t`, `d` | `t` |
+| `GREEN` | last test run passed | `t` | `r` |
+| `REVIEW` | you are reading the diff | `r`, `R` | `d` |
+| `WAIT` | parked on something outside the repo; `:REASON:` says what | `w`, `d`, a keyword change by hand (asks why) | back to PLAN, reason dropped, pi resumed |
+| `DONE` / `DROPPED` | merged / abandoned | `d` / you | archive the subtree |
+
+Every transition is timestamped (`!`), so the "Last week" agenda view is a log
+of the flow. `x` is the way back: it undoes `s`.
+
+The Board (`SPC 5 o`) is one block per stage in that order, ideas at the top,
+DONE and DROPPED gathered at the bottom as the pile to archive. Each row shows
+the task's branch, or its reason while it waits. Ready and Ideas list leaves
+only. `SPC 5 O` narrows the Board to the project it was opened from and back.
 
 The `branches` block only matches headings with a TODO keyword, so a stray
 `:BRANCH:` on `* Branches` shows as `NONE`. `org-agenda-files` is extended, not

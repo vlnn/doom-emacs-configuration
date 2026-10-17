@@ -14,15 +14,19 @@ real one in `+tasks/start`, found by using the flow.
 | state | who moves it there | how |
 |---|---|---|
 | `IDEA` | you | `SPC 5 i` (capture into `* Ideas`), `SPC 5 I` (sub-idea under the task at point) |
-| `TODO` | `+tasks/start` | `SPC 5 s` on a leaf: repo review if due, branch in its own worktree, `:BRANCH:`, `:ACCEPT:`, `:MODEL:`, refile its tree to `* Active`, jailed pi session there named after the branch |
-| `PLAN` → `RED` → `GREEN` | you, as the agent reports | `SPC m t` in `tasks.org`; each change is timestamped (`!`) |
-| `REVIEW` | you, when the agent says it is done | `SPC 5 r` / `SPC 5 R`; listed in `SPC o A r` ("Needs my review") |
+| `TODO` | you | a leaf you mean to start next; `SPC m t` |
+| `PLAN` | `+tasks/start` | `SPC 5 s` on a leaf: repo review if due, branch in its own worktree, `:BRANCH:`, `:ACCEPT:`, `:MODEL:`, refile its tree to `* Active`, jailed pi session there named after the branch |
+| `RED` / `GREEN` | `+tasks/test` | `SPC 5 t`: the worktree's tests in the jail; the verdict lands when the compilation finishes. `SPC 5 d` also leaves RED when its test run fails |
+| `REVIEW` | `+tasks/review`, `+tasks/ai-review` | `SPC 5 r` / `SPC 5 R`; listed in `SPC o A r` ("Needs my review") |
+| `WAIT` | `+tasks/wait`, `+tasks/done`, you | `SPC 5 w` asks why; `SPC 5 d` parks a task whose merge it cannot finish, the obstacle as the reason; `SPC m t` by hand asks why. `SPC 5 n` on it goes back to PLAN and resumes pi |
 | `DONE` | `+tasks/done` | `SPC 5 d`: guard check, jailed tests in the worktree, merge `--no-ff`, remove worktree and branch, DONE |
 | `DROPPED` | you, on abandon | `SPC m t`; asks for a note (`@`) |
+| back to `TODO`/`IDEA` | `+tasks/abort` | `SPC 5 x`: end the pi session and its processes, remove the worktree, delete the branch (tip kept at `refs/aborted/…`), heading back to where `s` found it |
 
-`TODO` and `DONE` are set for you; the states in between are a log of what you
-saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
-(`SPC o A w`) read them.
+Every command sets the state it leads to, so the Board (`SPC 5 o`) is current
+without you touching keywords; `SPC 5 n` runs whichever command moves the task
+at point (or the board row at point) one stage on. Each change is timestamped
+(`!`), so "Last week" (`SPC o A w`) is the log of the flow.
 
 ## One-time setup for this repo
 
@@ -115,7 +119,7 @@ In `$DOOMDIR`:
    - `ACCEPT for "…":` e.g. `start refiles under a tagged * Active; with none it errors before adding the worktree and loses nothing`.
    - The repo review, if due. Nothing has changed yet; `q` cancels cleanly.
    - Then the entry gets `:BRANCH:`, `:ACCEPT:`, `:MODEL: local`, becomes
-     `TODO`, moves to `* Active` (with its whole tree, had it been nested); the
+     `PLAN`, moves to `* Active` (with its whole tree, had it been nested); the
      `branches` block gains a row (`merged` until the first commit, since the
      empty branch is already in `main`); the file is saved.
    - `.worktrees/feat-start-drops-…` is created on the new branch; `$DOOMDIR`
@@ -149,8 +153,10 @@ Send the prefilled input. A good plan for this bug:
    (look the target up before deleting).
 4. `+tasks--start-at` checks the target heading before `+tasks--add-worktree`.
 
-`SPC m t` → `PLAN`. Push back now if a step is missing; it is the cheapest
-point to redirect.
+The task has been `PLAN` since `SPC 5 s`. Push back now if a step is missing;
+it is the cheapest point to redirect. If the plan is off in a way no reply will
+fix, `SPC 5 x` aborts: the session, worktree and branch go, the heading is an
+IDEA again with its `ACCEPT` kept, and nothing else has changed.
 
 ## 4. RED
 
@@ -179,7 +185,8 @@ The agent adds tests to `test/tasks-test.el` and runs `bin/test`:
       (should (string-match-p "IDEA keep me" (buffer-string))))))
 ```
 
-Both fail (`search-failed`, not `user-error`). `SPC m t` → `RED`.
+Both fail (`search-failed`, not `user-error`); `SPC 5 t` on the task runs them
+and leaves it `RED`.
 
 ## 5. GREEN
 
@@ -187,7 +194,7 @@ The agent edits `+tasks--top-heading-end`, `+tasks--move-under` and
 `+tasks--start-at` in its worktree; `SPC 5 t` on the task runs `bin/test` there,
 in the jail, in a compilation buffer, and
 `bin/compile-check` stays clean. `global-auto-revert-mode` keeps any open
-buffers of those files current. `SPC m t` → `GREEN`.
+buffers of those files current; the run leaves the task `GREEN`.
 
 Batch tests prove the pure functions; the running Emacs still has the old
 definitions, and loading new ones runs the agent's code with your rights, so
@@ -200,8 +207,9 @@ branch and session.
 
 ## 6. REVIEW
 
-`SPC m t` → `REVIEW`; it now shows in `SPC o A r`. With point on the task or
-on its `branches` row (or in any buffer of its worktree):
+`SPC 5 n` on a GREEN task opens the review and moves it to `REVIEW`; it now
+shows in `SPC o A r`. With point on the task or on its `branches` row (or in
+any buffer of its worktree):
 
 - `SPC 5 r`: magit diff `main...feat/start-drops-…`, the task's `ACCEPT` in the
   echo area, and `Touches agent guards: modules/my/tasks/config.el, …`: this
@@ -265,8 +273,9 @@ Before restarting after a merge:
   your full rights. When the jail denies something an agent legitimately
   needs, `log stream --style compact --predicate 'sender == "Sandbox"'` names
   the path; widening `agent.sb` is itself a guarded change.
-- In-flight states are manual, so the Board is only as fresh as your last
-  `SPC m t`.
+- The Board is as fresh as the last command that ran; a keyword typed by hand
+  moves the task on the Board but runs nothing. A task you parked by hand gets
+  asked for its reason.
 - A parent with open parts cannot be DROPPED either: drop the parts first, or
   set `:NOBLOCKING: t` on it.
 - `SPC 5 d` merges into your local `main` only; the remote learns nothing until
