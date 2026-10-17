@@ -688,16 +688,19 @@ Nothing changes until the repo review lets pi start."
 ;;; guard on diffs that widen what agents may do
 
 (defvar +tasks-guarded-files
-  (list (rx bos (or "modules/my/ai/" "modules/my/tasks/" ".pi/"))
-        (rx (or bos "/") (or "AGENTS.md" ".justfile" "justfile" "Justfile"
-                             (seq ".dir-locals" (? "-2") ".el"))
+  (list (rx bos (or "modules/my/ai/" "modules/my/tasks/" ".pi/" ".agents/"))
+        (rx (or bos "/")
+            (or "AGENTS.md" "AGENTS.override.md" "CLAUDE.md" ".justfile" "justfile"
+                (seq ".dir-locals" (? "-2") ".el"))
             eos))
-  "Regexps over repo-relative paths whose change can widen what agents may do.
-The jail, the trust review and this flow live in the first group; agent
-inputs and files Emacs or the test run act on with your rights, in the second.")
+  "Regexps over repo-relative paths, matched in any case, whose change can widen what agents may do.
+The jail, the trust review, this flow and agent inputs pi loads as a
+directory live in the first group; context files and files Emacs or the test
+run act on with your rights, in the second.")
 
 (defun +tasks--guarded-p (file)
-  (and (seq-some (lambda (regexp) (string-match-p regexp file)) +tasks-guarded-files) t))
+  (let ((case-fold-search t))
+    (and (seq-some (lambda (regexp) (string-match-p regexp file)) +tasks-guarded-files) t)))
 
 (defun +tasks--guard-note (files)
   (when-let* ((guarded (seq-filter #'+tasks--guarded-p files)))

@@ -551,6 +551,18 @@
     (ert-info ((format "%s should%s count as an agent guard" file (if expected "" " not")))
       (should (eq expected (+tasks--guarded-p file))))))
 
+(ert-deftest +tasks--guarded-p/flags-every-agent-context-file ()
+  (dolist (file '(".agents/skills/x/SKILL.md" "CLAUDE.md" "sub/claude.md" "AGENTS.override.md"
+                  "agents.MD" "Justfile" ".DIR-LOCALS.el"))
+    (ert-info ((format "guard-p should flag %s, which agents or Emacs load with your rights" file))
+      (should (+tasks--guarded-p file)))))
+
+(ert-deftest +tasks--guarded-p/covers-what-the-trust-review-scans ()
+  (dolist (name +ai-trust-context-files)
+    (dolist (spelling (list name (downcase name) (upcase name)))
+      (ert-info ((format "guard-p should flag %s, a context file the trust review scans" spelling))
+        (should (+tasks--guarded-p spelling))))))
+
 (ert-deftest +tasks--guard-note/lists-guarded-files-only ()
   (ert-info ("guard-note should name the guarded files among the changed ones")
     (should (equal "Touches agent guards: AGENTS.md, modules/my/ai/agent.sb"

@@ -89,6 +89,14 @@ expect denied "AGENTS.md in another case should not be writable" touch "$project
 expect denied ".pi in another case should not be writable" mkdir "$project/.PI"
 expect denied "dir-locals in another case should not be writable" touch "$project/.Dir-Locals.el"
 expect denied ".git in another case should not be writable" touch "$project/.GIT/hooks/pre-commit"
+expect denied "CLAUDE.md should not be writable" touch "$project/CLAUDE.md"
+expect denied "CLAUDE.md in another case should not be writable" touch "$project/claude.MD"
+expect denied "AGENTS.override.md should not be writable" touch "$project/AGENTS.override.md"
+expect denied "a nested AGENTS.md should not be writable" \
+  sh -c "mkdir -p '$project/sub' && touch '$project/sub/AGENTS.md'"
+expect denied "the project's .agents skills should not be writable" mkdir -p "$project/.agents/skills"
+expect allowed "agent files in the temp dir should stay writable, tests write them as fixtures" \
+  sh -c 'd="$(mktemp -d)" && touch "$d/AGENTS.md" "$d/CLAUDE.md" "$d/.dir-locals.el" && rm -r "$d"'
 
 for secret in .config/gcloud .kube .docker/config.json .git-credentials .config/git/credentials \
               .npmrc .pypirc .cargo/credentials .cargo/credentials.toml; do

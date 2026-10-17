@@ -21,8 +21,14 @@
 
 (defconst +ai-trust-skipped-dirs '("node_modules" "venv" "target" "dist" "build"))
 
+(defconst +ai-trust-context-files '("AGENTS.md" "AGENTS.override.md" "CLAUDE.md")
+  "Context files pi loads from a project, matched in any case as a case-insensitive disk serves them.")
+
+(defconst +ai-trust-context-pathspecs
+  (mapcar (lambda (name) (concat ":(glob,icase)**/" name)) +ai-trust-context-files))
+
 (defconst +ai-trust-pathspecs
-  '(".pi" ".agents/skills" "justfile" "Justfile" ".justfile" ":(glob)**/AGENTS.md"))
+  (append '(".pi" ".agents/skills" "justfile" "Justfile" ".justfile") +ai-trust-context-pathspecs))
 
 (defconst +ai-trust-patterns
   `((spawn . ,(rx (or "child_process" "Bun.spawn" "Deno.Command" "execa"
@@ -86,16 +92,21 @@
   (seq-some (lambda (dir) (not (+ai-trust--descend-p dir)))
             (butlast (split-string relative "/"))))
 
-(defun +ai-trust--git-agents-md-files (root)
+(defun +ai-trust--git-context-files (root)
   (mapcar (lambda (relative) (expand-file-name relative root))
           (seq-remove #'+ai-trust--skipped-path-p
-                      (+ai-trust--git root "ls-files" "--cached" "--others" "--exclude-standard"
-                                      "--" ":(glob)**/AGENTS.md"))))
+                      (apply #'+ai-trust--git root "ls-files" "--cached" "--others" "--exclude-standard"
+                             "--" +ai-trust-context-pathspecs))))
 
-(defun +ai-trust--agents-md-files (root)
+(defun +ai-trust--context-file-regexp ()
+  (concat "\\`" (regexp-opt +ai-trust-context-files) "\\'"))
+
+(defun +ai-trust--context-files (root)
+  "Every pi context file under ROOT, in any case: the ones git knows about, else all."
   (if (+ai-trust--git-ok-p root "rev-parse" "--is-inside-work-tree")
-      (+ai-trust--git-agents-md-files root)
-    (directory-files-recursively root "\\`AGENTS\\.md\\'" nil #'+ai-trust--descend-p)))
+      (+ai-trust--git-context-files root)
+    (let ((case-fold-search t))
+      (directory-files-recursively root (+ai-trust--context-file-regexp) nil #'+ai-trust--descend-p))))
 
 (defun +ai-trust--justfiles (root)
   (mapcan (lambda (name) (+ai-trust--files-under root name)) +ai-trust-justfiles))
@@ -105,7 +116,7 @@
   (sort (mapcar (lambda (file) (file-relative-name file root))
                 (append (+ai-trust--pi-files root)
                         (+ai-trust--files-under root ".agents/skills")
-                        (+ai-trust--agents-md-files root)
+                        (+ai-trust--context-files root)
                         (+ai-trust--justfiles root)))
         #'string<))
 

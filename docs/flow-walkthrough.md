@@ -246,7 +246,8 @@ Before restarting after a merge:
 - `/feature` and its behaviour live in `~/.pi/agent/prompts/`, not here; a
   fresh machine has the key binding but not the prompt.
 - `trust.el` treats commits from your `user.email` and `+ai-trust-own-emails` as
-  yours. A jailed agent cannot commit or touch `AGENTS.md` or `.pi/`; one you run
+  yours. A jailed agent cannot commit or touch the context files (`AGENTS.md`,
+  `AGENTS.override.md`, `CLAUDE.md`), `.pi/` or `.agents/`; one you run
   unjailed (Linux, a remote project, a terminal) can, under your identity,
   without the "changed by someone else" report. Read those diffs in magit; the
   guard on `SPC 5 r`/`d` points at them.

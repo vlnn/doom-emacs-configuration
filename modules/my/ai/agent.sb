@@ -29,24 +29,27 @@
   (regex #"^/dev/ttys[0-9]+$")
   (regex #"^/dev/fd/[0-9]+$"))
 
-;; any repo's git dir: git runs its config and hooks for you when you open files there
+;; outside the temp dirs, in any case: any repo's git dir (git runs its config and hooks for you),
+;; the context files pi loads (AGENTS.md, AGENTS.override.md, CLAUDE.md) and dir-locals Emacs evaluates
 (deny file-write*
-  (regex #"/\.git(/|$)"))
+  (regex #"/\.[Gg][Ii][Tt](/|$)")
+  (regex #"/[Aa][Gg][Ee][Nn][Tt][Ss](\.[Oo][Vv][Ee][Rr][Rr][Ii][Dd][Ee])?\.[Mm][Dd]$")
+  (regex #"/[Cc][Ll][Aa][Uu][Dd][Ee]\.[Mm][Dd]$")
+  (regex #"/\.[Dd][Ii][Rr]-[Ll][Oo][Cc][Aa][Ll][Ss](-2)?\.[Ee][Ll]$"))
 
-;; scratch repos tests create in temp, and gitlibs checkouts, are never opened as yours
+;; scratch repos and fixtures tests create in temp, and gitlibs checkouts, are never opened as yours
 (allow file-write*
   (subpath (param "TMPDIR"))
   (subpath "/private/tmp")
   (subpath (home "/.cache/agent-jail")))
 
-;; files that run or load later with your rights: git hooks and config, agent inputs, dir-locals;
+;; the project's git state and agent inputs (.pi, .agents/skills);
 ;; other tasks' worktrees, when the agent runs in the main checkout
 (deny file-write*
   (subpath (project "/.git"))
   (subpath (project "/.pi"))
-  (subpath (project "/.worktrees"))
-  (regex #"/AGENTS\.md$")
-  (regex #"/\.dir-locals(-2)?\.el$"))
+  (subpath (project "/.agents"))
+  (subpath (project "/.worktrees")))
 
 (deny file-read*
   (subpath (home "/.ssh"))

@@ -53,8 +53,9 @@ local step.
 files load outside Doom; tests cover the pure functions
 (`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
 `+tasks--*`, `+ai-trust--*`, `+ai--jail*`); the tasks tests drive real git in
-temp repos for worktrees and `done`. ERT only checks the arguments the jail is
-started with; `bin/jail-check` checks the profile itself, so run it after
+temp repos for worktrees and `done`. ERT checks the arguments the jail is
+started with and, as Emacs regexps, which paths the profile's name rules
+match; `bin/jail-check` checks what Seatbelt enforces, so run it after
 editing `agent.sb`.
 
 ## Coding agents
@@ -64,8 +65,8 @@ project root; `SPC 4` starts [hax](https://github.com/OleksandrChekhovskyi/hax)
 in eat, if it is on `PATH`. Both first go through `modules/my/ai/trust.el`:
 before the first start in a repo, when pi has no trust decision for it, and
 after someone else commits to what an agent reads (`.pi/`, `.agents/skills`,
-any `AGENTS.md`, the `justfile`), a report lists those files and flags risky
-lines. The report is a normal grep buffer, so its lines jump to the files; decide
+any `AGENTS.md`, `AGENTS.override.md` or `CLAUDE.md` in any case, the
+`justfile`), a report lists those files and flags risky lines. The report is a normal grep buffer, so its lines jump to the files; decide
 there with `C-c C-c` (trust / proceed), `C-c C-u` (untrusted once), `C-c C-d`
 (do not trust) or `C-c C-k` / `q` (cancel). A session that is already running
 skips the review, since its inputs are loaded; `SPC 3` inside pi hides it.
@@ -104,10 +105,12 @@ In the jail:
   and dape run what they hold; a test that needs a new Maven dependency
   fails until you fetch it outside (`clojure -P`) after reading the diff;
 - `.git` (hooks, config, refs) of the project and of any repo nested in it,
-  `.pi/`, `.worktrees/`, any `AGENTS.md` and `.dir-locals.el` stay
-  read-only: they run or load later with your rights. Agents read git but
-  cannot stage or commit; that stays yours, in magit. Repos under the temp
-  dirs stay writable for tests;
+  `.pi/`, `.agents/`, `.worktrees/`, any `AGENTS.md`, `AGENTS.override.md`,
+  `CLAUDE.md` and `.dir-locals.el` (names in any case, since macOS disks
+  ignore it) stay read-only: they run or load later with your rights. Agents
+  read git but cannot stage or commit; that stays yours, in magit. Under the
+  temp dirs repos and those files stay writable, so tests can create them as
+  fixtures;
 - ssh, gpg, AWS, gcloud, kube, gh, docker, npm, PyPI and cargo credentials,
   `~/.git-credentials`, `~/.authinfo*`, `~/.netrc` and any `secrets.el` are
   unreadable;
@@ -180,10 +183,10 @@ its parts are closed.
 
 Agent guards are the files whose change widens what agents may do:
 `modules/my/ai/` and `modules/my/tasks/` (the jail, the review and this flow),
-`.pi/`, any `AGENTS.md`, `.dir-locals.el` and the justfile
-(`+tasks-guarded-files`). The jail keeps agents off `.pi/`, `AGENTS.md` and
-dir-locals; the guard catches their edits to the rest, and whatever you or
-others commit. A branch the old flow left checked
+`.pi/`, `.agents/`, any `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`,
+`.dir-locals.el` and the justfile, in any case (`+tasks-guarded-files`). The
+jail keeps agents off `.pi/`, `.agents/`, the context files and dir-locals;
+the guard catches their edits to the rest, and whatever you or others commit. A branch the old flow left checked
 out in the main checkout keeps working there; `d` then tests it there, as
 before.
 
