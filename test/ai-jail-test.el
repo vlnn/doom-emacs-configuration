@@ -146,6 +146,15 @@
       (ert-info ((format "agent.sb should %s" what))
         (should (string-match-p regexp text))))))
 
+(ert-deftest +ai-jail-profile/lets-pi-lock-its-credential-store-without-writing-it ()
+  (let ((text (+ai-jail-test--profile-text)))
+    (ert-info ("agent.sb should allow the auth.json.lock dir pi 1.3 takes before reading credentials")
+      (should (string-match-p (regexp-quote "(subpath (home \"/.pi/agent/auth.json.lock\"))") text)))
+    (ert-info ("agent.sb should still not allow writes to auth.json itself")
+      (should-not (string-match-p "(home \"/\\.pi/agent/auth\\.json\")" text)))
+    (ert-info ("agent.sb should not open the whole ~/.pi/agent to the jailed pi")
+      (should-not (string-match-p "(subpath (home \"/\\.pi/agent\"))" text)))))
+
 (ert-deftest +ai-jail-profile/leaves-shared-caches-read-only ()
   (let ((text (+ai-jail-test--profile-text)))
     (dolist (cache '("/.cache/uv" "/.m2/repository" "/.gitlibs"))
