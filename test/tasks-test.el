@@ -331,3 +331,35 @@
                                       ("t" . +tasks/test) ("d" . +tasks/done)))
     (ert-info ((format "menu key %s should run %s" key command))
       (should (eq command (plist-get (nth 2 (transient-get-suffix '+tasks-transient key)) :command))))))
+
+(ert-deftest +tasks--proposed-branch/reuses-linked-branch ()
+  (pcase-dolist (`(,extra ,expected ,why)
+                 '(("** TODO Linked\n:PROPERTIES:\n:BRANCH: feat/kept\n:END:\n" "feat/kept" "reuse the branch already linked")
+                   ("** TODO Fresh start\n" "feat/fresh-start" "derive a branch from the heading")))
+    (+tasks-test--in-tasks-buffer extra
+      (re-search-forward "^\\*\\* TODO ")
+      (let ((+tasks-branch-prefixes '("feat/")))
+        (ert-info ((format "proposed-branch should %s" why))
+          (should (equal expected (+tasks--proposed-branch (org-get-heading t t t t)))))))))
+
+(ert-deftest +tasks--project-category/names-the-repo ()
+  (ert-info ("project-category should be the directory holding tasks.org")
+    (should (equal "my-repo" (+tasks--project-category "/src/my-repo/tasks.org")))))
+
+(ert-deftest +tasks--enable-file-mode-h/sets-agenda-category ()
+  (with-temp-buffer
+    (setq buffer-file-name "/src/my-repo/tasks.org")
+    (+tasks--enable-file-mode-h)
+    (ert-info ("a project's tasks.org should show in the agenda under the repo name, not \"tasks\"")
+      (should (equal "my-repo" org-category)))
+    (setq buffer-file-name nil)))
+
+(ert-deftest +tasks--hand-off/leaves-side-effects-to-the-gate ()
+  (let (launched prepared)
+    (cl-letf (((symbol-function '+ai--launch-pi)
+               (lambda (root draft prepare) (setq launched (list root draft prepare)))))
+      (+tasks--hand-off "/r/" "Unify menus" (lambda () (setq prepared t))))
+    (ert-info ("hand-off should pass the draft and the side effects to the launcher")
+      (should (equal '("/r/" "/feature Unify menus") (butlast launched))))
+    (ert-info ("hand-off should not run side effects itself; the launcher runs them after the review")
+      (should-not prepared))))

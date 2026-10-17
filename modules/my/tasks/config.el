@@ -377,28 +377,42 @@
   (when (fboundp 'magit-refresh-all)
     (magit-refresh-all)))
 
-(defun +tasks--hand-off (heading)
+(defun +tasks--hand-off (root heading prepare)
+  "Give the task to pi in ROOT; PREPARE runs only once the repo review allows it."
   (let ((prompt (+tasks--feature-prompt heading)))
-    (kill-new prompt)
-    (if (fboundp '+ai/pi)
-        (+ai/pi prompt)
+    (if (fboundp '+ai--launch-pi)
+        (+ai--launch-pi root prompt prepare)
+      (funcall prepare)
+      (kill-new prompt)
       (message "Copied: %s" prompt))))
+
+(defun +tasks--proposed-branch (heading)
+  (or (org-entry-get nil "BRANCH")
+      (+tasks--branch-name (+tasks--read-prefix) heading)))
+
+(defun +tasks--start-at (marker branch accept)
+  (with-current-buffer (marker-buffer marker)
+    (save-excursion
+      (goto-char marker)
+      (+tasks--checkout-branch branch)
+      (+tasks--start-entry branch accept)
+      (+tasks/refresh-branches)
+      (save-buffer))))
 
 (defun +tasks/start ()
   "Branch, link, promote and refile a task, then open pi on it.
-Uses the IDEA or TODO at point in tasks.org, otherwise asks for one."
+Uses the IDEA or TODO at point in tasks.org, otherwise asks for one.
+Nothing changes until the repo review lets pi start."
   (interactive)
   (pcase-let ((`(,buffer . ,pos) (+tasks--chosen-task)))
     (with-current-buffer buffer
       (goto-char pos)
-      (let* ((heading (org-get-heading t t t t))
-             (branch (read-string "Branch: " (+tasks--branch-name (+tasks--read-prefix) heading)))
+      (let* ((marker (point-marker))
+             (heading (org-get-heading t t t t))
+             (branch (read-string "Branch: " (+tasks--proposed-branch heading)))
              (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading))))
-        (+tasks--checkout-branch branch)
-        (+tasks--start-entry branch accept)
-        (+tasks/refresh-branches)
-        (save-buffer)
-        (+tasks--hand-off heading)))))
+        (+tasks--hand-off (+tasks--project-root) heading
+                          (lambda () (+tasks--start-at marker branch accept)))))))
 
 (defun +tasks/accept ()
   "Set the one-line acceptance criterion of a task."
@@ -666,8 +680,12 @@ Review this diff against it: what does not serve the criterion, missing or weak 
       (add-hook 'before-save-hook #'+tasks--refresh-on-save nil t)
     (remove-hook 'before-save-hook #'+tasks--refresh-on-save t)))
 
+(defun +tasks--project-category (file)
+  (file-name-nondirectory (directory-file-name (file-name-directory file))))
+
 (defun +tasks--enable-file-mode-h ()
   (when (+tasks--tasks-file-p buffer-file-name)
+    (setq-local org-category (+tasks--project-category buffer-file-name))
     (+tasks-file-mode 1)))
 
 (add-hook! 'org-mode-hook #'+tasks--enable-file-mode-h)

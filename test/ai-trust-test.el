@@ -1,5 +1,7 @@
 ;;; test/ai-trust-test.el -*- lexical-binding: t; -*-
 
+(defvar pilish-project-trust-policy)
+
 (defmacro +ai-trust-test--in-temp-dir (&rest body)
   "Run BODY with `root' bound to a fresh temp directory."
   `(let ((root (file-name-as-directory (make-temp-file "ai-trust-test" t))))
@@ -186,3 +188,65 @@
       (+ai--insert-draft-if-empty draft)
       (ert-info ((format "insert-draft-if-empty should %s" why))
         (should (equal expected (buffer-string)))))))
+
+;;; verdicts and launch
+
+(ert-deftest +ai-trust--verdict/maps-each-choice ()
+  (pcase-dolist (`(,choice . ,expected) '((?t . trusted) (?u . untrusted-once) (?d . distrusted)
+                                          (?p . proceed) (?c . nil)))
+    (ert-info ((format "verdict of %c should be %S" choice expected))
+      (should (eq expected (+ai-trust--verdict choice))))))
+
+(ert-deftest +ai-trust--pilish-policy/untrusted-once-ignores-project-files ()
+  (pcase-dolist (`(,verdict ,expected ,why)
+                 '((untrusted-once no-approve "force --no-approve for an untrusted-once start")
+                   (trusted default "leave trust.json in charge after a trust decision")
+                   (unchanged default "leave trust.json in charge when no review was due")))
+    (ert-info ((format "pilish-policy should %s" why))
+      (should (eq expected (+ai-trust--pilish-policy verdict 'default))))))
+
+(ert-deftest +ai-trust--review-key/separates-agents ()
+  (let ((reviews (+ai-trust--reviews-with nil (+ai-trust--review-key 'pi "/r") '(commit . "a"))))
+    (ert-info ("a pi review should not count as a hax review of the same directory")
+      (should-not (assoc (+ai-trust--review-key 'hax "/r") reviews)))
+    (ert-info ("a pi review should be found under the pi key")
+      (should (equal '(commit . "a") (cdr (assoc (+ai-trust--review-key 'pi "/r") reviews)))))))
+
+(defmacro +ai-trust-test--with-launch-spies (verdict &rest body)
+  "Run BODY with the trust gate answering VERDICT, recording launch steps in `calls'."
+  (declare (indent 1))
+  `(let ((calls nil))
+     (cl-letf (((symbol-function '+ai-trust--ensure) (lambda (_agent _root) ,verdict))
+               ((symbol-function 'pilish)
+                (lambda (&optional session) (push (list 'pilish pilish-project-trust-policy session) calls)))
+               ((symbol-function '+ai--prefill-pilish-input)
+                (lambda (draft &optional _session) (push (list 'prefill draft) calls))))
+       (let ((pilish-project-trust-policy 'default))
+         ,@body)
+       (nreverse calls))))
+
+(ert-deftest +ai--launch-pi/refused-gate-runs-nothing ()
+  (ert-info ("a cancelled review should neither prepare nor start pi")
+    (should (equal nil (+ai-trust-test--with-launch-spies nil
+                         (+ai--launch-pi "/r/" "/feature X" (lambda () (push 'prepare calls))))))))
+
+(ert-deftest +ai--launch-pi/prepares-after-gate-then-starts ()
+  (ert-info ("an allowed start should prepare, start pi with the verdict's policy, then prefill")
+    (should (equal '(prepare (pilish no-approve nil) (prefill "/feature X"))
+                   (+ai-trust-test--with-launch-spies 'untrusted-once
+                     (+ai--launch-pi "/r/" "/feature X" (lambda () (push 'prepare calls))))))))
+
+(ert-deftest +ai--prefill-pilish-input/falls-back-to-kill-ring ()
+  (pcase-dolist (`(,existing ,expected-input ,expected-kill ,why)
+                 '(("" "/feature X" nil "fill an empty session input")
+                   ("typing" "typing" "/feature X" "keep typed text and put the draft on the kill ring")))
+    (with-temp-buffer
+      (insert existing)
+      (let ((input (current-buffer))
+            (kill-ring nil))
+        (cl-letf (((symbol-function '+ai--pilish-input-buffer) (lambda (&optional _) input))
+                  ((symbol-function 'message) #'ignore))
+          (with-temp-buffer (+ai--prefill-pilish-input "/feature X")))
+        (ert-info ((format "prefill should %s" why))
+          (should (equal (list expected-input expected-kill)
+                         (list (buffer-string) (car kill-ring)))))))))

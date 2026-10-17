@@ -62,7 +62,9 @@ before the first start in a repo, when pi has no trust decision for it, and
 after someone else commits to what an agent reads (`.pi/`, `.agents/skills`,
 any `AGENTS.md`, the `justfile`), a report lists those files and flags risky
 lines. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
-with `pilish-project-trust-policy` `'default`, so that file decides what loads.
+with `pilish-project-trust-policy` `'default`, so that file decides what loads,
+except "untrusted once", which starts that run with `--no-approve`. Reviews are
+kept per agent, so a pi review never lets hax start unreviewed.
 Essential tree-sitter grammars install on first use; the `*pilish-grammars*`
 buffer opens in Emacs state so its `i`/`q` keys work under evil.
 Reviewed commits are kept in `doom-cache-dir`.
@@ -77,7 +79,7 @@ writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 | key | does |
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
-| `s` | start the IDEA/TODO at point (or pick one): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile under `* Active`, then open pi with `/feature <heading>` in an empty input (also on the kill ring) |
+| `s` | start the IDEA/TODO at point (or pick one): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile under `* Active`, then open pi with `/feature <heading>` in its input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
 | `a` | set `:ACCEPT:` |
 | `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed |
 | `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*` |
@@ -90,7 +92,8 @@ writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 The `branches` block only matches headings with a TODO keyword, so a stray
 `:BRANCH:` on `* Branches` shows as `NONE`. `org-agenda-files` is extended, not
 replaced: on every agenda command it is reset to `org-directory` plus the
-`tasks.org` of each known projectile project (remote projects skipped).
+`tasks.org` of each known projectile project (remote projects skipped); each
+file's agenda category is its repo name.
 `+tasks-branch-prefixes` (default `("feat/")`, safe as a dir-local) picks the
 branches the block lists; with more than one prefix, `start` asks which.
 

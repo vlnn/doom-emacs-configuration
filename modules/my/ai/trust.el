@@ -1,6 +1,8 @@
 ;;; my/ai/trust.el -*- lexical-binding: t; -*-
 ;; SPC 3 / SPC 4: review what a repo can feed an agent before pi or hax starts there.
 
+(defvar pilish-project-trust-policy)
+
 (defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
 
 (defvar +ai-trust-reviews-file
@@ -204,8 +206,11 @@
   (when (file-exists-p +ai-trust-reviews-file)
     (ignore-errors (read (+ai-trust--read-file +ai-trust-reviews-file)))))
 
-(defun +ai-trust--reviews-with (reviews root marker)
-  (append (assoc-delete-all root (copy-alist reviews)) (list (cons root marker))))
+(defun +ai-trust--review-key (agent dir)
+  (cons agent dir))
+
+(defun +ai-trust--reviews-with (reviews key marker)
+  (append (assoc-delete-all key (copy-alist reviews)) (list (cons key marker))))
 
 (defun +ai-trust--save-reviews (reviews)
   (make-directory (file-name-directory +ai-trust-reviews-file) t)
@@ -262,9 +267,9 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
       (cons 'commit head)
     (cons 'hash (+ai-trust--content-hash root files))))
 
-(defun +ai-trust--record-review (dir root files)
+(defun +ai-trust--record-review (key root files)
   (+ai-trust--save-reviews
-   (+ai-trust--reviews-with (+ai-trust--load-reviews) dir (+ai-trust--marker root files))))
+   (+ai-trust--reviews-with (+ai-trust--load-reviews) key (+ai-trust--marker root files))))
 
 ;;; report
 
@@ -321,12 +326,22 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
   (+ai--eat-in root (format "*pi-trust:%s*" (file-name-nondirectory (directory-file-name root))) "pi")
   (message "Could not write %s; run /trust in this pi, quit it, then SPC 3 again" +ai-trust-store-file))
 
-(defun +ai-trust--decide (choice dir root files)
+(defun +ai-trust--verdict (choice)
   (pcase choice
-    ((or ?u ?p) (+ai-trust--record-review dir root files) t)
+    (?t 'trusted)
+    (?u 'untrusted-once)
+    (?d 'distrusted)
+    (?p 'proceed)))
+
+(defun +ai-trust--pilish-policy (verdict current)
+  (if (eq verdict 'untrusted-once) 'no-approve current))
+
+(defun +ai-trust--decide (choice key dir root files)
+  (pcase choice
+    ((or ?u ?p) (+ai-trust--record-review key root files) (+ai-trust--verdict choice))
     ((or ?t ?d)
      (if (+ai-trust--write-decision +ai-trust-store-file dir (if (eq choice ?t) t :false))
-         (progn (+ai-trust--record-review dir root files) t)
+         (progn (+ai-trust--record-review key root files) (+ai-trust--verdict choice))
        (+ai-trust--open-pi-for-trust root)
        nil))))
 
@@ -339,39 +354,58 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
     (+ai-trust--decide (car (read-multiple-choice
                              (format "Start %s here? " agent)
                              (if (eq agent 'pi) +ai-trust--pi-choices +ai-trust--hax-choices)))
-                       dir root files)))
+                       (+ai-trust--review-key agent dir) dir root files)))
 
 (defun +ai-trust--ensure (agent root)
-  "Non-nil when AGENT may start in ROOT, after a review if one is due."
+  "Verdict letting AGENT start in ROOT, after a review if one is due; nil to stop.
+`unchanged' when no review was due."
   (let* ((dir (+ai-trust--canonical root))
+         (key (+ai-trust--review-key agent dir))
          (files (+ai-trust--scan-files root))
-         (review (cdr (assoc dir (+ai-trust--load-reviews))))
+         (review (cdr (assoc key (+ai-trust--load-reviews))))
          (decision (and (eq agent 'pi) (+ai-trust--current-decision dir)))
          (reason (+ai-trust--scan-reason agent decision review
                                          (+ai-trust--now root review files))))
-    (cond ((null reason) t)
-          ((null files) (+ai-trust--record-review dir root files) t)
+    (cond ((null reason) 'unchanged)
+          ((null files) (+ai-trust--record-review key root files) 'unchanged)
           (t (+ai-trust--review agent root dir reason files review)))))
 
 (defun +ai--insert-draft-if-empty (draft)
   (when (and draft (string-blank-p (buffer-string)))
     (erase-buffer)
-    (insert draft)))
+    (insert draft)
+    t))
 
-(defun +ai--prefill-pilish-input (draft)
-  (with-current-buffer (window-buffer (selected-window))
-    (when (derived-mode-p 'pilish-input-mode)
-      (+ai--insert-draft-if-empty draft))))
+(defun +ai--pilish-input-buffer (&optional session)
+  (when (fboundp 'pilish--find-session)
+    (when-let* ((chat (pilish--find-session (pilish--session-directory) session)))
+      (buffer-local-value 'pilish--input-buffer chat))))
 
-(defun +ai/pi (&optional draft)
-  "Start or focus this project's pilish session, reviewing the repo first when due.
-DRAFT, when given, fills an empty pilish input buffer."
+(defun +ai--prefill-pilish-input (draft &optional session)
+  (when draft
+    (let ((input (+ai--pilish-input-buffer session)))
+      (unless (and (buffer-live-p input)
+                   (with-current-buffer input (+ai--insert-draft-if-empty draft)))
+        (kill-new draft)
+        (message "pi input already has text; draft is on the kill ring: %s" draft)))))
+
+(defun +ai--launch-pi (root &optional draft prepare)
+  "Start or focus pi in ROOT once the repo review allows it.
+PREPARE runs after the review and before pi starts; DRAFT fills its empty input."
+  (when-let* ((verdict (+ai-trust--ensure 'pi root)))
+    (when prepare
+      (funcall prepare))
+    (let ((default-directory root)
+          (pilish-project-trust-policy
+           (+ai-trust--pilish-policy verdict pilish-project-trust-policy)))
+      (pilish)
+      (+ai--prefill-pilish-input draft))
+    verdict))
+
+(defun +ai/pi ()
+  "Start or focus this project's pilish session, reviewing the repo first when due."
   (interactive)
-  (let ((root (+ai--project-root)))
-    (when (+ai-trust--ensure 'pi root)
-      (let ((default-directory root))
-        (pilish)
-        (+ai--prefill-pilish-input draft)))))
+  (+ai--launch-pi (+ai--project-root)))
 
 (defun +ai/hax ()
   "Start or focus hax in eat at the project root, reviewing the repo first when due."
