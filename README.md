@@ -56,7 +56,9 @@ files load outside Doom; tests cover the pure functions
 temp repos for worktrees and `done`. ERT checks the arguments the jail is
 started with and, as Emacs regexps, which paths the profile's name rules
 match; `bin/jail-check` checks what Seatbelt enforces, so run it after
-editing `agent.sb`.
+editing `agent.sb`. `test/run.el` turns native-comp trampolines off, so tests
+that stub primitives (`message`, `read-string`, `call-process`) need no working
+native compiler; your Emacs still does for its own native compilation.
 
 ## Coding agents
 

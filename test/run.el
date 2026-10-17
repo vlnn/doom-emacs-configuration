@@ -5,6 +5,9 @@
   (setq default-directory root)
   (add-to-list 'load-path (expand-file-name "test" root))
   (require 'ert)
+  ;; Stubbing a primitive (message, read-string, call-process) would native-compile a trampoline
+  ;; for it; tests call stubs from interpreted code only, so they need no compiler.
+  (setq native-comp-enable-subr-trampolines nil)
   (require 'org)
   (require 'doom-stubs)
   (dolist (file '("modules/my/editing/avy-functions.el"

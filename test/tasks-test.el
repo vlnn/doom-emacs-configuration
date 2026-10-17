@@ -1,9 +1,9 @@
 ;;; test/tasks-test.el -*- lexical-binding: t; -*-
 
 (defmacro +tasks-test--with-projects (names &rest body)
-  "Run BODY with `root' bound to a temp dir holding project dirs NAMES."
+  "Run BODY with `root' bound to a temp dir, by its true name, holding project dirs NAMES."
   (declare (indent 1))
-  `(let ((root (make-temp-file "tasks-test" t)))
+  `(let ((root (file-truename (make-temp-file "tasks-test" t))))
      (unwind-protect
          (progn
            (dolist (name ,names)
