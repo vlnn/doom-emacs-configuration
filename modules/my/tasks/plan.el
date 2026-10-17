@@ -7,9 +7,13 @@
   '("## Decisions" "## Tests, in order" "## Functions" "## Touches guarded files" "## Open")
   "The sections a PLAN.md must carry, in order; the parser and the prompt both read this.")
 
-(defconst +tasks--plan-required-lines (cons "ACCEPT:" +tasks--plan-headings))
+(defconst +tasks--plan-required-lines (append '("# Plan:" "ACCEPT:") +tasks--plan-headings))
 
-(defconst +tasks--plan-approved-regexp "^Approved: ")
+(defconst +tasks--plan-accept-regexp "^ACCEPT: .*\n")
+
+(defconst +tasks--plan-approved-regexp
+  (concat +tasks--plan-accept-regexp "Approved: [0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}[ \t]*$")
+  "The approval as Emacs writes it, right under ACCEPT; a stray Approved elsewhere is the agent's, not yours.")
 
 (defconst +tasks--plan-go-line
   "Plan approved: PLAN.md carries the Approved line. Start with its first test; any decision it does not settle goes through the grilling interview first.")
@@ -126,8 +130,12 @@ change that passes, tick it. Finish with a summary of the diff and how
 (defun +tasks--worktree-at-point ()
   (+tasks--branch-worktree-in default-directory (org-entry-get nil "BRANCH")))
 
-(defun +tasks--has-line-p (prefix text)
-  (string-match-p (concat "^" (regexp-quote prefix)) text))
+(defun +tasks--line-regexp (line)
+  "LINE on its own, trailing blanks aside; a title line (ending in a colon) may carry anything after it."
+  (concat "^" (regexp-quote line) (if (string-suffix-p ":" line) "" "[ \t]*$")))
+
+(defun +tasks--has-line-p (line text)
+  (string-match-p (+tasks--line-regexp line) text))
 
 (defun +tasks--plan-missing-heading (text)
   "The first required line PLAN.md TEXT lacks, else nil."
@@ -160,18 +168,33 @@ change that passes, tick it. Finish with a summary of the diff and how
 ;;; approving
 
 (defun +tasks--plan-with-approval (text date)
-  (replace-regexp-in-string "^\\(ACCEPT: .*\n\\)" (concat "\\1Approved: " date "\n") text t))
+  "TEXT with Approved: DATE under its first ACCEPT line; unchanged when already approved or without one."
+  (if (or (+tasks--plan-approved-p text) (not (string-match +tasks--plan-accept-regexp text)))
+      text
+    (concat (substring text 0 (match-end 0)) "Approved: " date "\n" (substring text (match-end 0)))))
+
+(defun +tasks--approved-plan (text date)
+  (let ((approved (+tasks--plan-with-approval text date)))
+    (unless (+tasks--plan-approved-p approved)
+      (user-error "%s has no \"ACCEPT: <line>\" to write the approval under" +tasks-plan-file-name))
+    approved))
 
 (defun +tasks--write-plan (worktree text)
   (with-temp-file (+tasks--plan-file worktree) (insert text))
   (when-let* ((buffer (get-file-buffer (+tasks--plan-file worktree))))
     (with-current-buffer buffer (revert-buffer t t))))
 
+(defun +tasks--refuse-unsaved-plan (worktree)
+  (when-let* ((buffer (get-file-buffer (+tasks--plan-file worktree)))
+              ((buffer-modified-p buffer)))
+    (user-error "%s has unsaved edits; save them first (they would be lost)" +tasks-plan-file-name)))
+
 (defun +tasks--send-to-session (task line)
   "Send LINE to TASK's pi session, run from its worktree so pilish finds the right one."
-  (when (fboundp '+ai--send-pilish-input)
-    (let ((default-directory (+tasks--task-worktree-of task)))
-      (+ai--send-pilish-input line (plist-get task :branch)))))
+  (let ((default-directory (+tasks--task-worktree-of task)))
+    (unless (and (fboundp '+ai--send-pilish-input)
+                 (+ai--send-pilish-input line (plist-get task :branch)))
+      (message "No pi session took this; resume the task and send it yourself: %s" line))))
 
 (defun +tasks--prefill-session (task draft)
   (when (fboundp '+ai--prefill-pilish-input)
@@ -196,13 +219,17 @@ change that passes, tick it. Finish with a summary of the diff and how
 
 (defun +tasks--approve (task worktree)
   "Date the plan, move TASK to RED and tell pi to start on the first test."
-  (+tasks--write-plan worktree (+tasks--plan-with-approval (+tasks--plan-text worktree)
-                                                           (format-time-string "%Y-%m-%d")))
+  (+tasks--refuse-unsaved-plan worktree)
+  (+tasks--write-plan worktree (+tasks--approved-plan (+tasks--plan-text worktree)
+                                                      (format-time-string "%Y-%m-%d")))
   (+tasks--set-state task "RED")
   (+tasks--go task worktree))
 
 (defun +tasks--plan-buffer (worktree)
-  (find-file-noselect (+tasks--plan-file worktree)))
+  "PLAN.md visited as text: the agent wrote it, so none of its local variables run."
+  (let ((enable-local-variables nil)
+        (enable-dir-local-variables nil))
+    (find-file-noselect (+tasks--plan-file worktree))))
 
 (defun +tasks--show-plan (worktree)
   (let ((buffer (+tasks--plan-buffer worktree)))
@@ -228,7 +255,7 @@ change that passes, tick it. Finish with a summary of the diff and how
     (pop-to-buffer buffer)))
 
 (defun +tasks--refuse-plan (task)
-  (+tasks/resume)
+  (+tasks--resume-task task)
   (+tasks--prefill-session task +tasks--plan-refusal-draft))
 
 (defun +tasks--decide-plan (task worktree answer)
@@ -249,7 +276,7 @@ Without one, the interview is still running: go back to it."
          (worktree (+tasks--task-worktree-of task))
          (text (+tasks--plan-text worktree)))
     (if (null text)
-        (progn (+tasks/resume)
+        (progn (+tasks--resume-task task)
                (message "No %s yet; the interview is still running" +tasks-plan-file-name))
       (+tasks--check-plan text)
       (+tasks--show-plan worktree)
@@ -263,8 +290,8 @@ Without one, the interview is still running: go back to it."
     (let ((lines (split-string text "\n"))
           in-section result)
       (dolist (line lines (nreverse result))
-        (cond ((equal line heading) (setq in-section t))
-              ((string-prefix-p "## " line) (setq in-section nil))
+        (cond ((string-match-p (+tasks--line-regexp heading) line) (setq in-section t))
+              ((string-prefix-p "#" line) (setq in-section nil))
               (in-section (push line result)))))))
 
 (defun +tasks--plan-test-lines (text)
@@ -278,7 +305,7 @@ Without one, the interview is still running: go back to it."
           (length tests))))
 
 (defun +tasks--plan-open-items (text)
-  (seq-filter (apply-partially #'string-prefix-p "- ") (+tasks--plan-section "## Open" text)))
+  (seq-remove #'string-blank-p (+tasks--plan-section "## Open" text)))
 
 (defun +tasks--plan-tick-line (text)
   (when text

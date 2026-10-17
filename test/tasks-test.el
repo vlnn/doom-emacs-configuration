@@ -462,9 +462,9 @@
         (should (string-search needle prompt))))))
 
 (ert-deftest +tasks--exclude-lines/adds-only-missing-entries ()
-  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive" ".worktrees/" "PLAN.md"))
-                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive" ".worktrees/" "PLAN.md"))
-                                            ("tasks.org\ntasks.org_archive\n.worktrees/\nPLAN.md\n" . ())))
+  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive" ".worktrees/" "/PLAN.md"))
+                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive" ".worktrees/" "/PLAN.md"))
+                                            ("tasks.org\ntasks.org_archive\n.worktrees/\n/PLAN.md\n" . ())))
     (ert-info ((format "exclude-lines for %S should be %S" existing expected))
       (should (equal expected (+tasks--exclude-lines existing))))))
 

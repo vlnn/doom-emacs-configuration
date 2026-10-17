@@ -37,7 +37,7 @@ ACCEPT: it works
 
 (ert-deftest +tasks--excluded-files/keeps-the-plan-out-of-git ()
   (ert-info ("the plan should be excluded from git, since it lives in the worktree and is not part of the change")
-    (should (member "PLAN.md" (+tasks--excluded-files)))))
+    (should (member "/PLAN.md" (+tasks--excluded-files)))))
 
 (ert-deftest +tasks--plan-file/sits-at-the-worktree-root ()
   (ert-info ("plan-file should be PLAN.md at the root of the given worktree")
@@ -94,7 +94,7 @@ ACCEPT: it works
                    (,(replace-regexp-in-string "^## Open\n" "" +tasks-plan-test--written) . "## Open")
                    (,(replace-regexp-in-string "^## Tests, in order\n\\|^## Functions\n" "" +tasks-plan-test--written) . "## Tests, in order")
                    (,(replace-regexp-in-string "^ACCEPT: .*\n" "" +tasks-plan-test--written) . "ACCEPT:")
-                   ("# Plan\n" . "ACCEPT:")))
+                   ("# Plan\n" . "# Plan:")))
     (ert-info ((format "plan-missing-heading should be %S" expected))
       (should (equal expected (+tasks--plan-missing-heading text))))))
 
@@ -117,7 +117,7 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
                    ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
                    ((symbol-function '+tasks--read-approval) (lambda () ,answer))
                    ((symbol-function '+tasks--show-plan) #'ignore)
-                   ((symbol-function '+tasks/resume) (lambda () (setq resumed t)))
+                   ((symbol-function '+tasks--resume-task) (lambda (_) (setq resumed t)))
                    ((symbol-function '+ai--send-pilish-input) (lambda (line &optional _) (push line sent)))
                    ((symbol-function '+ai--prefill-pilish-input) (lambda (line &optional _) (setq prefilled line)))
                    ((symbol-function 'message) #'ignore))
@@ -484,3 +484,123 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
                 (ert-info ("a second e should not double the reread line sent on save")
                   (should (= 1 (length sent)))))
             (kill-buffer plan)))))))
+
+;;; hardening after review
+
+(ert-deftest +tasks--plan-missing-heading/wants-exact-heading-lines ()
+  (pcase-dolist (`(,text . ,expected)
+                 `((,(replace-regexp-in-string "^## Open\n" "## Open questions\n" +tasks-plan-test--written) . "## Open")
+                   (,(replace-regexp-in-string "^## Open\n" "## Open  \n" +tasks-plan-test--written) . nil)
+                   (,(replace-regexp-in-string "^# Plan: .*\n" "" +tasks-plan-test--written) . "# Plan:")))
+    (ert-info ((format "a heading that only starts like a required one should count as missing: %S" expected))
+      (should (equal expected (+tasks--plan-missing-heading text))))))
+
+(ert-deftest +tasks--plan-approved-p/wants-emacs-own-line-under-accept ()
+  (pcase-dolist (`(,text ,expected ,why)
+                 `((,(concat +tasks-plan-test--written "Approved: 2026-10-17\n") nil "ignore an Approved line anywhere but under ACCEPT")
+                   (,(replace-regexp-in-string "^ACCEPT: it works\n" "ACCEPT: it works\nApproved: yes\n" +tasks-plan-test--written) nil "want the date Emacs writes")
+                   (,+tasks-plan-test--approved t "accept the line Emacs writes")))
+    (ert-info ((format "plan-approved-p should %s" why))
+      (should (eq expected (+tasks--plan-approved-p text))))))
+
+(ert-deftest +tasks--plan-with-approval/dates-once-after-the-first-accept-line ()
+  (ert-info ("approving an approved plan should change nothing")
+    (should (equal +tasks-plan-test--approved (+tasks--plan-with-approval +tasks-plan-test--approved "2026-10-18"))))
+  (ert-info ("approving should leave a second ACCEPT line, quoted later in the plan, alone")
+    (let ((text (concat +tasks-plan-test--written "ACCEPT: quoted again\n")))
+      (should (equal (concat +tasks-plan-test--approved "ACCEPT: quoted again\n")
+                     (+tasks--plan-with-approval text "2026-10-17"))))))
+
+(ert-deftest +tasks/approve-plan/refuses-when-no-approval-can-be-written ()
+  (+tasks-plan-test--with-worktree (replace-regexp-in-string "^ACCEPT: it works\n" "ACCEPT:it works\n" +tasks-plan-test--written)
+    (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:END:\n"
+      (+tasks-test--goto-heading "Fix it")
+      (let ((task (+tasks--task-plist))
+            (tasks (current-buffer))
+            sent)
+        (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                  ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                  ((symbol-function '+tasks--read-approval) (lambda () ?y))
+                  ((symbol-function '+tasks--show-plan) #'ignore)
+                  ((symbol-function '+ai--send-pilish-input) (lambda (line &optional _) (push line sent))))
+          (ert-info ("y on a plan whose ACCEPT line the approval cannot be written under should stop")
+            (should-error (+tasks/approve-plan) :type 'user-error)))
+        (ert-info ("a refused approval should leave the task in PLAN, the plan unapproved and pi untold")
+          (should (equal '("PLAN" nil) (+tasks-test--state-of tasks "Fix it")))
+          (should-not sent)
+          (should-not (+tasks--plan-approved-p (+tasks--plan-text tree))))))))
+
+(ert-deftest +tasks/approve-plan/refuses-over-unsaved-edits ()
+  (+tasks-plan-test--with-worktree +tasks-plan-test--written
+    (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:END:\n"
+      (+tasks-test--goto-heading "Fix it")
+      (let ((task (+tasks--task-plist))
+            (plan (find-file-noselect (expand-file-name "PLAN.md" tree))))
+        (unwind-protect
+            (progn
+              (with-current-buffer plan (goto-char (point-max)) (insert "- edit\n"))
+              (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                        ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                        ((symbol-function '+tasks--read-approval) (lambda () ?y))
+                        ((symbol-function '+tasks--show-plan) #'ignore))
+                (ert-info ("approve-plan should stop while PLAN.md has unsaved edits, rather than approve the stale file and drop them")
+                  (should-error (+tasks/approve-plan) :type 'user-error)
+                  (should (buffer-modified-p plan)))))
+          (with-current-buffer plan (set-buffer-modified-p nil))
+          (kill-buffer plan))))))
+
+(ert-deftest +tasks--plan-buffer/never-applies-the-agents-file-local-variables ()
+  (+tasks-plan-test--with-worktree (concat "<!-- -*- mode: emacs-lisp; eval: (setq +tasks-plan-test--pwned t) -*- -->\n" +tasks-plan-test--written)
+    (let ((enable-local-variables :all)
+          (+tasks-plan-test--pwned nil)
+          buffer)
+      (unwind-protect
+          (progn
+            (setq buffer (+tasks--plan-buffer tree))
+            (ert-info ("plan-buffer should visit the agent's file without evaluating its local variables")
+              (should-not +tasks-plan-test--pwned)
+              (should-not (eq 'emacs-lisp-mode (buffer-local-value 'major-mode buffer)))))
+        (when buffer (kill-buffer buffer))))))
+
+(ert-deftest +tasks--plan-open-items/counts-any-line-under-open ()
+  (ert-info ("any non-blank line under Open should count as an open item, whatever its bullet")
+    (should (equal '("* which backend?" "1. naming" "  - nested")
+                   (+tasks--plan-open-items (concat +tasks-plan-test--written "* which backend?\n1. naming\n\n  - nested\n"))))))
+
+(ert-deftest +tasks--excluded-files/anchors-the-plan-to-the-root ()
+  (ert-info ("only a PLAN.md at the worktree root should be hidden from git")
+    (should (member "/PLAN.md" (+tasks--excluded-files)))
+    (should-not (member "PLAN.md" (+tasks--excluded-files)))))
+
+(ert-deftest +tasks--start-entry/replaces-the-plan-model-you-pick ()
+  (+tasks-test--in-tasks-buffer "** TODO Again\n:PROPERTIES:\n:PLAN_MODEL: local\n:END:\n"
+    (+tasks-test--goto-heading "Again")
+    (+tasks--start-entry "feat/again" nil "claude")
+    (+tasks-test--goto-heading "Again")
+    (ert-info ("a plan model picked with C-u s should replace an older one, so c resumes on it")
+      (should (equal "claude" (org-entry-get nil "PLAN_MODEL"))))))
+
+(ert-deftest +tasks--send-to-session/says-when-nobody-is-listening ()
+  (let (said)
+    (cl-letf (((symbol-function '+tasks--task-worktree-of) (lambda (_) "/r/.worktrees/feat-x/"))
+              ((symbol-function '+ai--send-pilish-input) #'ignore)
+              ((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args)))))
+      (+tasks--send-to-session '(:branch "feat/x") "Plan approved"))
+    (ert-info ("a line that reached no session should be reported, not lost in silence")
+      (should (string-search "Plan approved" said)))))
+
+(ert-deftest +tasks/approve-plan/asks-for-the-task-once ()
+  (+tasks-plan-test--with-worktree +tasks-plan-test--written
+    (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:END:\n"
+      (+tasks-test--goto-heading "Fix it")
+      (let ((task (+tasks--task-plist))
+            (asked 0))
+        (cl-letf (((symbol-function '+tasks--work-task) (lambda () (cl-incf asked) task))
+                  ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                  ((symbol-function '+tasks--read-approval) (lambda () ?n))
+                  ((symbol-function '+tasks--show-plan) #'ignore)
+                  ((symbol-function '+tasks--hand-off) #'ignore)
+                  ((symbol-function '+ai--prefill-pilish-input) #'ignore))
+          (+tasks/approve-plan))
+        (ert-info ("n should resume the task it already has, not pick a task a second time")
+          (should (= 1 asked)))))))

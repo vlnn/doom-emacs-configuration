@@ -159,7 +159,7 @@ the denied paths, including other repos, stay open.
 ## Tasks
 
 Each repo in the agent flow keeps a `tasks.org` at its root; `M-x +tasks/init`
-writes the skeleton and adds `tasks.org`, `tasks.org_archive` and `PLAN.md` to
+writes the skeleton and adds `tasks.org`, `tasks.org_archive` and `/PLAN.md` to
 `.git/info/exclude`, so they stay out of git without touching `.gitignore`.
 It also offers, asking first, the `grilling` skill (`.agents/skills/`) and an
 `AGENTS.md` holding the plan gate, so the interview below works in that repo
@@ -233,7 +233,7 @@ and goes away with the worktree.
 
 The plan is what the rest of the flow reads: `R` reviews the diff against it,
 `r` and `d` show how many of its tests are ticked (shown, not enforced), and
-`d` refuses while `## Open` has a bullet. Decisions the plan did not settle go
+`d` refuses while `## Open` has any line. Only the `Approved: <date>` line Emacs writes right under `ACCEPT:` counts as approval; one the agent writes elsewhere does not, and the plan is opened with file-local variables off. Decisions the plan did not settle go
 through the same interview later and land under `## Decisions`; approval is
 not reopened for them. `:PLAN_MODEL:` can run the interview on a better model
 than the work: the plan is the handoff, and `y` restarts the session on

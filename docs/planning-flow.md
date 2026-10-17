@@ -20,6 +20,11 @@ What landed differs from the text below in three small ways:
 - The model restart on `y` goes through `+tasks--hand-off` with a new
   `:send` flag on `+ai--launch-pi`, so the go line is sent once the new
   session is up rather than left in its input.
+- After review: approval counts only as the `Approved: <date>` line right
+  under `ACCEPT:`, written once and verified before RED; headings are
+  matched as whole lines; any non-blank line under `## Open` stops `d`; the
+  exclude entry is `/PLAN.md`; the plan buffer is visited with file-local
+  variables off; `y` refuses over unsaved edits to the plan.
 
 ## Why
 

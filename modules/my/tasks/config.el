@@ -280,7 +280,7 @@ Offers the grilling skill and an AGENTS.md too, asking before each."
 
 (defun +tasks--excluded-files ()
   (list +tasks-file-name (concat +tasks-file-name "_archive") (concat +tasks-worktree-dir "/")
-        +tasks-plan-file-name))
+        (concat "/" +tasks-plan-file-name)))
 
 (defun +tasks--exclude-lines (existing)
   (seq-difference (+tasks--excluded-files) (split-string existing "\n" t)))
@@ -485,7 +485,7 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (org-entry-put nil "BRANCH" branch)
   (+tasks--put-missing "ACCEPT" accept)
   (+tasks--put-missing "MODEL" "local")
-  (+tasks--put-missing "PLAN_MODEL" plan-model)
+  (when plan-model (org-entry-put nil "PLAN_MODEL" plan-model))
   (org-todo "PLAN")
   (+tasks--goto-tree-root)
   (+tasks--move-under "Active"))
@@ -913,8 +913,10 @@ run act on with your rights, in the second.")
 (defun +tasks/resume ()
   "Open a started task's worktree and focus its pi session."
   (interactive)
-  (let* ((task (+tasks--work-task))
-         (branch (plist-get task :branch))
+  (+tasks--resume-task (+tasks--work-task)))
+
+(defun +tasks--resume-task (task)
+  (let* ((branch (plist-get task :branch))
          (root (file-name-as-directory (file-truename (+tasks--task-root task)))))
     (+tasks--hand-off (+tasks--task-worktree root branch)
                       :review-root root
@@ -1159,13 +1161,14 @@ Refuses while the task's PLAN.md lists open items, unless DESPITE-OPEN-ITEMS (\\
          (branch (plist-get task :branch))
          (default-directory (+tasks--task-root task))
          (main (+tasks--default-branch))
-         (tree (+tasks--own-worktree default-directory branch)))
+         (tree (+tasks--own-worktree default-directory branch))
+         (plan (+tasks--plan-text tree)))
     (when (+tasks--dirty-p)
       (user-error "Commit or stash your changes first"))
     (when (and tree (+tasks--worktree-dirty-p tree))
       (user-error "Commit or remove the uncommitted work in %s first" tree))
     (unless despite-open-items
-      (+tasks--refuse-open-items (+tasks--plan-text tree)))
+      (+tasks--refuse-open-items plan))
     (+tasks--confirm-guarded branch (+tasks--changed-files main branch))
     (+tasks--or-set-state task "RED"
       (+tasks--test-branch default-directory branch tree))
@@ -1177,7 +1180,8 @@ Refuses while the task's PLAN.md lists open items, unless DESPITE-OPEN-ITEMS (\\
     (+tasks--mark-done branch (plist-get task :buffer))
     (when (fboundp 'magit-refresh-all)
       (magit-refresh-all))
-    (message "%s merged into %s; task done%s" branch main
+    (message "%s merged into %s; task done%s%s" branch main
+             (if-let* ((ticks (+tasks--plan-tick-line plan))) (concat "; " ticks) "")
              (if tree "; quit its pi session, its worktree is gone" ""))))
 
 ;;; abort: throw the agent's work away, put the task back where it was
