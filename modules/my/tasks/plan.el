@@ -133,6 +133,30 @@ change that passes, tick it. Finish with a summary of the diff and how
   "The first required line PLAN.md TEXT lacks, else nil."
   (seq-find (lambda (line) (not (+tasks--has-line-p line text))) +tasks--plan-required-lines))
 
+;;; which model runs which stage
+
+(defun +tasks--work-model (task)
+  (or (plist-get task :model) "local"))
+
+(defun +tasks--interview-model (task)
+  "The model that runs the interview: :PLAN_MODEL:, else the work model."
+  (or (plist-get task :plan-model) (+tasks--work-model task)))
+
+(defun +tasks--session-model (task plan-text)
+  "The model a session of TASK runs on now: the interview's until PLAN-TEXT is approved, the work model after."
+  (if (+tasks--plan-approved-p plan-text) (+tasks--work-model task) (+tasks--interview-model task)))
+
+(defun +tasks--model-names ()
+  (mapcar #'car (bound-and-true-p +ai-pi-model-args)))
+
+(defun +tasks--read-plan-model ()
+  (completing-read "Model for the interview: " (+tasks--model-names) nil t))
+
+(defun +tasks--check-models (&rest models)
+  "Refuse a model `+ai-pi-model-args' has no flags for, before any review or worktree."
+  (when (fboundp '+ai--check-pi-model)
+    (mapc #'+ai--check-pi-model models)))
+
 ;;; approving
 
 (defun +tasks--plan-with-approval (text date)
@@ -154,12 +178,28 @@ change that passes, tick it. Finish with a summary of the diff and how
     (let ((default-directory (+tasks--task-worktree-of task)))
       (+ai--prefill-pilish-input draft (plist-get task :branch)))))
 
+(defun +tasks--restart-on-work-model (task worktree)
+  "Trade the interview's session for one on the work model, which sends the go line once it is up."
+  (when (fboundp '+ai--stop-pilish-session)
+    (+ai--stop-pilish-session worktree (plist-get task :branch)))
+  (+tasks--hand-off worktree
+                    :review-root (+tasks--task-root task)
+                    :draft +tasks--plan-go-line
+                    :send t
+                    :session (plist-get task :branch)
+                    :model (+tasks--work-model task)))
+
+(defun +tasks--go (task worktree)
+  (if (equal (+tasks--work-model task) (+tasks--interview-model task))
+      (+tasks--send-to-session task +tasks--plan-go-line)
+    (+tasks--restart-on-work-model task worktree)))
+
 (defun +tasks--approve (task worktree)
   "Date the plan, move TASK to RED and tell pi to start on the first test."
   (+tasks--write-plan worktree (+tasks--plan-with-approval (+tasks--plan-text worktree)
                                                            (format-time-string "%Y-%m-%d")))
   (+tasks--set-state task "RED")
-  (+tasks--send-to-session task +tasks--plan-go-line))
+  (+tasks--go task worktree))
 
 (defun +tasks--plan-buffer (worktree)
   (find-file-noselect (+tasks--plan-file worktree)))

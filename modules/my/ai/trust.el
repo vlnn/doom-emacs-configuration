@@ -622,7 +622,7 @@ The chat buffer keeps them, so pilish's later restarts of the session reuse them
   (when (and (+ai--jail-applies-p root) (not (+ai--pi-jail-hooked-p)))
     (user-error "pilish no longer starts pi through pilish--start-process; not starting pi unjailed")))
 
-(cl-defun +ai--start-pi (root verdict &key draft prepare session model review-root)
+(cl-defun +ai--start-pi (root verdict &key draft send prepare session model review-root)
   (ignore review-root)
   (require 'pilish nil t)
   (+ai--require-pi-jail root)
@@ -631,17 +631,19 @@ The chat buffer keeps them, so pilish's later restarts of the session reuse them
   (let ((default-directory root)
         (+ai--pi-next-launch (+ai--pi-launch-settings root verdict model)))
     (pilish session)
-    (+ai--prefill-pilish-input draft session)))
+    (if send
+        (+ai--send-pilish-input draft session)
+      (+ai--prefill-pilish-input draft session))))
 
-(cl-defun +ai--launch-pi (root &rest args &key draft prepare session model review-root)
+(cl-defun +ai--launch-pi (root &rest args &key draft send prepare session model review-root)
   "Start or focus pi in ROOT once the repo review allows it.
-PREPARE runs after the review and before pi starts; DRAFT fills its empty input.
-SESSION names a separate session; MODEL picks flags from
+PREPARE runs after the review and before pi starts; DRAFT fills its empty input,
+and is sent at once with SEND. SESSION names a separate session; MODEL picks flags from
 `+ai-pi-model-args' for a session that is not running yet. REVIEW-ROOT is the
 repo to review, by default the one ROOT belongs to, so task worktrees share
 their repo's review; pass it when PREPARE creates ROOT. A running session
 skips the review: its inputs are already loaded."
-  (ignore draft prepare)
+  (ignore draft send prepare)
   (+ai--check-pi-model model)
   (if (+ai--live-pilish-session-p root session)
       (apply #'+ai--start-pi root 'live args)

@@ -8,7 +8,7 @@
     ("i" "new idea" +tasks/idea)
     ("I" "sub-idea under task" +tasks/sub-idea)
     ("n" "next: advance task at point" +tasks/next)
-    ("s" "start leaf: worktree, PLAN, Active, pi" +tasks/start)
+    ("s" "start leaf: worktree, Active, interview (C-u: pick its model)" +tasks/start)
     ("c" "continue: worktree, pi session" +tasks/resume)
     ("a" "set ACCEPT" +tasks/accept)
     ("w" "wait: park with a reason" +tasks/wait)]
@@ -16,7 +16,7 @@
     ("r" "review diff" +tasks/review)
     ("R" "AI review vs ACCEPT" +tasks/ai-review)
     ("t" "run tests" +tasks/test)
-    ("d" "done: test, merge, remove, DONE" +tasks/done)
+    ("d" "done: test, merge, remove, DONE (C-u: despite open plan items)" +tasks/done)
     ("x" "abort: drop branch, worktree, back to ready" +tasks/abort)]
    ["Branches"
     ("l" "link row to a task" +tasks/link)
