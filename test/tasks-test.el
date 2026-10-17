@@ -215,6 +215,56 @@
     (ert-info ("start-entry should not overwrite a model or acceptance line already set")
       (should (equal '("claude" "old") (list (org-entry-get nil "MODEL") (org-entry-get nil "ACCEPT")))))))
 
+;;; top headings carrying tags, cookies or a priority
+
+(defun +tasks-test--backlog-pos ()
+  (save-excursion (goto-char (point-min)) (re-search-forward "^\\* Backlog") (line-beginning-position)))
+
+(ert-deftest +tasks--top-heading-end/finds-headings-with-tags-cookies-or-priority ()
+  (dolist (heading '("* Active" "* Active :work:" "* Active [1/3]" "* [#A] Active" "* Active [50%] :work:x:"))
+    (with-temp-buffer
+      (insert "* Ideas\n" heading "\n** TODO x\n* Backlog\n")
+      (org-mode)
+      (ert-info ((format "top-heading-end should find %S as the Active heading and end before * Backlog" heading))
+        (should (= (+tasks-test--backlog-pos) (+tasks--top-heading-end "Active")))))))
+
+(ert-deftest +tasks--top-heading-end/missing-heading-is-a-user-error ()
+  (with-temp-buffer
+    (insert "* Ideas\n* Activity\n* Backlog\n")
+    (org-mode)
+    (ert-info ("top-heading-end should name the missing heading in a user-error, not a failed search")
+      (should-error (+tasks--top-heading-end "Active") :type 'user-error))))
+
+(ert-deftest +tasks--move-under/keeps-subtree-when-target-missing ()
+  (with-temp-buffer
+    (insert "* Ideas\n** IDEA keep me\n")
+    (org-mode)
+    (+tasks-test--goto-heading "keep me")
+    (beginning-of-line)
+    (ert-info ("move-under should refuse when the target heading is missing")
+      (should-error (+tasks--move-under "Active") :type 'user-error))
+    (ert-info ("move-under should not delete the subtree when the target heading is missing")
+      (should (string-match-p "IDEA keep me" (buffer-string))))))
+
+(ert-deftest +tasks--start-entry/refiles-under-a-tagged-active ()
+  (+tasks-test--in-tasks-buffer "** IDEA Keep me\n"
+    (save-excursion
+      (re-search-forward "^\\* Active$")
+      (insert " :work:"))
+    (+tasks-test--goto-heading "Keep me")
+    (+tasks--start-entry "feat/keep-me" "it stays")
+    (ert-info ("start-entry should refile the task under a * Active heading that carries tags")
+      (should (string-match-p "^\\* Active :work:\n\\*\\* TODO Keep me" (buffer-string))))))
+
+(ert-deftest +tasks--start-entry/leaves-active-tasks-in-place-under-a-cookie ()
+  (+tasks-test--in-tasks-buffer ""
+    (re-search-forward "^\\* Active$")
+    (insert " [0/2]\n** TODO First\n** TODO Second")
+    (+tasks-test--goto-heading "First")
+    (+tasks--start-entry "feat/first" "it works")
+    (ert-info ("start-entry should not reorder a task that already sits under * Active [0/2]")
+      (should (string-match-p "TODO First\\(.\\|\n\\)*TODO Second" (buffer-string))))))
+
 (ert-deftest +tasks--insert-idea/adds-linked-idea-under-ideas ()
   (+tasks-test--in-tasks-buffer ""
     (+tasks--insert-idea "menu unify" "feat/menu-unify")
@@ -789,6 +839,41 @@
          (should-error (+tasks/done) :type 'user-error)))
      (ert-info ("a refused done should leave the worktree in place")
        (should (file-exists-p (expand-file-name "forgotten_test.py" tree)))))))
+
+(ert-deftest +tasks--start-at/adds-no-worktree-without-an-active-heading ()
+  (+tasks-test--in-git-repo
+   (let ((repo default-directory)
+         (buffer (find-file-noselect (expand-file-name "tasks.org" default-directory))))
+     (unwind-protect
+         (progn
+           (with-current-buffer buffer
+             (insert "#+TODO: IDEA TODO | DONE\n* Ideas\n** IDEA Fix it\n* Backlog\n")
+             (save-buffer)
+             (org-mode)
+             (+tasks-test--goto-heading "Fix it")
+             (ert-info ("start should stop with a user-error when tasks.org has no * Active")
+               (should-error (+tasks--start-at (point-marker) repo "feat/fix-it" "it works") :type 'user-error)))
+           (ert-info ("a refused start should not have added the worktree or the branch")
+             (should-not (file-exists-p (+tasks--worktree-path repo "feat/fix-it")))
+             (should-not (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/fix-it")))
+           (ert-info ("a refused start should leave the task where it was")
+             (should (with-current-buffer buffer (string-match-p "IDEA Fix it" (buffer-string))))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks/start/stops-before-the-review-without-an-active-heading ()
+  (let (handed)
+    (with-temp-buffer
+      (insert "#+TODO: IDEA TODO | DONE\n* Ideas\n** IDEA Fix it\n")
+      (org-mode)
+      (+tasks-test--goto-heading "Fix it")
+      (cl-letf (((symbol-function '+tasks--task-to-start) (lambda () (cons (current-buffer) (line-beginning-position))))
+                ((symbol-function 'read-string) (lambda (_prompt &optional initial &rest _) (or initial "ok")))
+                ((symbol-function '+tasks--hand-off) (lambda (&rest _) (setq handed t))))
+        (ert-info ("start should refuse at once when tasks.org has no * Active")
+          (should-error (+tasks/start) :type 'user-error))))
+    (ert-info ("start should not open the repo review for a task it cannot refile")
+      (should-not handed))))
 
 (ert-deftest +tasks--start-at/adds-the-worktree-and-keeps-main-checked-out ()
   (+tasks-test--in-git-repo

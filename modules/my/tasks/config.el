@@ -395,20 +395,35 @@ With WITHIN-TREE, only leaves in the subtree at point."
       (widen)
       (delq nil (org-map-entries (lambda () (+tasks--task-entry states)))))))
 
-(defun +tasks--top-heading-end (title)
+(defconst +tasks--cookie-regexp "[ \t]*\\[[0-9]*\\(?:%\\|/[0-9]*\\)\\]")
+
+(defun +tasks--heading-title ()
+  "The heading at point as you named it: no TODO keyword, priority, tags or statistics cookies."
+  (string-trim (replace-regexp-in-string +tasks--cookie-regexp "" (org-get-heading t t t t))))
+
+(defun +tasks--top-heading (title)
+  "Start of the top-level heading named TITLE, or a user-error naming it."
   (save-excursion
     (goto-char (point-min))
-    (re-search-forward (format "^\\* %s[ \t]*$" (regexp-quote title)))
+    (or (cl-loop while (re-search-forward "^\\* " nil t)
+                 thereis (and (equal title (+tasks--heading-title)) (line-beginning-position)))
+        (user-error "No top-level \"* %s\" heading in %s" title (buffer-name)))))
+
+(defun +tasks--top-heading-end (title)
+  (save-excursion
+    (goto-char (+tasks--top-heading title))
     (org-end-of-subtree t t)
     (point)))
 
 (defun +tasks--parent-title ()
   (save-excursion
     (when (org-up-heading-safe)
-      (org-get-heading t t t t))))
+      (+tasks--heading-title))))
 
 (defun +tasks--move-under (title)
+  "Move the subtree at point under the top-level heading TITLE, which must exist first."
   (unless (equal title (+tasks--parent-title))
+    (+tasks--top-heading title)
     (let ((tree (buffer-substring (point) (save-excursion (org-end-of-subtree t t) (point)))))
       (delete-region (point) (save-excursion (org-end-of-subtree t t) (point)))
       (goto-char (+tasks--top-heading-end title))
@@ -546,6 +561,7 @@ With WITHIN-TREE, only leaves in the subtree at point."
 (defun +tasks--start-at (marker root branch accept)
   (with-current-buffer (marker-buffer marker)
     (save-excursion
+      (+tasks--top-heading "Active")
       (goto-char marker)
       (+tasks--add-worktree root branch)
       (+tasks--start-entry branch accept)
@@ -560,6 +576,7 @@ Nothing changes until the repo review lets pi start."
   (interactive)
   (pcase-let ((`(,buffer . ,pos) (+tasks--task-to-start)))
     (with-current-buffer buffer
+      (+tasks--top-heading "Active")
       (goto-char pos)
       (let* ((marker (point-marker))
              (root (file-name-as-directory (file-truename default-directory)))

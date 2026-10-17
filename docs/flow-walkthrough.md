@@ -4,6 +4,11 @@ A realistic end-to-end run of the agent task flow (`tasks` module + pilish +
 `trust.el` + the agent jail) where the repo being worked on is this `$DOOMDIR`. The bug is a
 real one in `+tasks/start`, found by using the flow.
 
+> The fix this run produces has since landed: `* Active` may carry tags,
+> statistics cookies or a priority, and a `tasks.org` without one stops
+> `SPC 5 s` before the review, with nothing changed. The steps below still
+> show the flow; to replay them, take any open IDEA instead of this bug.
+
 ## The flow in one table
 
 | state | who moves it there | how |
