@@ -522,6 +522,28 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 (defun +ai--pi-network (model)
   (or (cdr (assoc model +ai-pi-model-networks)) "open"))
 
+(defun +ai--pilish-session (root &optional session)
+  (let ((default-directory root))
+    (when (and (file-directory-p root) (fboundp 'pilish--find-session))
+      (pilish--find-session (pilish--session-directory) session))))
+
+(defun +ai--kill-buffer-quietly (buffer)
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer (set-buffer-modified-p nil))
+    (kill-buffer buffer)))
+
+(defun +ai--stop-pilish-session (root &optional session)
+  "End the pi SESSION running in ROOT: its process, chat and input buffers. Nil without one."
+  (when-let* ((chat (+ai--pilish-session root session)))
+    (let ((process (buffer-local-value 'pilish--process chat))
+          (input (buffer-local-value 'pilish--input-buffer chat)))
+      (when (process-live-p process)
+        (set-process-query-on-exit-flag process nil)
+        (delete-process process))
+      (+ai--kill-buffer-quietly input)
+      (+ai--kill-buffer-quietly chat)
+      t)))
+
 (defun +ai--live-pilish-session-p (root &optional session)
   (let ((default-directory root))
     (when-let* ((chat (and (file-directory-p root)

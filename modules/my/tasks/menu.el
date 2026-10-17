@@ -16,7 +16,8 @@
     ("r" "review diff" +tasks/review)
     ("R" "AI review vs ACCEPT" +tasks/ai-review)
     ("t" "run tests" +tasks/test)
-    ("d" "done: test, merge, remove, DONE" +tasks/done)]
+    ("d" "done: test, merge, remove, DONE" +tasks/done)
+    ("x" "abort: drop branch, worktree, back to ready" +tasks/abort)]
    ["Branches"
     ("l" "link row to a task" +tasks/link)
     ("b" "refresh block" +tasks/refresh-branches)]

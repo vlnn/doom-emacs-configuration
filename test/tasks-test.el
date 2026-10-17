@@ -1364,3 +1364,100 @@
                 (buffer-string))))
     (ert-info ("the menu should bind n to advancing the task at point")
       (should (string-search "(\"n\" \"next: advance task at point\" +tasks/next)" text)))))
+
+;;; abort: throw the agent's work away and put the task back where it was
+
+(ert-deftest +tasks--state-before-start/reads-where-the-task-came-from ()
+  (pcase-dolist (`(,log . ,expected)
+                 '(("- State \"PLAN\"       from \"IDEA\"       [2026-10-17 Sat 10:00]\n" . "IDEA")
+                   ("- State \"RED\"        from \"PLAN\"       [2026-10-17 Sat 11:00]\n- State \"PLAN\"       from \"TODO\"       [2026-10-17 Sat 10:00]\n" . "TODO")
+                   (":LOGBOOK:\n- State \"PLAN\"       from \"IDEA\"       [2026-10-17 Sat 10:00]\n:END:\n" . "IDEA")
+                   ("" . "TODO")))
+    (+tasks-test--in-tasks-buffer (concat "** RED Thing\n" log "** IDEA Next\n- State \"PLAN\"       from \"IDEA\"       [2026-10-17 Sat 09:00]\n")
+      (+tasks-test--goto-heading "Thing")
+      (ert-info ((format "with this log an aborted task should go back to %s" expected))
+        (should (equal expected (+tasks--state-before-start)))))))
+
+(ert-deftest +tasks--abort-entry/unlinks-and-restores-keeping-what-you-wrote ()
+  (+tasks-test--in-tasks-buffer "** WAIT Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:ACCEPT: it works\n:MODEL: claude\n:REASON: stuck\n:END:\n- State \"PLAN\"       from \"IDEA\"       [2026-10-17 Sat 10:00]\n"
+    (+tasks-test--goto-heading "Thing")
+    (+tasks--abort-entry)
+    (+tasks-test--goto-heading "Thing")
+    (pcase-dolist (`(,property . ,expected) '(("BRANCH" . nil) ("REASON" . nil) ("ACCEPT" . "it works") ("MODEL" . "claude")))
+      (ert-info ((format "abort should leave %s as %S" property expected))
+        (should (equal expected (org-entry-get nil property)))))
+    (ert-info ("abort should return the task to the state it was started from")
+      (should (equal "IDEA" (org-get-todo-state))))))
+
+(ert-deftest +tasks/abort/drops-branch-and-worktree-and-puts-the-task-back ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo)))
+          stopped)
+     (unwind-protect
+         (progn
+           (let ((default-directory tree))
+             (+tasks-test--commit-file "half.txt" "unfinished")
+             (with-temp-file (expand-file-name "dirty.txt" tree) (insert "x")))
+           (+tasks-test--write-active-task buffer "Risky idea" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Risky idea")))
+                     ((symbol-function '+ai--stop-pilish-session) (lambda (root session) (setq stopped (list root session))))
+                     ((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                     ((symbol-function 'message) #'ignore))
+             (+tasks/abort))
+           (ert-info ("abort should quit the task's pi session before touching its worktree")
+             (should (equal (list tree "feat/x") stopped)))
+           (ert-info ("abort should remove the worktree, uncommitted work included")
+             (should-not (file-exists-p tree)))
+           (ert-info ("abort should delete the branch, unmerged commits included")
+             (should-not (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x")))
+           (ert-info ("abort should leave main as it was")
+             (should-not (file-exists-p (expand-file-name "half.txt" repo)))
+             (should (equal "main" (+tasks-test--current-branch repo))))
+           (ert-info ("abort should put the task back as a ready TODO with no branch")
+             (should (equal '("TODO" nil)
+                            (with-current-buffer buffer
+                              (+tasks-test--goto-heading "Risky idea")
+                              (list (org-get-todo-state) (org-entry-get nil "BRANCH")))))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks/abort/does-nothing-unless-you-say-yes ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+     (unwind-protect
+         (progn
+           (+tasks-test--write-active-task buffer "Keep" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Keep")))
+                     ((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+             (should-error (+tasks/abort) :type 'user-error))
+           (ert-info ("a declined abort should keep the worktree and the branch")
+             (should (file-exists-p tree))
+             (should (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x"))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks/abort/refuses-a-branch-that-is-already-merged ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+     (+tasks-test--git "branch" "feat/x")
+     (unwind-protect
+         (progn
+           (+tasks-test--write-active-task buffer "Shipped" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Shipped")))
+                     ((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+             (ert-info ("abort should refuse a branch main already contains; that is done's job")
+               (should-error (+tasks/abort) :type 'user-error))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks/menu-file/binds-abort ()
+  (let ((text (with-temp-buffer
+                (insert-file-contents (expand-file-name "modules/my/tasks/menu.el" default-directory))
+                (buffer-string))))
+    (ert-info ("the menu should bind x to aborting the task")
+      (should (string-search "(\"x\" \"abort: drop branch, worktree, back to ready\" +tasks/abort)" text)))))

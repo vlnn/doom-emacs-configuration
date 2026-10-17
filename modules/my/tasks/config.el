@@ -1159,6 +1159,76 @@ A task's run leaves it GREEN or RED when it finishes."
     (message "%s merged into %s; task done%s" branch main
              (if tree "; quit its pi session, its worktree is gone" ""))))
 
+;;; abort: throw the agent's work away, put the task back where it was
+
+(defconst +tasks--started-log-regexp
+  "^[ \t]*- State \"\\(?:PLAN\\|TODO\\)\"[ \t]+from \"\\([A-Z]+\\)\""
+  "The log line a start writes; group 1 is the state the task came from.")
+
+(defun +tasks--state-before-start ()
+  "The state this task had before it was started, by its log; TODO when the log is silent."
+  (save-excursion
+    (org-back-to-heading t)
+    (let ((end (save-excursion (org-end-of-subtree t) (point)))
+          (from nil))
+      (while (re-search-forward +tasks--started-log-regexp end t)
+        (setq from (match-string-no-properties 1)))
+      (or from "TODO"))))
+
+(defun +tasks--abort-entry ()
+  "Unlink the task at point from its branch and return it to the state it was started from."
+  (org-back-to-heading t)
+  (let ((state (+tasks--state-before-start)))
+    (org-entry-delete nil "BRANCH")
+    (org-entry-delete nil "REASON")
+    (org-todo state)))
+
+(defun +tasks--stop-session (tree branch)
+  (when (and tree (fboundp '+ai--stop-pilish-session))
+    (+ai--stop-pilish-session tree branch)))
+
+(defun +tasks--drop-worktree (tree)
+  (unless (+tasks--git-ok-p "worktree" "remove" "--force" tree)
+    (user-error "git could not remove %s" tree)))
+
+(defun +tasks--drop-branch (branch)
+  (unless (+tasks--git-ok-p "branch" "-D" branch)
+    (user-error "git could not delete %s" branch)))
+
+(defun +tasks--abort-question (task branch main)
+  (format "Abort \"%s\": throw away %s (%d commit%s ahead of %s) and its worktree? "
+          (plist-get task :heading) branch (+tasks--ahead branch main)
+          (if (= 1 (+tasks--ahead branch main)) "" "s") main))
+
+(defun +tasks/abort ()
+  "Drop the task's branch, worktree and pi session, and put it back as it was before start.
+Keeps ACCEPT and MODEL. Refuses a branch main already contains; that is done's job."
+  (interactive)
+  (let* ((task (+tasks--work-task))
+         (branch (plist-get task :branch))
+         (default-directory (+tasks--task-root task))
+         (main (+tasks--default-branch))
+         (tree (+tasks--own-worktree default-directory branch)))
+    (when (+tasks--merged-p branch main)
+      (user-error "%s is already merged into %s; finish it with done instead" branch main))
+    (unless (yes-or-no-p (+tasks--abort-question task branch main))
+      (user-error "Kept %s" branch))
+    (+tasks--stop-session tree branch)
+    (when tree
+      (+tasks--drop-worktree tree))
+    (+tasks--drop-branch branch)
+    (with-current-buffer (plist-get task :buffer)
+      (save-excursion
+        (goto-char (plist-get task :marker))
+        (+tasks--abort-entry))
+      (+tasks/refresh-branches)
+      (when buffer-file-name (save-buffer)))
+    (when (fboundp 'magit-refresh-all)
+      (magit-refresh-all))
+    (message "%s dropped; task back to %s" branch
+             (with-current-buffer (plist-get task :buffer)
+               (save-excursion (goto-char (plist-get task :marker)) (org-get-todo-state))))))
+
 ;;; tasks.org buffers
 
 (defun +tasks--refresh-on-save ()

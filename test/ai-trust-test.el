@@ -493,3 +493,27 @@
           (ert-info ("hax in a task worktree should share the review of its repo, not ask again per worktree")
             (should (equal repo gated))))
       (delete-directory repo t))))
+
+;;; stopping a pi session
+
+(ert-deftest +ai--stop-pilish-session/kills-the-process-and-its-buffers ()
+  (let* ((process (start-process "ai-test-sleep" nil "sleep" "30"))
+         (input (generate-new-buffer "*pilish-input-test*"))
+         (chat (with-current-buffer (generate-new-buffer "*pilish-chat-test*")
+                 (setq-local pilish--process process)
+                 (setq-local pilish--input-buffer input)
+                 (current-buffer))))
+    (cl-letf (((symbol-function 'pilish--session-directory) (lambda () default-directory))
+              ((symbol-function 'pilish--find-session) (lambda (&rest _) chat)))
+      (+ai--stop-pilish-session temporary-file-directory "feat/x"))
+    (ert-info ("stopping a session should kill pi's process")
+      (should-not (process-live-p process)))
+    (ert-info ("stopping a session should kill its chat and input buffers")
+      (should-not (buffer-live-p chat))
+      (should-not (buffer-live-p input)))))
+
+(ert-deftest +ai--stop-pilish-session/is-quiet-when-there-is-none ()
+  (cl-letf (((symbol-function 'pilish--session-directory) (lambda () default-directory))
+            ((symbol-function 'pilish--find-session) #'ignore))
+    (ert-info ("stopping a session that is not running should be a no-op")
+      (should-not (+ai--stop-pilish-session temporary-file-directory "feat/none")))))
