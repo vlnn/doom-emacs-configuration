@@ -2,6 +2,8 @@
 
 (require 'cl-lib)
 
+(defvar gptel-model)
+
 (defconst +tasks--dir
   (file-name-directory (or load-file-name (bound-and-true-p byte-compile-current-file) buffer-file-name)))
 
@@ -691,13 +693,22 @@ Nothing changes until the repo review lets pi start."
       (when (org-entry-get nil "BRANCH")
         (+tasks--task-plist)))))
 
+(defun +tasks--task-at (pos)
+  (save-excursion
+    (goto-char pos)
+    (+tasks--task-plist)))
+
+(defun +tasks--task-on-row-at-point ()
+  (when-let* ((branch (and (+tasks--tasks-file-p buffer-file-name)
+                           (+tasks--row-branch (thing-at-point 'line t))))
+              (task (+tasks--branch-task branch)))
+    (+tasks--task-at (nth 2 task))))
+
 (defun +tasks--task-on-current-branch ()
   (when-let* ((branch (car (+tasks--git-lines "branch" "--show-current"))))
     (with-current-buffer (+tasks--tasks-buffer)
       (when-let* ((task (+tasks--branch-task branch)))
-        (save-excursion
-          (goto-char (nth 2 task))
-          (+tasks--task-plist))))))
+        (+tasks--task-at (nth 2 task))))))
 
 (defun +tasks--linked-p (entry)
   (save-excursion
@@ -709,13 +720,13 @@ Nothing changes until the repo review lets pi start."
     (let ((tasks (seq-filter #'+tasks--linked-p (+tasks--open-tasks org-not-done-keywords))))
       (unless tasks
         (user-error "No open task with a :BRANCH: in %s" buffer-file-name))
-      (save-excursion
-        (goto-char (cdr (assoc (completing-read "Task: " tasks nil t) tasks)))
-        (+tasks--task-plist)))))
+      (+tasks--task-at (cdr (assoc (completing-read "Task: " tasks nil t) tasks))))))
 
 (defun +tasks--work-task ()
-  "The task to review, test or finish: at point, on the current branch, or picked."
+  "The task to review, test or finish: at point, linked to the branches row at point,
+on the current branch, or picked."
   (or (+tasks--linked-task-at-point)
+      (+tasks--task-on-row-at-point)
       (+tasks--task-on-current-branch)
       (+tasks--pick-linked-task)))
 
@@ -845,9 +856,13 @@ Review this diff against it: what does not serve the criterion, missing or weak 
   (if (and recipe-p just-p) "just test" projectile-command))
 
 (defun +tasks--projectile-test-command (root)
+  "Projectile's test command for ROOT, its dir-locals applied, whatever buffer is current."
   (when (fboundp 'projectile-test-command)
-    (let ((command (ignore-errors (projectile-test-command root))))
-      (and (stringp command) command))))
+    (with-temp-buffer
+      (setq default-directory root)
+      (hack-dir-local-variables-non-file-buffer)
+      (let ((command (ignore-errors (projectile-test-command root))))
+        (and (stringp command) command)))))
 
 (defun +tasks--warn-missing-just (recipe-p just-p)
   (when (and recipe-p (not just-p))
@@ -892,15 +907,20 @@ Review this diff against it: what does not serve the criterion, missing or weak 
   (unless (+tasks--git-ok-p "switch" branch)
     (user-error "git could not switch to %s" branch)))
 
+(defun +tasks--run-tests (root command)
+  (let ((default-directory root)
+        (buffer (get-buffer-create "*tasks-done-tests*"))
+        (argv (+tasks--test-argv root command)))
+    (with-current-buffer buffer (erase-buffer))
+    (message "Running %s in %s..." command root)
+    (unless (zerop (apply #'call-process (car argv) nil buffer nil (cdr argv)))
+      (display-buffer buffer)
+      (user-error "%s failed; nothing merged" command))))
+
 (defun +tasks--run-tests-or-confirm (root)
+  "Run ROOT's tests there, or ask to go on without any."
   (if-let* ((command (+tasks--project-test-command root)))
-      (let ((buffer (get-buffer-create "*tasks-done-tests*"))
-            (argv (+tasks--test-argv root command)))
-        (with-current-buffer buffer (erase-buffer))
-        (message "Running %s..." command)
-        (unless (zerop (apply #'call-process (car argv) nil buffer nil (cdr argv)))
-          (display-buffer buffer)
-          (user-error "%s failed; nothing merged" command)))
+      (+tasks--run-tests root command)
     (unless (y-or-n-p "No test command found; merge without running tests? ")
       (user-error "Stopped before merging"))))
 

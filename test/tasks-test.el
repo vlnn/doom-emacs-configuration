@@ -444,6 +444,19 @@
       (ert-info ((format "projectile test command %S should give %S" value expected))
         (should (equal expected (+tasks--projectile-test-command "/repo/")))))))
 
+(defvar projectile-project-test-cmd nil)
+(put 'projectile-project-test-cmd 'safe-local-variable #'stringp)
+
+(ert-deftest +tasks--projectile-test-command/reads-the-tested-roots-dir-locals ()
+  (+tasks-test--with-projects '("p")
+    (let ((dir (expand-file-name "p/" root)))
+      (with-temp-file (expand-file-name ".dir-locals.el" dir)
+        (insert "((nil . ((projectile-project-test-cmd . \"bin/test\"))))"))
+      (cl-letf (((symbol-function 'projectile-test-command) (lambda (_) projectile-project-test-cmd)))
+        (with-temp-buffer
+          (ert-info ("the test command should come from the tested root's dir-locals, whatever buffer done or test runs from")
+            (should (equal "bin/test" (+tasks--projectile-test-command dir)))))))))
+
 (ert-deftest +tasks--merge-message/names-branch-and-task ()
   (ert-info ("merge-message should name the branch and the task heading")
     (should (equal "Merge feat/x: Unify menus" (+tasks--merge-message "feat/x" "Unify menus")))))
@@ -472,6 +485,27 @@
         (should (equal "Shipped" (org-get-heading t t t t)))))
     (ert-info ("branch-task should be nil for an unlinked branch")
       (should-not (+tasks--branch-task "feat/other")))))
+
+(ert-deftest +tasks--work-task/acts-on-the-branches-row-at-point ()
+  (+tasks-test--with-projects '("p")
+    (let ((buffer (find-file-noselect (expand-file-name "p/tasks.org" root))))
+      (unwind-protect
+          (with-current-buffer buffer
+            (insert (+tasks--skeleton))
+            (goto-char (point-min))
+            (re-search-forward "^\\* Active\n")
+            (insert "** TODO Linked\n:PROPERTIES:\n:BRANCH: feat/x\n:END:\n")
+            (re-search-forward "^#\\+BEGIN: branches\n")
+            (insert "| feat/x | now | Linked | ahead 1 |\n")
+            (save-buffer)
+            (org-mode)
+            (forward-line -1)
+            (ert-info ("review, test and done on a branches row should act on the task linked to that row")
+              (should (equal '("feat/x" "Linked")
+                             (let ((task (+tasks--work-task)))
+                               (list (plist-get task :branch) (plist-get task :heading)))))))
+        (with-current-buffer buffer (set-buffer-modified-p nil))
+        (kill-buffer buffer)))))
 
 (ert-deftest +tasks/menu-file/binds-the-work-keys ()
   (require 'transient)
@@ -897,6 +931,36 @@
                                      (org-get-todo-state))))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
+
+(ert-deftest +tasks/done/tests-the-branch-in-its-worktree ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+     (unwind-protect
+         (progn
+           (let ((default-directory tree))
+             (+tasks-test--commit-file "feature.txt" "done"))
+           (+tasks-test--write-active-task buffer "Ship it" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Ship it")))
+                     ((symbol-function '+tasks--project-test-command) (lambda (_) "test -e feature.txt"))
+                     ((symbol-function 'message) #'ignore))
+             (+tasks/done))
+           (ert-info ("done should run the tests in the worktree, where the branch's own files are, not on main")
+             (should (file-exists-p (expand-file-name "feature.txt" repo)))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks--run-tests-or-confirm/runs-the-command-in-the-tested-root ()
+  (let (ran-in)
+    (cl-letf (((symbol-function '+tasks--project-test-command) (lambda (_) "bin/test"))
+              ((symbol-function '+ai--jailed) (lambda (_root command &rest _) command))
+              ((symbol-function 'message) #'ignore)
+              ((symbol-function 'call-process) (lambda (&rest _) (setq ran-in default-directory) 0)))
+      (let ((default-directory "/elsewhere/"))
+        (+tasks--run-tests-or-confirm "/r/.worktrees/feat-x/")))
+    (ert-info ("run-tests-or-confirm should start the command in the root it tests")
+      (should (equal "/r/.worktrees/feat-x/" ran-in)))))
 
 (ert-deftest +tasks/done/refuses-a-worktree-with-uncommitted-work ()
   (+tasks-test--in-git-repo
