@@ -19,6 +19,88 @@
 
 (defconst +tasks--plan-refusal-draft "Plan not approved: ")
 
+;;; the interview s starts, and the plan it asks for
+
+(defconst +tasks--plan-section-bodies
+  '(("## Decisions" . "- Q: <question as asked> → A: <the user's answer>")
+    ("## Tests, in order" . "- [ ] `<test name>`: <X> should <Y>")
+    ("## Functions" . "- `<name>` in `<file>`: <one line>")
+    ("## Touches guarded files" . "- none | <paths>")
+    ("## Open" . "")))
+
+(defun +tasks--plan-section-format (heading)
+  (string-trim-right (concat heading "\n" (alist-get heading +tasks--plan-section-bodies nil nil #'equal))))
+
+(defun +tasks--plan-format ()
+  "The PLAN.md shape the interview must write, built from the headings the parser checks."
+  (string-join (append '("# Plan: <heading>" "ACCEPT: <the acceptance line>")
+                       (mapcar #'+tasks--plan-section-format +tasks--plan-headings))
+               "\n\n"))
+
+(defun +tasks--interview-prompt (heading &optional accept parents)
+  "What s puts in pi's input: the grilling skill on HEADING, then the plan to write when done."
+  (concat (format "/skill:grilling %s" heading)
+          (if parents (format "\n\nPART OF: %s" parents) "")
+          (if accept (format "\n\nACCEPT: %s" accept) "")
+          (format "\n\nWhen the frontier is empty, write %s at the repo root:\n\n%s\n\n"
+                  +tasks-plan-file-name (+tasks--plan-format))
+          (format "Leave \"%s\" bare when nothing is unresolved. Then say \"%s written; waiting for approval.\" and stop."
+                  (car (last +tasks--plan-headings)) +tasks-plan-file-name)))
+
+;;; what init offers a new project
+
+(defconst +tasks--agents-md-text
+  "# Working with agents here
+
+## The plan gate
+
+While `PLAN.md` exists at the repo root without an `Approved:` line, edit no
+file other than `PLAN.md`. The human approves the plan from Emacs; the
+`Approved:` line is the record.
+
+## Decisions
+
+Any decision this task forces that `PLAN.md` does not settle, during planning
+or later, goes through the grilling interview
+(`.agents/skills/grilling/SKILL.md`), never a guess. Append each answer to
+`## Decisions` in `PLAN.md` before continuing, in the same `Q → A` form. Say
+so when a round changes the test list.
+
+There are no sub-agents here. Look facts up yourself with read, grep and
+bash.
+
+## PLAN.md
+
+Once approved, work the tests under `## Tests, in order` one at a time: write
+the next unticked one, run the tests, show the failure, make the smallest
+change that passes, tick it. Finish with a summary of the diff and how
+`ACCEPT` is met.
+"
+  "The AGENTS.md init offers: the gate and the standing rule only; style and the test command are the project's own.")
+
+(defconst +tasks--skill-dir ".agents/skills/grilling/")
+
+(defun +tasks--own-skill-dir ()
+  (expand-file-name +tasks--skill-dir doom-user-dir))
+
+(defun +tasks--offer-skill (root)
+  (let ((target (expand-file-name +tasks--skill-dir root)))
+    (when (and (not (file-exists-p target))
+               (file-directory-p (+tasks--own-skill-dir))
+               (y-or-n-p "Copy the grilling skill into this project, so s can interview you? "))
+      (copy-directory (+tasks--own-skill-dir) target nil t t))))
+
+(defun +tasks--offer-agents-md (root)
+  (let ((target (expand-file-name "AGENTS.md" root)))
+    (when (and (not (file-exists-p target))
+               (y-or-n-p "Write an AGENTS.md with the plan gate and the interview rule? "))
+      (with-temp-file target (insert +tasks--agents-md-text)))))
+
+(defun +tasks--offer-agent-inputs (root)
+  "Ask, never silently, before giving a new project the skill and the AGENTS.md the flow expects."
+  (+tasks--offer-skill root)
+  (+tasks--offer-agents-md root))
+
 ;;; reading the plan
 
 (defun +tasks--plan-file (worktree)
