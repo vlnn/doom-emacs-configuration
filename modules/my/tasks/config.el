@@ -36,6 +36,8 @@
 (defun +tasks--skeleton ()
   +tasks--skeleton-text)
 
+(load! "plan")
+
 (defun +tasks--string-list-p (value)
   (and (listp value) (seq-every-p #'stringp value) t))
 
@@ -80,8 +82,9 @@ Empty, it is `org-directory', as Doom's default would have it."
   `((todo . ,(format " %%-12:c %%-%d(+tasks--agenda-prefix) " +tasks--board-prefix-width))))
 
 (defun +tasks--agenda-prefix ()
-  "What the board shows before a task: why it waits, else its branch, else nothing."
+  "What the board shows before a task: why it waits, what its plan needs, else its branch, else nothing."
   (truncate-string-to-width (or (and (equal (org-get-todo-state) "WAIT") (org-entry-get nil "REASON"))
+                                (+tasks--plan-mark-at-point)
                                 (org-entry-get nil "BRANCH")
                                 "")
                             +tasks--board-prefix-width nil nil "…"))
@@ -272,7 +275,8 @@ Empty, it is `org-directory', as Doom's default would have it."
     (find-file file)))
 
 (defun +tasks--excluded-files ()
-  (list +tasks-file-name (concat +tasks-file-name "_archive") (concat +tasks-worktree-dir "/")))
+  (list +tasks-file-name (concat +tasks-file-name "_archive") (concat +tasks-worktree-dir "/")
+        +tasks-plan-file-name))
 
 (defun +tasks--exclude-lines (existing)
   (seq-difference (+tasks--excluded-files) (split-string existing "\n" t)))
