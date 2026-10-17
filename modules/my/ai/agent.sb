@@ -1,0 +1,49 @@
+;; Seatbelt profile for pi, hax and task tests; see modules/my/ai/jail.el.
+;; Params: PROJECT, HOME, TMPDIR, all real paths. The last matching rule wins.
+
+(version 1)
+(allow default)
+
+(define (home path) (string-append (param "HOME") path))
+(define (project path) (string-append (param "PROJECT") path))
+
+(deny file-write*)
+
+(allow file-write*
+  (subpath (param "PROJECT"))
+  (subpath (param "TMPDIR"))
+  (subpath "/private/tmp")
+  (subpath (home "/.pi/agent/sessions"))
+  (subpath (home "/.local/state/hax"))
+  (subpath (home "/.cache/hax"))
+  ;; dependency caches the project's own tests need; a poisoned entry runs later outside the jail
+  (subpath (home "/.cache/uv"))
+  (subpath (home "/.m2/repository"))
+  (subpath (home "/.gitlibs"))
+  (literal "/dev/null")
+  (literal "/dev/zero")
+  (literal "/dev/tty")
+  (literal "/dev/ptmx")
+  (literal "/dev/stdout")
+  (literal "/dev/stderr")
+  (literal "/dev/dtracehelper")
+  (regex #"^/dev/ttys[0-9]+$")
+  (regex #"^/dev/fd/[0-9]+$"))
+
+;; files that run or load later with your rights: git hooks and config, agent inputs, dir-locals
+(deny file-write*
+  (subpath (project "/.git"))
+  (subpath (project "/.pi"))
+  (regex #"/AGENTS\.md$")
+  (regex #"/\.dir-locals(-2)?\.el$"))
+
+(deny file-read*
+  (subpath (home "/.ssh"))
+  (subpath (home "/.aws"))
+  (subpath (home "/.gnupg"))
+  (subpath (home "/.password-store"))
+  (subpath (home "/.config/gh"))
+  (literal (home "/.netrc"))
+  (literal (home "/.authinfo"))
+  (literal (home "/.authinfo.gpg"))
+  (regex #"/secrets\.el$"))

@@ -157,6 +157,7 @@
 
 (set-popup-rule! "^\\*pilish-" :ignore t)
 
+(load! "jail")
 (load! "trust")
 
 (map! :leader

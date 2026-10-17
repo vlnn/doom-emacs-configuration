@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Run commands under modules/my/ai/agent.sb and check what the jail allows.
+# macOS only: Seatbelt (sandbox-exec) is the jail jail.el wraps agents in.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+[[ "$(uname)" == Darwin ]] || { echo "jail-check needs macOS sandbox-exec" >&2; exit 2; }
+
+profile="$PWD/modules/my/ai/agent.sb"
+real_home="$(cd ~ && pwd -P)"
+real_tmp="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+project="$(cd "$(mktemp -d)" && pwd -P)"
+outside="$(mktemp -d "$real_home/.jail-check.XXXXXX")"
+trap 'rm -rf "$project" "$outside"' EXIT
+git -C "$project" init -q
+failures=0
+
+jailed() {
+  sandbox-exec -f "$profile" \
+    -D PROJECT="$project" -D HOME="$real_home" -D TMPDIR="$real_tmp" \
+    "$@"
+}
+
+expect() {
+  local wanted="$1" message="$2" actual
+  shift 2
+  if jailed "$@" >/dev/null 2>&1; then actual=allowed; else actual=denied; fi
+  if [[ "$actual" == "$wanted" ]]; then
+    echo "ok   - $message"
+  else
+    echo "FAIL - $message (was $actual)"
+    failures=$((failures + 1))
+  fi
+}
+
+expect allowed "a file in the project should be writable" touch "$project/file"
+expect allowed "a project file should be readable" cat "$project/file"
+expect allowed "the temp dir should be writable" sh -c "rm \"\$(mktemp)\""
+expect allowed "git should read the project's repo" git -C "$project" status --short
+expect denied "a file outside the project should not be writable" touch "$outside/file"
+expect denied "git hooks should not be writable" touch "$project/.git/hooks/pre-commit"
+expect denied "git config should not be writable" sh -c "echo >> '$project/.git/config'"
+expect denied "the project's .pi should not be writable" mkdir "$project/.pi"
+expect denied "AGENTS.md should not be writable" touch "$project/AGENTS.md"
+expect denied "dir-locals should not be writable" touch "$project/.dir-locals.el"
+
+if [[ -d "$real_home/.ssh" ]]; then
+  expect denied "ssh keys should not be readable" ls "$real_home/.ssh"
+fi
+if [[ -d "$real_home/.pi/agent/sessions" ]]; then
+  expect allowed "pi sessions should be writable" \
+    sh -c "f='$real_home/.pi/agent/sessions/.jail-check' && touch \"\$f\" && rm \"\$f\""
+fi
+
+if ((failures > 0)); then
+  echo "$failures failure(s)"
+  exit 1
+fi
+echo "jail behaves as agent.sb says"

@@ -12,6 +12,7 @@
                   "modules/my/python/dape.el"
                   "modules/my/ai/config.el"
                   "modules/my/ai/annotate.el"
+                  "modules/my/ai/jail.el"
                   "modules/my/ai/trust.el"
                   "modules/my/vc/config.el"
                   "modules/my/tasks/config.el"))

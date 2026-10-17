@@ -5,6 +5,7 @@
 
 (defvar pilish-project-trust-policy)
 (defvar pilish-extra-args)
+(defvar pilish-executable)
 
 (defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
 
@@ -327,14 +328,14 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
   (when-let* ((buffer (get-buffer name)))
     (and (get-buffer-process buffer) buffer)))
 
-(defun +ai--eat-in (root name program)
+(defun +ai--eat-in (root name command)
   (require 'eat)
   (pop-to-buffer (or (+ai--live-buffer name)
                      (let ((default-directory root))
-                       (eat-make (substring name 1 -1) program)))))
+                       (apply #'eat-make (substring name 1 -1) (car command) nil (cdr command))))))
 
 (defun +ai-trust--open-pi-for-trust (root)
-  (+ai--eat-in root (format "*pi-trust:%s*" (file-name-nondirectory (directory-file-name root))) "pi")
+  (+ai--eat-in root (format "*pi-trust:%s*" (file-name-nondirectory (directory-file-name root))) '("pi"))
   (message "Could not write %s; run /trust in this pi, quit it, then SPC 3 again" +ai-trust-store-file))
 
 (defun +ai-trust--verdict (choice)
@@ -488,7 +489,9 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 (cl-defun +ai--start-pi (root verdict &key draft prepare session model)
   (when prepare
     (funcall prepare))
+  (require 'pilish nil t)
   (let ((default-directory root)
+        (pilish-executable (+ai--jailed root (if (boundp 'pilish-executable) pilish-executable '("pi"))))
         (pilish-project-trust-policy
          (+ai-trust--pilish-policy verdict pilish-project-trust-policy))
         (pilish-extra-args (append (bound-and-true-p pilish-extra-args) (+ai--pi-model-args model))))
@@ -523,7 +526,7 @@ Inside a pi buffer, hide the session instead."
          (name (+ai--hax-buffer-name root)))
     (if-let* ((live (+ai--live-buffer name)))
         (pop-to-buffer live)
-      (+ai-trust--gate 'hax root (lambda (_verdict) (+ai--eat-in root name "hax"))))))
+      (+ai-trust--gate 'hax root (lambda (_verdict) (+ai--eat-in root name (+ai--jailed root '("hax"))))))))
 
 (set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select t :quit t)
 (set-popup-rule! "^\\*\\(hax\\|pi-trust\\):" :side 'right :size 0.4 :select t :quit nil :ttl nil)
