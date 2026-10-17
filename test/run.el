@@ -17,7 +17,7 @@
                   "modules/my/ai/annotate.el"
                   "modules/my/lua/repl.el"
                   "modules/my/lua/busted.el"
-                  "modules/my/lua/love.el"))
+                  "modules/my/lua/love.el"
                   "modules/my/ai/jail.el"
                   "modules/my/ai/trust.el"
                   "modules/my/vc/config.el"
