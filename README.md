@@ -72,7 +72,8 @@ skips the review, since its inputs are loaded; `SPC 3` inside pi hides it.
 Add other machines' commit emails to `+ai-trust-own-emails` so your own
 commits never count as someone else's. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
 with `pilish-project-trust-policy` `'default`, so that file decides what loads,
-except "untrusted once", which starts that run with `--no-approve`. Reviews are
+except "untrusted once", which starts that session with `--no-approve`, reloads
+included. Reviews are
 kept per agent, so a pi review never lets hax start unreviewed.
 Essential tree-sitter grammars install on first use; the `*pilish-grammars*`
 buffer opens in Emacs state so its `i`/`q` keys work under evil.
@@ -84,7 +85,17 @@ share the review of the repo it belongs to.
 On macOS, pi, hax and the tests `SPC 5 t`/`SPC 5 d` run through `sandbox-exec`
 with `modules/my/ai/agent.sb` (`modules/my/ai/jail.el` builds the command). The
 profile is read from the live config, so an agent editing its project's copy
-changes nothing until you merge and reload. In the jail:
+changes nothing until you merge and reload.
+
+The jail hooks into pilish where it starts pi (`pilish--start-process`), so
+every pi process pilish starts is jailed: `SPC 3`, task sessions, `M-x pilish`,
+and restarts (`/reload`, `C-c C-p R`, a session revived after its process
+died). A restart keeps what the session started with: its jail network, its
+`:MODEL:` flags and its trust flag. A pi pilish starts on its own gets the open
+network and your plain pilish settings. Should pilish stop starting pi through
+that function, `SPC 3` and task starts refuse instead of running pi unjailed.
+
+In the jail:
 
 - writes reach only the project, temp dirs, `~/.pi/agent/sessions`, hax's
   state and cache, and `~/.cache/agent-jail`, where jailed runs keep their

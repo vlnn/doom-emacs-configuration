@@ -503,17 +503,65 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
                            (pilish--find-session (pilish--session-directory) session))))
       (process-live-p (buffer-local-value 'pilish--process chat)))))
 
+;;; pi processes: jailed at every start, pilish's restarts included
+
+(defvar +ai--pi-next-launch nil
+  "How the pi process pilish starts next runs; bound by `+ai--start-pi'.")
+
+(defvar-local +ai--pi-session-launch nil
+  "How this chat buffer's pi first started, so /reload and restarts start it the same way.")
+(put '+ai--pi-session-launch 'permanent-local t)
+
+(defun +ai--pilish-default (symbol fallback)
+  (if (boundp symbol) (default-value symbol) fallback))
+
+(defun +ai--pi-launch-settings (root verdict model)
+  "How pi in ROOT runs after review VERDICT on tasks.org MODEL: jail network, flags, trust."
+  (list :root root
+        :network (+ai--pi-network model)
+        :extra-args (append (+ai--pilish-default 'pilish-extra-args nil) (+ai--pi-model-args model))
+        :policy (+ai-trust--pilish-policy verdict (+ai--pilish-default 'pilish-project-trust-policy 'default))))
+
+(defun +ai--pi-launch-for (directory)
+  "This start's settings: `+ai--start-pi''s, else its session's first, else plain ones for DIRECTORY."
+  (or +ai--pi-next-launch
+      +ai--pi-session-launch
+      (+ai--pi-launch-settings directory nil nil)))
+
+(defun +ai--pi-start-process-jailed (start directory)
+  "Around `pilish--start-process': START pi in DIRECTORY jailed, with its session's flags.
+The chat buffer keeps them, so pilish's later restarts of the session reuse them."
+  (let ((launch (+ai--pi-launch-for directory)))
+    (when (derived-mode-p 'pilish-chat-mode)
+      (setq-local +ai--pi-session-launch launch))
+    (let ((pilish-executable (+ai--jailed (plist-get launch :root)
+                                          (+ai--pilish-default 'pilish-executable '("pi"))
+                                          (plist-get launch :network)))
+          (pilish-extra-args (plist-get launch :extra-args))
+          (pilish-project-trust-policy (plist-get launch :policy)))
+      (funcall start directory))))
+
+(defun +ai--hook-pi-jail ()
+  (advice-add 'pilish--start-process :around #'+ai--pi-start-process-jailed))
+
+(+ai--hook-pi-jail)
+
+(defun +ai--pi-jail-hooked-p ()
+  (and (fboundp 'pilish--start-process)
+       (advice-member-p #'+ai--pi-start-process-jailed 'pilish--start-process)))
+
+(defun +ai--require-pi-jail (root)
+  (when (and (+ai--jail-applies-p root) (not (+ai--pi-jail-hooked-p)))
+    (user-error "pilish no longer starts pi through pilish--start-process; not starting pi unjailed")))
+
 (cl-defun +ai--start-pi (root verdict &key draft prepare session model review-root)
   (ignore review-root)
+  (require 'pilish nil t)
+  (+ai--require-pi-jail root)
   (when prepare
     (funcall prepare))
-  (require 'pilish nil t)
   (let ((default-directory root)
-        (pilish-executable (+ai--jailed root (if (boundp 'pilish-executable) pilish-executable '("pi"))
-                                        (+ai--pi-network model)))
-        (pilish-project-trust-policy
-         (+ai-trust--pilish-policy verdict pilish-project-trust-policy))
-        (pilish-extra-args (append (bound-and-true-p pilish-extra-args) (+ai--pi-model-args model))))
+        (+ai--pi-next-launch (+ai--pi-launch-settings root verdict model)))
     (pilish session)
     (+ai--prefill-pilish-input draft session)))
 

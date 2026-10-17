@@ -52,7 +52,8 @@ saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
    why is non-obvious, every should wrapped in ert-info "X should Y".
    ```
 
-   Run `/reload` in an open pi session after editing it.
+   Run `/reload` in an open pi session after editing it; the reloaded pi keeps
+   the session's jail, model and trust flags.
 3. Tell `SPC 5 t` and `SPC 5 d` how to test this repo. Without a `justfile` they
    ask projectile, which has no test command for a Doom config. Add
    `.dir-locals.el` at the root (Emacs may ask once whether to accept it):

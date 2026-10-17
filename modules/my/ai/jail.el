@@ -46,6 +46,10 @@
                         (concat var "=" (expand-file-name dir +ai-jail-cache-dir)))
                       +ai-jail-cache-vars)))
 
+(defun +ai--jail-applies-p (root)
+  "Whether agents working in ROOT run jailed: jailing on, a local ROOT, sandbox-exec here."
+  (and +ai-jail-enabled (not (file-remote-p root)) (+ai--jail-available-p)))
+
 (defun +ai--warn-unjailed ()
   (unless +ai--jail-warned
     (setq +ai--jail-warned t)

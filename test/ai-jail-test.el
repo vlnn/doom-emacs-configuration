@@ -14,6 +14,29 @@
 (defun +ai-jail-test--param (name command)
   (seq-find (lambda (arg) (string-prefix-p (concat name "=") arg)) command))
 
+(defvar +ai-jail-test--started nil
+  "What the last `+ai-jail-test--pilish' started pi with.")
+
+(defun +ai-jail-test--seen (directory)
+  "Stand-in for `pilish--start-process': what pi would start with in DIRECTORY."
+  (list :executable pilish-executable :extra-args pilish-extra-args
+        :policy pilish-project-trust-policy :directory directory))
+
+(defun +ai-jail-test--pilish (&optional _session)
+  "Stand-in for `pilish': start pi from a chat buffer, as pilish does, through the jail hook."
+  (with-temp-buffer
+    (setq major-mode 'pilish-chat-mode)
+    (setq +ai-jail-test--started (+ai--pi-start-process-jailed #'+ai-jail-test--seen default-directory))))
+
+(defmacro +ai-jail-test--in-chat-buffer (&rest body)
+  "Run BODY in a buffer that passes for a pilish chat buffer, under plain pilish settings."
+  `(with-temp-buffer
+     (setq major-mode 'pilish-chat-mode)
+     (let ((pilish-executable '("pi"))
+           (pilish-extra-args '("-e" "ext.ts"))
+           (pilish-project-trust-policy 'default))
+       ,@body)))
+
 ;;; command wrapping
 
 (ert-deftest +ai--jailed/wraps-command-in-sandbox-exec ()
@@ -146,19 +169,98 @@
 ;;; launchers
 
 (ert-deftest +ai--start-pi/starts-pilish-jailed ()
-  (let (seen
+  (let ((+ai-jail-test--started nil)
         (pilish-executable '("pi"))
         (pilish-extra-args nil)
         (pilish-project-trust-policy 'default))
     (+ai-jail-test--available
-     (cl-letf (((symbol-function 'pilish) (lambda (&rest _) (setq seen pilish-executable)))
+     (cl-letf (((symbol-function 'pilish) #'+ai-jail-test--pilish)
+               ((symbol-function '+ai--pi-jail-hooked-p) (lambda () t))
                ((symbol-function '+ai--prefill-pilish-input) #'ignore))
        (+ai--start-pi temporary-file-directory 'unchanged)))
-    (ert-info ("start-pi should hand pilish a sandbox-exec command that ends in pi")
-      (should (equal "sandbox-exec" (car seen)))
-      (should (equal "pi" (car (last seen)))))
+    (ert-info ("start-pi should have pilish start a sandbox-exec command that ends in pi")
+      (should (equal "sandbox-exec" (car (plist-get +ai-jail-test--started :executable))))
+      (should (equal "pi" (car (last (plist-get +ai-jail-test--started :executable))))))
     (ert-info ("start-pi should not change pilish-executable outside the launch")
       (should (equal '("pi") pilish-executable)))))
+
+(ert-deftest +ai--start-pi/refuses-when-pilish-cannot-be-jailed ()
+  (let (started prepared)
+    (+ai-jail-test--available
+     (cl-letf (((symbol-function 'pilish) (lambda (&rest _) (setq started t)))
+               ((symbol-function '+ai--pi-jail-hooked-p) #'ignore))
+       (ert-info ("start-pi should refuse when pilish no longer starts pi where the jail hooks in")
+         (should-error (+ai--start-pi temporary-file-directory 'unchanged
+                                      :prepare (lambda () (setq prepared t)))
+                       :type 'user-error))))
+    (ert-info ("a refused start should neither prepare a worktree nor start pi")
+      (should-not (or started prepared)))))
+
+(ert-deftest +ai--pi-jail-hooked-p/follows-pilish-defining-the-hooked-function ()
+  (skip-unless (not (fboundp 'pilish--start-process)))
+  (ert-info ("the jail hook should not count as installed while pilish has no pilish--start-process")
+    (should-not (+ai--pi-jail-hooked-p)))
+  (unwind-protect
+      (progn
+        (defalias 'pilish--start-process (lambda (directory) directory))
+        (ert-info ("the jail hook should be on pilish--start-process as soon as pilish defines it")
+          (should (+ai--pi-jail-hooked-p))))
+    (fmakunbound 'pilish--start-process)
+    (+ai--hook-pi-jail)))
+
+;;; pi restarts
+
+(ert-deftest +ai--pi-start-process-jailed/starts-the-session-jailed-with-its-flags ()
+  (+ai-jail-test--available
+   (+ai-jail-test--in-chat-buffer
+    (let ((seen (let ((+ai--pi-next-launch (+ai--pi-launch-settings "/r/" 'untrusted-once "local")))
+                  (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/r/"))))
+      (ert-info ("a session start should run pi through sandbox-exec on its model's network")
+        (should (equal "sandbox-exec" (car (plist-get seen :executable))))
+        (should (equal "NETWORK=local" (+ai-jail-test--param "NETWORK" (plist-get seen :executable)))))
+      (ert-info ("a session start should pass the model flags after your own extra args")
+        (should (equal '("-e" "ext.ts" "--model" "qwopus-coder") (plist-get seen :extra-args))))
+      (ert-info ("a session start should pass the review verdict's trust policy")
+        (should (eq 'no-approve (plist-get seen :policy))))))))
+
+(ert-deftest +ai--pi-start-process-jailed/reload-starts-pi-as-the-session-started ()
+  (+ai-jail-test--available
+   (+ai-jail-test--in-chat-buffer
+    (let ((first (let ((+ai--pi-next-launch (+ai--pi-launch-settings "/r/" 'untrusted-once "local")))
+                   (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/r/")))
+          (reload (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/r/")))
+      (ert-info ("/reload should restart pi jailed, with the network, model and trust flags it started with")
+        (should (equal first reload)))))))
+
+(ert-deftest +ai--pi-start-process-jailed/launch-survives-a-mode-change ()
+  (+ai-jail-test--available
+   (+ai-jail-test--in-chat-buffer
+    (let ((first (let ((+ai--pi-next-launch (+ai--pi-launch-settings "/r/" 'unchanged "local")))
+                   (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/r/"))))
+      (kill-all-local-variables)
+      (setq major-mode 'pilish-chat-mode)
+      (ert-info ("a chat buffer that re-runs its mode should still restart pi as the session started")
+        (should (equal first (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/r/"))))))))
+
+(ert-deftest +ai--pi-start-process-jailed/jails-pi-that-pilish-starts-on-its-own ()
+  (+ai-jail-test--available
+   (+ai-jail-test--in-chat-buffer
+    (let ((seen (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/elsewhere/")))
+      (ert-info ("a pi pilish starts by itself (M-x pilish, a resumed session) should be jailed in its directory")
+        (should (equal "sandbox-exec" (car (plist-get seen :executable))))
+        (should (equal "PROJECT=/elsewhere" (+ai-jail-test--param "PROJECT" (plist-get seen :executable)))))
+      (ert-info ("such a pi should get the open network and your own pilish flags")
+        (should (equal "NETWORK=open" (+ai-jail-test--param "NETWORK" (plist-get seen :executable))))
+        (should (equal '("-e" "ext.ts") (plist-get seen :extra-args)))
+        (should (eq 'default (plist-get seen :policy))))))))
+
+(ert-deftest +ai--pi-start-process-jailed/leaves-pilish-defaults-alone ()
+  (+ai-jail-test--available
+   (+ai-jail-test--in-chat-buffer
+    (+ai--pi-start-process-jailed #'+ai-jail-test--seen "/r/")
+    (ert-info ("starting pi jailed should not rewrite your pilish settings")
+      (should (equal '("pi") (default-value 'pilish-executable)))
+      (should (equal '("-e" "ext.ts") (default-value 'pilish-extra-args)))))))
 
 (ert-deftest +ai/hax/starts-hax-jailed ()
   (let (started)
@@ -200,16 +302,17 @@
       (should (equal expected (+ai--pi-network model))))))
 
 (ert-deftest +ai--start-pi/local-model-runs-offline ()
-  (let (seen
+  (let ((+ai-jail-test--started nil)
         (pilish-executable '("pi"))
         (pilish-extra-args nil)
         (pilish-project-trust-policy 'default))
     (+ai-jail-test--available
-     (cl-letf (((symbol-function 'pilish) (lambda (&rest _) (setq seen pilish-executable)))
+     (cl-letf (((symbol-function 'pilish) #'+ai-jail-test--pilish)
+               ((symbol-function '+ai--pi-jail-hooked-p) (lambda () t))
                ((symbol-function '+ai--prefill-pilish-input) #'ignore))
        (+ai--start-pi temporary-file-directory 'unchanged :model "local")))
     (ert-info ("a :MODEL: local session should reach only llama-server on loopback")
-      (should (equal "NETWORK=local" (+ai-jail-test--param "NETWORK" seen))))))
+      (should (equal "NETWORK=local" (+ai-jail-test--param "NETWORK" (plist-get +ai-jail-test--started :executable)))))))
 
 (ert-deftest +ai-jail-profile/blocks-sockets-that-act-as-you ()
   (let ((text (+ai-jail-test--profile-text)))
