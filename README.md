@@ -111,6 +111,9 @@ is `origin/HEAD`, else `main`, else `master`. `r`, `R`, `t` and `d` act on the
 linked row or task at point, else the task on the current branch, else ask;
 so does `c`.
 
+`docs/flow-walkthrough.md` follows one task from capture to merge, using this
+repo to fix a bug in `+tasks/start`.
+
 ## Local models
 
 See `llama-server/README.md`. `M-x +ai/refresh-llama-models` re-reads the
