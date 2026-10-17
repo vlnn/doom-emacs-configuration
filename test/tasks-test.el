@@ -771,6 +771,12 @@
   (ert-info ("worktree-path should keep task worktrees under .worktrees, slashes flattened")
     (should (equal "/r/.worktrees/feat-a-b/" (+tasks--worktree-path "/r/" "feat/a-b")))))
 
+(ert-deftest +tasks--worktrees-dir-regexp/matches-the-worktree-dir-only ()
+  (pcase-dolist (`(,dir . ,expected) '(("/r/.worktrees" . t) ("/r/sub/.worktrees" . t)
+                                       ("/r/.worktrees-old" . nil) ("/r/my.worktrees" . nil)))
+    (ert-info ((format "lsp should%s skip watching %s" (if expected "" " not") dir))
+      (should (eq expected (and (string-match-p (+tasks--worktrees-dir-regexp) dir) t))))))
+
 (ert-deftest +tasks--parse-worktrees/maps-branches-to-dirs ()
   (ert-info ("parse-worktrees should map each checked-out branch to its dir and skip detached ones")
     (should (equal '(("main" . "/r/") ("feat/x" . "/r/.worktrees/feat-x/"))

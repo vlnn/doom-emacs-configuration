@@ -522,6 +522,12 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (let ((accept (string-trim (read-string (format "ACCEPT for \"%s\" (one testable line): " heading)))))
     (unless (string-empty-p accept) accept)))
 
+(defun +tasks--worktrees-dir-regexp ()
+  (concat "[/\\\\]" (regexp-quote +tasks-worktree-dir) "\\'"))
+
+(after! lsp-mode
+  (add-to-list 'lsp-file-watch-ignored-directories (+tasks--worktrees-dir-regexp)))
+
 (defun +tasks--worktree-path (root branch)
   (file-name-as-directory
    (expand-file-name (string-replace "/" "-" branch) (expand-file-name +tasks-worktree-dir root))))

@@ -142,7 +142,8 @@ Each repo in the agent flow keeps a `tasks.org` at its root; `M-x +tasks/init`
 writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 `.git/info/exclude`, so they stay out of git without touching `.gitignore`.
 Each started task works in its own git worktree, `.worktrees/<branch>` (slashes
-become `-`, also excluded), so the main checkout stays on main. For `$DOOMDIR`
+become `-`, also excluded, and left out of lsp's file watching in the main
+checkout), so the main checkout stays on main. For `$DOOMDIR`
 that is the config Emacs loads: a restart mid-task never loads the agent's code.
 `SPC 5` (and `SPC m w` inside `tasks.org`) opens the tasks menu:
 
