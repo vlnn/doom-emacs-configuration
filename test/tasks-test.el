@@ -1301,7 +1301,7 @@
 
 (ert-deftest +tasks--next-step/maps-each-state-to-the-command-that-moves-it ()
   (pcase-dolist (`(,state . ,command) '(("IDEA" . +tasks/start) ("TODO" . +tasks/start)
-                                        ("PLAN" . +tasks/test) ("RED" . +tasks/test)
+                                        ("PLAN" . +tasks/approve-plan) ("RED" . +tasks/test)
                                         ("GREEN" . +tasks/review) ("REVIEW" . +tasks/done)
                                         ("WAIT" . +tasks/unpark)
                                         ("DONE" . org-archive-subtree) ("DROPPED" . org-archive-subtree)))
@@ -1333,7 +1333,7 @@
         (insert (propertize " tasks: PLAN Thing" 'org-hd-marker marker))
         (org-agenda-mode)
         (goto-char (point-min))
-        (cl-letf (((symbol-function '+tasks/test) (lambda () (setq ran (list (buffer-name) (org-get-heading t t t t))))))
+        (cl-letf (((symbol-function '+tasks/approve-plan) (lambda () (setq ran (list (buffer-name) (org-get-heading t t t t))))))
           (+tasks/next)))
       (ert-info ("next on a board row should act in tasks.org at that row's heading")
         (should (equal (list (buffer-name) "Thing") ran))))

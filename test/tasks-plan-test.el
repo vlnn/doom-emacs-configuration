@@ -79,3 +79,121 @@ ACCEPT: it works
           (+tasks-test--goto-heading heading)
           (ert-info ((format "the board prefix of %s should read %S" heading expected))
             (should (equal expected (+tasks--agenda-prefix)))))))))
+
+;;; approving a plan
+
+(ert-deftest +tasks--next-step/plan-asks-for-approval-not-tests ()
+  (ert-info ("next on a PLAN task should offer the plan for approval; there are no tests to run yet")
+    (should (eq '+tasks/approve-plan (+tasks--next-step "PLAN"))))
+  (ert-info ("next on a RED task should still run the tests")
+    (should (eq '+tasks/test (+tasks--next-step "RED")))))
+
+(ert-deftest +tasks--plan-missing-heading/names-the-first-absent-section ()
+  (pcase-dolist (`(,text . ,expected)
+                 `((,+tasks-plan-test--written . nil)
+                   (,(replace-regexp-in-string "^## Open\n" "" +tasks-plan-test--written) . "## Open")
+                   (,(replace-regexp-in-string "^## Tests, in order\n\\|^## Functions\n" "" +tasks-plan-test--written) . "## Tests, in order")
+                   (,(replace-regexp-in-string "^ACCEPT: .*\n" "" +tasks-plan-test--written) . "ACCEPT:")
+                   ("# Plan\n" . "ACCEPT:")))
+    (ert-info ((format "plan-missing-heading should be %S" expected))
+      (should (equal expected (+tasks--plan-missing-heading text))))))
+
+(ert-deftest +tasks--plan-with-approval/dates-the-plan-under-accept ()
+  (ert-info ("approving should add the Approved line right after the ACCEPT line, once")
+    (should (equal +tasks-plan-test--approved
+                   (+tasks--plan-with-approval +tasks-plan-test--written "2026-10-17")))))
+
+(defmacro +tasks-plan-test--approving (plan-text answer &rest body)
+  "Run +tasks/approve-plan on a PLAN task whose worktree holds PLAN-TEXT, answering ANSWER.
+BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefilled' and `resumed'."
+  (declare (indent 2))
+  `(+tasks-plan-test--with-worktree ,plan-text
+     (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:MODEL: local\n:END:\n"
+       (+tasks-test--goto-heading "Fix it")
+       (let ((task (+tasks--task-plist))
+             (tasks (current-buffer))
+             sent prefilled resumed)
+         (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                   ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                   ((symbol-function '+tasks--read-approval) (lambda () ,answer))
+                   ((symbol-function '+tasks--show-plan) #'ignore)
+                   ((symbol-function '+tasks/resume) (lambda () (setq resumed t)))
+                   ((symbol-function '+ai--send-pilish-input) (lambda (line &optional _) (push line sent)))
+                   ((symbol-function '+ai--prefill-pilish-input) (lambda (line &optional _) (setq prefilled line)))
+                   ((symbol-function 'message) #'ignore))
+           (+tasks/approve-plan)
+           (with-current-buffer tasks
+             ,@body))))))
+
+(ert-deftest +tasks/approve-plan/resumes-when-the-plan-is-not-written-yet ()
+  (+tasks-plan-test--approving nil ?y
+    (ert-info ("approve-plan without PLAN.md should take you back to the running interview")
+      (should resumed))
+    (ert-info ("approve-plan without PLAN.md should neither approve nor send anything")
+      (should (equal '("PLAN" nil) (+tasks-test--state-of (current-buffer) "Fix it")))
+      (should-not sent))))
+
+(ert-deftest +tasks/approve-plan/refuses-a-plan-without-the-fixed-headings ()
+  (+tasks-plan-test--with-worktree (replace-regexp-in-string "^## Open\n" "" +tasks-plan-test--written)
+    (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:END:\n"
+      (+tasks-test--goto-heading "Fix it")
+      (let ((task (+tasks--task-plist)))
+        (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                  ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                  ((symbol-function '+tasks--read-approval) (lambda () (error "Should not ask"))))
+          (ert-info ("approve-plan should stop, naming the missing section, before asking anything")
+            (should (string-match-p "## Open" (cadr (should-error (+tasks/approve-plan) :type 'user-error))))))))))
+
+(ert-deftest +tasks/approve-plan/approves-into-red-and-sends-the-go-line ()
+  (+tasks-plan-test--approving +tasks-plan-test--written ?y
+    (ert-info ("y should write the Approved line into PLAN.md")
+      (should (+tasks--plan-approved-p (+tasks--plan-text tree))))
+    (ert-info ("y should move the task to RED")
+      (should (equal '("RED" nil) (+tasks-test--state-of (current-buffer) "Fix it"))))
+    (ert-info ("y should tell pi to start with the first test, naming the file that carries the approval")
+      (should (= 1 (length sent)))
+      (should (string-match-p "Plan approved: PLAN.md carries the Approved line" (car sent)))
+      (should (string-match-p "grilling interview" (car sent))))))
+
+(ert-deftest +tasks/approve-plan/prefills-a-refusal ()
+  (+tasks-plan-test--approving +tasks-plan-test--written ?n
+    (ert-info ("n should leave the task in PLAN and the plan unapproved")
+      (should (equal '("PLAN" nil) (+tasks-test--state-of (current-buffer) "Fix it")))
+      (should-not (+tasks--plan-approved-p (+tasks--plan-text tree))))
+    (ert-info ("n should prefill the refusal for you to finish, sending nothing")
+      (should (equal "Plan not approved: " prefilled))
+      (should-not sent))))
+
+(ert-deftest +tasks/approve-plan/sends-the-reread-line-after-an-edit ()
+  (+tasks-plan-test--approving +tasks-plan-test--written ?e
+    (let ((plan (get-file-buffer (+tasks--plan-file tree))))
+      (unwind-protect
+          (progn
+            (ert-info ("e should open PLAN.md for editing")
+              (should plan)
+              (should-not (buffer-local-value 'buffer-read-only plan)))
+            (with-current-buffer plan
+              (goto-char (point-max))
+              (insert "- a change\n")
+              (save-buffer))
+            (ert-info ("saving the edited plan should ask pi to read it again and wait")
+              (should (equal 1 (length sent)))
+              (should (string-match-p "PLAN.md edited; read it again" (car sent))))
+            (ert-info ("e should leave the task in PLAN, unapproved")
+              (should (equal '("PLAN" nil) (+tasks-test--state-of tasks "Fix it")))))
+        (when plan (kill-buffer plan))))))
+
+(ert-deftest +tasks/unpark/returns-to-red-when-the-plan-is-approved ()
+  (pcase-dolist (`(,plan-text . ,expected) `((,+tasks-plan-test--approved . "RED")
+                                             (,+tasks-plan-test--written . "PLAN")
+                                             (nil . "PLAN")))
+    (+tasks-plan-test--with-worktree plan-text
+      (+tasks-test--in-tasks-buffer "** WAIT Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:REASON: API key\n:END:\n"
+        (+tasks-test--goto-heading "Thing")
+        (cl-letf (((symbol-function '+tasks--work-task) (let ((task (+tasks--task-plist))) (lambda () task)))
+                  ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                  ((symbol-function '+tasks/resume) #'ignore))
+          (+tasks/unpark))
+        (ert-info ((format "unpark should return to %s when the plan is %s" expected
+                           (cond ((null plan-text) "not written") ((equal expected "RED") "approved") (t "unapproved"))))
+          (should (equal (list expected nil) (+tasks-test--state-of (current-buffer) "Thing"))))))))
