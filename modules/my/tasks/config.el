@@ -1,5 +1,7 @@
 ;;; my/tasks/config.el -*- lexical-binding: t; -*-
 
+(require 'cl-lib)
+
 (defconst +tasks--dir
   (file-name-directory (or load-file-name (bound-and-true-p byte-compile-current-file) buffer-file-name)))
 

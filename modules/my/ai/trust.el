@@ -1,6 +1,8 @@
 ;;; my/ai/trust.el -*- lexical-binding: t; -*-
 ;; SPC 3 / SPC 4: review what a repo can feed an agent before pi or hax starts there.
 
+(require 'cl-lib)
+
 (defvar pilish-project-trust-policy)
 (defvar pilish-extra-args)
 
@@ -46,15 +48,18 @@
     (external . "agent inputs changed by someone else since your review")
     (changed . "agent inputs changed since your review (no git history)")))
 
+(defvar +ai-trust-own-emails nil
+  "Commit emails that count as yours besides git's user.email, e.g. other machines.")
+
 (defconst +ai-trust--pi-choices
-  '((?t "trust" "write true to trust.json and start pi")
-    (?u "untrusted once" "start pi without .pi/ resources this time")
-    (?d "do not trust" "write false to trust.json and start pi")
-    (?c "cancel" "start nothing")))
+  '((?t "C-c C-c" "trust")
+    (?u "C-c C-u" "untrusted once")
+    (?d "C-c C-d" "do not trust")
+    (?c "C-c C-k" "cancel")))
 
 (defconst +ai-trust--hax-choices
-  '((?p "proceed" "start hax")
-    (?c "cancel" "start nothing")))
+  '((?p "C-c C-c" "proceed")
+    (?c "C-c C-k" "cancel")))
 
 ;;; files
 
@@ -76,8 +81,20 @@
   (mapcan (lambda (entry) (+ai-trust--files-under root (concat ".pi/" entry)))
           +ai-trust-pi-entries))
 
+(defun +ai-trust--skipped-path-p (relative)
+  (seq-some (lambda (dir) (not (+ai-trust--descend-p dir)))
+            (butlast (split-string relative "/"))))
+
+(defun +ai-trust--git-agents-md-files (root)
+  (mapcar (lambda (relative) (expand-file-name relative root))
+          (seq-remove #'+ai-trust--skipped-path-p
+                      (+ai-trust--git root "ls-files" "--cached" "--others" "--exclude-standard"
+                                      "--" ":(glob)**/AGENTS.md"))))
+
 (defun +ai-trust--agents-md-files (root)
-  (directory-files-recursively root "\\`AGENTS\\.md\\'" nil #'+ai-trust--descend-p))
+  (if (+ai-trust--git-ok-p root "rev-parse" "--is-inside-work-tree")
+      (+ai-trust--git-agents-md-files root)
+    (directory-files-recursively root "\\`AGENTS\\.md\\'" nil #'+ai-trust--descend-p)))
 
 (defun +ai-trust--justfiles (root)
   (mapcan (lambda (name) (+ai-trust--files-under root name)) +ai-trust-justfiles))
@@ -219,7 +236,8 @@
     (prin1 reviews (current-buffer))))
 
 (defun +ai-trust--external-authors (emails mine)
-  (seq-uniq (seq-remove (lambda (email) (string= (downcase email) (downcase mine))) emails)))
+  (let ((own (mapcar #'downcase mine)))
+    (seq-uniq (seq-remove (lambda (email) (member (downcase email) own)) emails))))
 
 (defun +ai-trust--scan-reason (agent decision review now)
   "Why AGENT needs a review before starting, or nil.
@@ -259,7 +277,8 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
          (list :commit-known t
                :external (+ai-trust--external-authors
                           (+ai-trust--authors-since root sha)
-                          (or (car (+ai-trust--git root "config" "user.email")) "")))
+                          (cons (or (car (+ai-trust--git root "config" "user.email")) "")
+                                +ai-trust-own-emails)))
        (list :commit-known nil)))
     (`(hash . ,_) (list :hash (+ai-trust--content-hash root files)))))
 
@@ -292,15 +311,6 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 
 (defun +ai-trust--report-buffer-name (root)
   (format "*agent-review:%s*" (file-name-nondirectory (directory-file-name root))))
-
-(defun +ai-trust--show-report (root text)
-  (with-current-buffer (get-buffer-create (+ai-trust--report-buffer-name root))
-    (let ((inhibit-read-only t))
-      (erase-buffer)
-      (insert text))
-    (grep-mode)
-    (setq default-directory root)
-    (pop-to-buffer (current-buffer))))
 
 ;;; launch
 
@@ -346,20 +356,8 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
        (+ai-trust--open-pi-for-trust root)
        nil))))
 
-(defun +ai-trust--review (agent root dir reason files review)
-  (let* ((diff-p (eq reason 'external))
-         (shown (if diff-p (+ai-trust--changed-files root (cdr review)) files)))
-    (+ai-trust--show-report root (+ai-trust--report-text
-                                  reason shown (+ai-trust--file-flags root shown)
-                                  (and diff-p (+ai-trust--diff-since root (cdr review)))))
-    (+ai-trust--decide (car (read-multiple-choice
-                             (format "Start %s here? " agent)
-                             (if (eq agent 'pi) +ai-trust--pi-choices +ai-trust--hax-choices)))
-                       (+ai-trust--review-key agent dir) dir root files)))
-
-(defun +ai-trust--ensure (agent root)
-  "Verdict letting AGENT start in ROOT, after a review if one is due; nil to stop.
-`unchanged' when no review was due."
+(defun +ai-trust--assess (agent root)
+  "`unchanged' when AGENT may start in ROOT without a review, else the review due."
   (let* ((dir (+ai-trust--canonical root))
          (key (+ai-trust--review-key agent dir))
          (files (+ai-trust--scan-files root))
@@ -369,7 +367,90 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
                                          (+ai-trust--now root review files))))
     (cond ((null reason) 'unchanged)
           ((null files) (+ai-trust--record-review key root files) 'unchanged)
-          (t (+ai-trust--review agent root dir reason files review)))))
+          (t (list :agent agent :root root :dir dir :key key
+                   :reason reason :files files :review review)))))
+
+(defun +ai-trust--agent-choices (agent)
+  (if (eq agent 'pi) +ai-trust--pi-choices +ai-trust--hax-choices))
+
+(defun +ai-trust--choice-hint (agent)
+  (mapconcat (pcase-lambda (`(,_ ,key ,label)) (concat key " " label))
+             (+ai-trust--agent-choices agent) "  "))
+
+(defun +ai-trust--pending-report (pending)
+  (let* ((root (plist-get pending :root))
+         (review (plist-get pending :review))
+         (diff-p (eq (plist-get pending :reason) 'external))
+         (shown (if diff-p (+ai-trust--changed-files root (cdr review)) (plist-get pending :files))))
+    (+ai-trust--report-text (plist-get pending :reason) shown (+ai-trust--file-flags root shown)
+                            (and diff-p (+ai-trust--diff-since root (cdr review))))))
+
+(defvar-local +ai-trust--pending nil
+  "The review this buffer is waiting on: `+ai-trust--assess' output plus :on-allow.")
+
+(defvar +ai-trust-review-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") #'+ai-trust/accept)
+    (define-key map (kbd "C-c C-u") #'+ai-trust/untrusted-once)
+    (define-key map (kbd "C-c C-d") #'+ai-trust/distrust)
+    (define-key map (kbd "C-c C-k") #'+ai-trust/cancel)
+    map))
+
+(define-minor-mode +ai-trust-review-mode
+  "Decide in an agent review buffer whether the agent may start.")
+
+(defun +ai-trust--open-review (pending on-allow)
+  (let ((root (plist-get pending :root))
+        (agent (plist-get pending :agent)))
+    (with-current-buffer (get-buffer-create (+ai-trust--report-buffer-name root))
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (+ai-trust--pending-report pending)))
+      (grep-mode)
+      (setq default-directory root
+            header-line-format (format "Start %s here?  %s" agent (+ai-trust--choice-hint agent)))
+      (setq-local +ai-trust--pending (plist-put (copy-sequence pending) :on-allow on-allow))
+      (+ai-trust-review-mode 1)
+      (pop-to-buffer (current-buffer)))))
+
+(defun +ai-trust--gate (agent root on-allow)
+  "Call ON-ALLOW with a verdict once AGENT may start in ROOT, after a review if due."
+  (pcase (+ai-trust--assess agent root)
+    ('unchanged (funcall on-allow 'unchanged))
+    (pending (+ai-trust--open-review pending on-allow))))
+
+(defun +ai-trust--choose (choice)
+  (let* ((pending (or +ai-trust--pending (user-error "No agent review waiting here")))
+         (agent (plist-get pending :agent)))
+    (unless (assq choice (+ai-trust--agent-choices agent))
+      (user-error "Not a choice for %s" agent))
+    (setq-local +ai-trust--pending nil)
+    (quit-window)
+    (when-let* ((verdict (and (not (eq choice ?c))
+                              (+ai-trust--decide choice (plist-get pending :key) (plist-get pending :dir)
+                                                 (plist-get pending :root) (plist-get pending :files)))))
+      (with-current-buffer (window-buffer (selected-window))
+        (funcall (plist-get pending :on-allow) verdict)))))
+
+(defun +ai-trust/accept ()
+  "Trust the repo (pi) or proceed (hax), then start the agent."
+  (interactive)
+  (+ai-trust--choose (car (car (+ai-trust--agent-choices (plist-get +ai-trust--pending :agent))))))
+
+(defun +ai-trust/untrusted-once ()
+  "Start pi without the repo's .pi/ resources this time."
+  (interactive)
+  (+ai-trust--choose ?u))
+
+(defun +ai-trust/distrust ()
+  "Record that pi must not trust this repo, then start it."
+  (interactive)
+  (+ai-trust--choose ?d))
+
+(defun +ai-trust/cancel ()
+  "Start nothing."
+  (interactive)
+  (+ai-trust--choose ?c))
 
 (defun +ai--insert-draft-if-empty (draft)
   (when (and draft (string-blank-p (buffer-string)))
@@ -398,35 +479,51 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 (defun +ai--pi-model-args (model)
   (cdr (assoc model +ai-pi-model-args)))
 
-(cl-defun +ai--launch-pi (root &key draft prepare session model)
+(defun +ai--live-pilish-session-p (root &optional session)
+  (let ((default-directory root))
+    (when-let* ((chat (and (fboundp 'pilish--find-session)
+                           (pilish--find-session (pilish--session-directory) session))))
+      (process-live-p (buffer-local-value 'pilish--process chat)))))
+
+(cl-defun +ai--start-pi (root verdict &key draft prepare session model)
+  (when prepare
+    (funcall prepare))
+  (let ((default-directory root)
+        (pilish-project-trust-policy
+         (+ai-trust--pilish-policy verdict pilish-project-trust-policy))
+        (pilish-extra-args (append (bound-and-true-p pilish-extra-args) (+ai--pi-model-args model))))
+    (pilish session)
+    (+ai--prefill-pilish-input draft session)))
+
+(cl-defun +ai--launch-pi (root &rest args &key draft prepare session model)
   "Start or focus pi in ROOT once the repo review allows it.
 PREPARE runs after the review and before pi starts; DRAFT fills its empty input.
-SESSION names a separate session; MODEL picks flags from `+ai-pi-model-args'
-for a session that is not running yet."
-  (when-let* ((verdict (+ai-trust--ensure 'pi root)))
-    (when prepare
-      (funcall prepare))
-    (let ((default-directory root)
-          (pilish-project-trust-policy
-           (+ai-trust--pilish-policy verdict pilish-project-trust-policy))
-          (pilish-extra-args (append (bound-and-true-p pilish-extra-args) (+ai--pi-model-args model))))
-      (pilish session)
-      (+ai--prefill-pilish-input draft session))
-    verdict))
+SESSION names a separate session; MODEL picks flags from
+`+ai-pi-model-args' for a session that is not running yet. A running session
+skips the review: its inputs are already loaded."
+  (ignore draft prepare model)
+  (if (+ai--live-pilish-session-p root session)
+      (apply #'+ai--start-pi root 'live args)
+    (+ai-trust--gate 'pi root (lambda (verdict) (apply #'+ai--start-pi root verdict args)))))
 
 (defun +ai/pi ()
-  "Start or focus this project's pilish session, reviewing the repo first when due."
+  "Start or focus this project's pi session, reviewing the repo first when due.
+Inside a pi buffer, hide the session instead."
   (interactive)
-  (+ai--launch-pi (+ai--project-root)))
+  (if (derived-mode-p 'pilish-chat-mode 'pilish-input-mode)
+      (pilish-toggle)
+    (+ai--launch-pi (+ai--project-root))))
 
 (defun +ai/hax ()
   "Start or focus hax in eat at the project root, reviewing the repo first when due."
   (interactive)
   (unless (executable-find "hax")
     (user-error "hax is not on PATH"))
-  (let ((root (+ai--project-root)))
-    (when (+ai-trust--ensure 'hax root)
-      (+ai--eat-in root (+ai--hax-buffer-name root) "hax"))))
+  (let* ((root (+ai--project-root))
+         (name (+ai--hax-buffer-name root)))
+    (if-let* ((live (+ai--live-buffer name)))
+        (pop-to-buffer live)
+      (+ai-trust--gate 'hax root (lambda (_verdict) (+ai--eat-in root name "hax"))))))
 
-(set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select nil :quit t)
+(set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select t :quit t)
 (set-popup-rule! "^\\*\\(hax\\|pi-trust\\):" :side 'right :size 0.4 :select t :quit nil :ttl nil)

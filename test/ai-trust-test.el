@@ -29,6 +29,15 @@
                       "sub/AGENTS.md")
                     (+ai-trust--scan-files root))))))
 
+(ert-deftest +ai-trust--scan-files/uses-git-for-agents-md ()
+  (+ai-trust-test--in-temp-dir
+   (call-process "git" nil nil nil "-C" root "init" "-q")
+   (dolist (file '("AGENTS.md" "sub/AGENTS.md" "ignored/AGENTS.md" "node_modules/dep/AGENTS.md"))
+     (+ai-trust-test--write root file))
+   (+ai-trust-test--write root ".gitignore" "ignored/\n")
+   (ert-info ("in a git repo scan-files should list AGENTS.md git knows about, skipping ignored and vendored dirs")
+     (should (equal '("AGENTS.md" "sub/AGENTS.md") (+ai-trust--scan-files root))))))
+
 (ert-deftest +ai-trust--scan-files/empty-repo-gives-nothing ()
   (+ai-trust-test--in-temp-dir
    (+ai-trust-test--write root "src/main.py")
@@ -127,10 +136,11 @@
 ;;; reviews and external changes
 
 (ert-deftest +ai-trust--external-authors/drops-own-commits ()
-  (ert-info ("external-authors should ignore my email, case-insensitively, and dedupe")
+  (ert-info ("external-authors should ignore every one of my emails, case-insensitively, and dedupe")
     (should (equal '("eve@x.org")
                    (+ai-trust--external-authors
-                    '("Me@Example.org" "eve@x.org" "eve@x.org") "me@example.org")))))
+                    '("Me@Example.org" "eve@x.org" "eve@x.org" "me@laptop.local")
+                    '("me@example.org" "me@laptop.local"))))))
 
 (ert-deftest +ai-trust--reviews-with/replaces-project-entry ()
   (ert-info ("reviews-with should keep one marker per project root")
@@ -217,7 +227,9 @@
   "Run BODY with the trust gate answering VERDICT, recording launch steps in `calls'."
   (declare (indent 1))
   `(let ((calls nil))
-     (cl-letf (((symbol-function '+ai-trust--ensure) (lambda (_agent _root) ,verdict))
+     (cl-letf (((symbol-function '+ai-trust--gate)
+                (lambda (_agent _root on-allow) (push 'gate calls) (when ,verdict (funcall on-allow ,verdict))))
+               ((symbol-function '+ai--live-pilish-session-p) (lambda (_root _session) nil))
                ((symbol-function 'pilish)
                 (lambda (&optional session)
                   (push (list 'pilish pilish-project-trust-policy pilish-extra-args session) calls)))
@@ -230,23 +242,95 @@
 
 (ert-deftest +ai--launch-pi/refused-gate-runs-nothing ()
   (ert-info ("a cancelled review should neither prepare nor start pi")
-    (should (equal nil (+ai-trust-test--with-launch-spies nil
-                         (+ai--launch-pi "/r/" :draft "/feature X"
-                                         :prepare (lambda () (push 'prepare calls))))))))
+    (should (equal '(gate) (+ai-trust-test--with-launch-spies nil
+                             (+ai--launch-pi "/r/" :draft "/feature X"
+                                             :prepare (lambda () (push 'prepare calls))))))))
 
 (ert-deftest +ai--launch-pi/prepares-after-gate-then-starts ()
   (ert-info ("an allowed start should prepare, start pi with the verdict's policy, then prefill")
-    (should (equal '(prepare (pilish no-approve ("-e" "ext.ts") nil) (prefill "/feature X" nil))
+    (should (equal '(gate prepare (pilish no-approve ("-e" "ext.ts") nil) (prefill "/feature X" nil))
                    (+ai-trust-test--with-launch-spies 'untrusted-once
                      (+ai--launch-pi "/r/" :draft "/feature X"
                                      :prepare (lambda () (push 'prepare calls))))))))
 
 (ert-deftest +ai--launch-pi/named-session-with-model ()
   (ert-info ("a task start should open its own named session on the task's model")
-    (should (equal '((pilish default ("-e" "ext.ts" "--model" "qwopus-coder") "feat/x")
-                     (prefill "/feature X" "feat/x"))
+    (should (equal '(gate (pilish default ("-e" "ext.ts" "--model" "qwopus-coder") "feat/x")
+                          (prefill "/feature X" "feat/x"))
                    (+ai-trust-test--with-launch-spies 'unchanged
                      (+ai--launch-pi "/r/" :draft "/feature X" :session "feat/x" :model "local"))))))
+
+(ert-deftest +ai--launch-pi/live-session-skips-the-review ()
+  (ert-info ("focusing a running session should not scan or ask, its inputs are already loaded")
+    (should (equal '(prepare (pilish default ("-e" "ext.ts") "feat/x") (prefill nil "feat/x"))
+                   (+ai-trust-test--with-launch-spies 'unchanged
+                     (cl-letf (((symbol-function '+ai--live-pilish-session-p) (lambda (_root _session) t)))
+                       (+ai--launch-pi "/r/" :session "feat/x"
+                                       :prepare (lambda () (push 'prepare calls)))))))))
+
+(ert-deftest +ai/pi-toggles-from-inside-pi ()
+  (let (called)
+    (cl-letf (((symbol-function 'pilish-toggle) (lambda () (setq called 'toggle)))
+              ((symbol-function '+ai--launch-pi) (lambda (&rest _) (setq called 'launch)))
+              ((symbol-function '+ai--project-root) (lambda () "/r/")))
+      (with-temp-buffer
+        (setq major-mode 'pilish-input-mode)
+        (+ai/pi))
+      (ert-info ("SPC 3 inside a pi buffer should hide the session")
+        (should (eq 'toggle called)))
+      (with-temp-buffer
+        (+ai/pi))
+      (ert-info ("SPC 3 elsewhere should start or focus pi")
+        (should (eq 'launch called))))))
+
+;;; review buffer
+
+(ert-deftest +ai-trust--gate/no-review-due-allows-at-once ()
+  (let (allowed opened)
+    (cl-letf (((symbol-function '+ai-trust--assess) (lambda (_agent _root) 'unchanged))
+              ((symbol-function '+ai-trust--open-review) (lambda (&rest _) (setq opened t))))
+      (+ai-trust--gate 'pi "/r/" (lambda (verdict) (setq allowed verdict))))
+    (ert-info ("gate should call through with `unchanged' and open no review")
+      (should (equal '(unchanged nil) (list allowed opened))))))
+
+(ert-deftest +ai-trust--gate/due-review-waits-for-a-choice ()
+  (let (allowed opened)
+    (cl-letf (((symbol-function '+ai-trust--assess) (lambda (_agent _root) '(:agent pi)))
+              ((symbol-function '+ai-trust--open-review) (lambda (&rest _) (setq opened t))))
+      (+ai-trust--gate 'pi "/r/" (lambda (verdict) (setq allowed verdict))))
+    (ert-info ("gate should open the review and not start anything yet")
+      (should (equal '(nil t) (list allowed opened))))))
+
+(defmacro +ai-trust-test--in-review (agent decided &rest body)
+  "Run BODY in a review buffer for AGENT whose decision yields DECIDED; `allowed' records the callback."
+  (declare (indent 2))
+  `(let ((allowed 'never))
+     (with-temp-buffer
+       (setq-local +ai-trust--pending
+                   (list :agent ,agent :on-allow (lambda (verdict) (setq allowed verdict))))
+       (cl-letf (((symbol-function '+ai-trust--decide) (lambda (&rest _) ,decided))
+                 ((symbol-function 'quit-window) #'ignore))
+         ,@body))
+     allowed))
+
+(ert-deftest +ai-trust--choose/runs-the-launch-on-a-verdict ()
+  (ert-info ("choosing trust should hand the verdict to the waiting launch")
+    (should (eq 'trusted (+ai-trust-test--in-review 'pi 'trusted (+ai-trust--choose ?t))))))
+
+(ert-deftest +ai-trust--choose/cancel-and-failure-start-nothing ()
+  (pcase-dolist (`(,choice ,decided ,why)
+                 '((?c nil "cancel")
+                   (?t nil "a trust.json write that failed")))
+    (ert-info ((format "%s should leave the launch waiting forever" why))
+      (should (eq 'never (+ai-trust-test--in-review 'pi decided (+ai-trust--choose choice)))))))
+
+(ert-deftest +ai-trust--choose/rejects-choices-the-agent-lacks ()
+  (ert-info ("hax has no trust.json, so untrusted-once is not a choice for it")
+    (should-error (+ai-trust-test--in-review 'hax 'proceed (+ai-trust--choose ?u)) :type 'user-error)))
+
+(ert-deftest +ai-trust--choice-hint/lists-keys-for-the-agent ()
+  (ert-info ("choice-hint should show the keys and labels for hax only")
+    (should (equal "C-c C-c proceed  C-c C-k cancel" (+ai-trust--choice-hint 'hax)))))
 
 (ert-deftest +ai--pi-model-args/maps-task-models ()
   (let ((+ai-pi-model-args '(("local" "--model" "qwopus-coder"))))
