@@ -47,3 +47,24 @@
   (literal (home "/.authinfo"))
   (literal (home "/.authinfo.gpg"))
   (regex #"/secrets\.el$"))
+
+;; sockets and services that act as you, whatever the network mode
+(deny network-outbound
+  (regex #"/emacs[0-9]+/[^/]+$")
+  (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
+  (subpath (home "/.gnupg"))
+  (literal "/private/var/run/docker.sock")
+  (subpath (home "/.docker/run"))
+  (subpath (home "/.colima")))
+
+(deny mach-lookup
+  (global-name "com.apple.coreservices.launchservicesd")
+  (global-name "com.apple.coreservices.appleevents"))
+
+;; local models: llama-server on loopback; name lookups still go through mDNSResponder
+(if (string=? (param "NETWORK") "local")
+  (deny network-outbound))
+(if (string=? (param "NETWORK") "local")
+  (allow network-outbound
+    (remote ip "localhost:*")
+    (literal "/private/var/run/mDNSResponder")))

@@ -134,3 +134,45 @@
        (+ai-trust--open-pi-for-trust temporary-file-directory)))
     (ert-info ("the pi opened to record a trust decision must write trust.json, so it runs outside the jail")
       (should (equal '("pi") started)))))
+
+;;; network
+
+(ert-deftest +ai--jailed/network-is-open-unless-asked ()
+  (+ai-jail-test--available
+   (ert-info ("jailed should leave the network open by default")
+     (should (equal "NETWORK=open" (+ai-jail-test--param "NETWORK" (+ai--jailed temporary-file-directory '("pi"))))))
+   (ert-info ("jailed should restrict to loopback when asked for local")
+     (should (equal "NETWORK=local"
+                    (+ai-jail-test--param "NETWORK" (+ai--jailed temporary-file-directory '("pi") "local")))))
+   (ert-info ("jailed should refuse a network mode the profile does not know")
+     (should-error (+ai--jailed temporary-file-directory '("pi") "lan")))))
+
+(ert-deftest +ai--pi-network/local-model-gets-loopback-only ()
+  (pcase-dolist (`(,model . ,expected) '(("local" . "local") ("claude" . "open") (nil . "open")))
+    (ert-info ((format ":MODEL: %S should run with network %s" model expected))
+      (should (equal expected (+ai--pi-network model))))))
+
+(ert-deftest +ai--start-pi/local-model-runs-offline ()
+  (let (seen
+        (pilish-executable '("pi"))
+        (pilish-extra-args nil)
+        (pilish-project-trust-policy 'default))
+    (+ai-jail-test--available
+     (cl-letf (((symbol-function 'pilish) (lambda (&rest _) (setq seen pilish-executable)))
+               ((symbol-function '+ai--prefill-pilish-input) #'ignore))
+       (+ai--start-pi temporary-file-directory 'unchanged :model "local")))
+    (ert-info ("a :MODEL: local session should reach only llama-server on loopback")
+      (should (equal "NETWORK=local" (+ai-jail-test--param "NETWORK" seen))))))
+
+(ert-deftest +ai-jail-profile/blocks-sockets-that-act-as-you ()
+  (let ((text (+ai-jail-test--profile-text)))
+    (pcase-dolist (`(,regexp . ,what)
+                   '(("(param \"NETWORK\") \"local\"" . "switch to loopback-only on NETWORK=local")
+                     ("remote ip \"localhost:\\*\"" . "keep loopback open for llama-server")
+                     ("emacs\\[0-9\\]" . "block the Emacs server socket, a way back into your Emacs")
+                     ("Listeners" . "block the ssh-agent socket")
+                     ("docker\\.sock" . "block the Docker socket")
+                     ("launchservicesd" . "block LaunchServices, which starts apps outside the jail")
+                     ("appleevents" . "block AppleEvents, which drive apps outside the jail")))
+      (ert-info ((format "agent.sb should %s" what))
+        (should (string-match-p regexp text))))))

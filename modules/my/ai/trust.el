@@ -480,6 +480,12 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 (defun +ai--pi-model-args (model)
   (cdr (assoc model +ai-pi-model-args)))
 
+(defvar +ai-pi-model-networks '(("local" . "local"))
+  "Jail network for each tasks.org :MODEL: value; other models get \"open\".")
+
+(defun +ai--pi-network (model)
+  (or (cdr (assoc model +ai-pi-model-networks)) "open"))
+
 (defun +ai--live-pilish-session-p (root &optional session)
   (let ((default-directory root))
     (when-let* ((chat (and (fboundp 'pilish--find-session)
@@ -491,7 +497,8 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
     (funcall prepare))
   (require 'pilish nil t)
   (let ((default-directory root)
-        (pilish-executable (+ai--jailed root (if (boundp 'pilish-executable) pilish-executable '("pi"))))
+        (pilish-executable (+ai--jailed root (if (boundp 'pilish-executable) pilish-executable '("pi"))
+                                        (+ai--pi-network model)))
         (pilish-project-trust-policy
          (+ai-trust--pilish-policy verdict pilish-project-trust-policy))
         (pilish-extra-args (append (bound-and-true-p pilish-extra-args) (+ai--pi-model-args model))))
