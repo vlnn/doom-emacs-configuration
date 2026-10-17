@@ -79,8 +79,9 @@ writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 | key | does |
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
-| `s` | start the IDEA/TODO at point (or pick one): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile under `* Active`, then open pi with `/feature <heading>` in its input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
-| `a` | set `:ACCEPT:` |
+| `s` | start the IDEA/TODO at point (or pick one): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile under `* Active`, then open a pi session named after the branch, on the task's `:MODEL:`, with `/feature <heading>` and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
+| `c` | continue a started task: switch to its `:BRANCH:` and focus its pi session |
+| `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
 | `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed |
 | `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*` |
 | `t` | `just test` when the justfile has a `test` recipe and `just` is installed, else projectile's test command (says so when `just` is missing) |
@@ -96,11 +97,14 @@ replaced: on every agenda command it is reset to `org-directory` plus the
 file's agenda category is its repo name.
 `+tasks-branch-prefixes` (default `("feat/")`, safe as a dir-local) picks the
 branches the block lists; with more than one prefix, `start` asks which.
+`:MODEL:` maps to pi flags through `+ai-pi-model-args` (`local`, `claude`);
+they apply when a task's session starts.
 
 The block's State column reads `ahead N` (commits not on main), `merged`, or
 `DONE! …` once the task is done; `DONE! delete branch` marks leftovers. Main
 is `origin/HEAD`, else `main`, else `master`. `r`, `R`, `t` and `d` act on the
-linked row or task at point, else the task on the current branch, else ask.
+linked row or task at point, else the task on the current branch, else ask;
+so does `c`.
 
 ## Local models
 

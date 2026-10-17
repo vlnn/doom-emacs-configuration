@@ -150,7 +150,8 @@
   :commands (pilish)
   :init
   (setq pilish-project-trust-policy 'default
-        pilish-essential-grammar-action 'auto)
+        pilish-essential-grammar-action 'auto
+        pilish-extra-args nil)
   :config
   (advice-add 'pilish-install-grammars :after #'+ai--pilish-grammars-in-emacs-state))
 

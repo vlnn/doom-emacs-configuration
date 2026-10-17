@@ -2,6 +2,7 @@
 ;; SPC 3 / SPC 4: review what a repo can feed an agent before pi or hax starts there.
 
 (defvar pilish-project-trust-policy)
+(defvar pilish-extra-args)
 
 (defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
 
@@ -389,17 +390,28 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
         (kill-new draft)
         (message "pi input already has text; draft is on the kill ring: %s" draft)))))
 
-(defun +ai--launch-pi (root &optional draft prepare)
+(defvar +ai-pi-model-args
+  '(("local" "--model" "qwopus-coder")
+    ("claude" "--provider" "anthropic" "--model" "claude-sonnet-4-6"))
+  "pi CLI flags for each tasks.org :MODEL: value, used when a session starts.")
+
+(defun +ai--pi-model-args (model)
+  (cdr (assoc model +ai-pi-model-args)))
+
+(cl-defun +ai--launch-pi (root &key draft prepare session model)
   "Start or focus pi in ROOT once the repo review allows it.
-PREPARE runs after the review and before pi starts; DRAFT fills its empty input."
+PREPARE runs after the review and before pi starts; DRAFT fills its empty input.
+SESSION names a separate session; MODEL picks flags from `+ai-pi-model-args'
+for a session that is not running yet."
   (when-let* ((verdict (+ai-trust--ensure 'pi root)))
     (when prepare
       (funcall prepare))
     (let ((default-directory root)
           (pilish-project-trust-policy
-           (+ai-trust--pilish-policy verdict pilish-project-trust-policy)))
-      (pilish)
-      (+ai--prefill-pilish-input draft))
+           (+ai-trust--pilish-policy verdict pilish-project-trust-policy))
+          (pilish-extra-args (append (bound-and-true-p pilish-extra-args) (+ai--pi-model-args model))))
+      (pilish session)
+      (+ai--prefill-pilish-input draft session))
     verdict))
 
 (defun +ai/pi ()

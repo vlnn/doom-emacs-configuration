@@ -250,6 +250,8 @@
 
 (defconst +tasks-start-states '("IDEA" "TODO"))
 
+(defconst +tasks-in-flight-states '("TODO" "PLAN" "RED" "GREEN" "REVIEW"))
+
 (defconst +tasks--new-idea "[new idea named after the branch]")
 
 (defun +tasks--tasks-file-p (file)
@@ -285,8 +287,9 @@
 (defun +tasks--branch-title (branch prefixes)
   (string-replace "-" " " (+tasks--strip-prefix branch prefixes)))
 
-(defun +tasks--feature-prompt (heading)
-  (format "/feature %s" heading))
+(defun +tasks--feature-prompt (heading &optional accept)
+  (concat (format "/feature %s" heading)
+          (if accept (format "\n\nACCEPT: %s" accept) "")))
 
 (defun +tasks--task-entry (states)
   (when (member (org-get-todo-state) states)
@@ -341,24 +344,25 @@
 (defun +tasks--tasks-buffer ()
   (find-file-noselect (+tasks--existing-project-file)))
 
-(defun +tasks--task-at-point ()
+(defun +tasks--task-at-point (states)
   (when (and (+tasks--tasks-file-p buffer-file-name)
              (derived-mode-p 'org-mode)
              (not (org-before-first-heading-p)))
     (save-excursion
       (org-back-to-heading t)
-      (when (member (org-get-todo-state) +tasks-start-states)
+      (when (member (org-get-todo-state) states)
         (cons (current-buffer) (point))))))
 
-(defun +tasks--pick-task ()
+(defun +tasks--pick-task (states)
   (let* ((buffer (+tasks--tasks-buffer))
-         (tasks (with-current-buffer buffer (+tasks--open-tasks))))
+         (tasks (with-current-buffer buffer (+tasks--open-tasks states))))
     (unless tasks
-      (user-error "No IDEA or TODO in %s" (buffer-file-name buffer)))
+      (user-error "No %s task in %s" (string-join states "/") (buffer-file-name buffer)))
     (cons buffer (cdr (assoc (completing-read "Task: " tasks nil t) tasks)))))
 
-(defun +tasks--chosen-task ()
-  (or (+tasks--task-at-point) (+tasks--pick-task)))
+(defun +tasks--chosen-task (&optional states)
+  (let ((states (or states +tasks-start-states)))
+    (or (+tasks--task-at-point states) (+tasks--pick-task states))))
 
 (defun +tasks--read-prefix ()
   (if (cdr +tasks-branch-prefixes)
@@ -377,14 +381,15 @@
   (when (fboundp 'magit-refresh-all)
     (magit-refresh-all)))
 
-(defun +tasks--hand-off (root heading prepare)
-  "Give the task to pi in ROOT; PREPARE runs only once the repo review allows it."
-  (let ((prompt (+tasks--feature-prompt heading)))
-    (if (fboundp '+ai--launch-pi)
-        (+ai--launch-pi root prompt prepare)
-      (funcall prepare)
-      (kill-new prompt)
-      (message "Copied: %s" prompt))))
+(cl-defun +tasks--hand-off (root &key draft prepare session model)
+  "Give a task to pi in ROOT; PREPARE runs only once the repo review allows it."
+  (if (fboundp '+ai--launch-pi)
+      (+ai--launch-pi root :draft draft :prepare prepare :session session :model model)
+    (when prepare
+      (funcall prepare))
+    (when draft
+      (kill-new draft)
+      (message "Copied: %s" draft))))
 
 (defun +tasks--proposed-branch (heading)
   (or (org-entry-get nil "BRANCH")
@@ -411,13 +416,17 @@ Nothing changes until the repo review lets pi start."
              (heading (org-get-heading t t t t))
              (branch (read-string "Branch: " (+tasks--proposed-branch heading)))
              (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading))))
-        (+tasks--hand-off (+tasks--project-root) heading
-                          (lambda () (+tasks--start-at marker branch accept)))))))
+        (+tasks--hand-off (+tasks--project-root)
+                          :draft (+tasks--feature-prompt heading (or accept (org-entry-get nil "ACCEPT")))
+                          :prepare (lambda () (+tasks--start-at marker branch accept))
+                          :session branch
+                          :model (or (org-entry-get nil "MODEL") "local"))))))
 
 (defun +tasks/accept ()
   "Set the one-line acceptance criterion of a task."
   (interactive)
-  (pcase-let ((`(,buffer . ,pos) (+tasks--chosen-task)))
+  (pcase-let ((`(,buffer . ,pos) (+tasks--chosen-task
+                                  (seq-uniq (append +tasks-start-states +tasks-in-flight-states)))))
     (with-current-buffer buffer
       (goto-char pos)
       (org-entry-put nil "ACCEPT" (read-string "ACCEPT: " (org-entry-get nil "ACCEPT")))
@@ -466,7 +475,8 @@ Nothing changes until the repo review lets pi start."
   (list :buffer (current-buffer)
         :heading (org-get-heading t t t t)
         :branch (org-entry-get nil "BRANCH")
-        :accept (org-entry-get nil "ACCEPT")))
+        :accept (org-entry-get nil "ACCEPT")
+        :model (org-entry-get nil "MODEL")))
 
 (defun +tasks--linked-task-at-point ()
   (when (and (+tasks--tasks-file-p buffer-file-name)
@@ -510,6 +520,17 @@ Nothing changes until the repo review lets pi start."
 
 (defun +tasks--range (main branch)
   (format "%s...%s" main branch))
+
+(defun +tasks/resume ()
+  "Switch to a started task's branch and focus its pi session."
+  (interactive)
+  (let* ((task (+tasks--work-task))
+         (branch (plist-get task :branch))
+         (root (+tasks--task-root task)))
+    (+tasks--hand-off root
+                      :prepare (lambda () (let ((default-directory root)) (+tasks--switch branch)))
+                      :session branch
+                      :model (plist-get task :model))))
 
 (defun +tasks/review ()
   "Show the task branch's whole diff against the default branch, with its ACCEPT."

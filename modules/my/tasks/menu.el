@@ -7,6 +7,7 @@
   [["Task"
     ("i" "new idea" +tasks/idea)
     ("s" "start: branch, TODO, Active, pi" +tasks/start)
+    ("c" "continue: branch, pi session" +tasks/resume)
     ("a" "set ACCEPT" +tasks/accept)]
    ["Work"
     ("r" "review diff" +tasks/review)

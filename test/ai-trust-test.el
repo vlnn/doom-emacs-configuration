@@ -1,6 +1,7 @@
 ;;; test/ai-trust-test.el -*- lexical-binding: t; -*-
 
 (defvar pilish-project-trust-policy)
+(defvar pilish-extra-args)
 
 (defmacro +ai-trust-test--in-temp-dir (&rest body)
   "Run BODY with `root' bound to a fresh temp directory."
@@ -218,23 +219,43 @@
   `(let ((calls nil))
      (cl-letf (((symbol-function '+ai-trust--ensure) (lambda (_agent _root) ,verdict))
                ((symbol-function 'pilish)
-                (lambda (&optional session) (push (list 'pilish pilish-project-trust-policy session) calls)))
+                (lambda (&optional session)
+                  (push (list 'pilish pilish-project-trust-policy pilish-extra-args session) calls)))
                ((symbol-function '+ai--prefill-pilish-input)
-                (lambda (draft &optional _session) (push (list 'prefill draft) calls))))
-       (let ((pilish-project-trust-policy 'default))
+                (lambda (draft &optional session) (push (list 'prefill draft session) calls))))
+       (let ((pilish-project-trust-policy 'default)
+             (pilish-extra-args '("-e" "ext.ts")))
          ,@body)
        (nreverse calls))))
 
 (ert-deftest +ai--launch-pi/refused-gate-runs-nothing ()
   (ert-info ("a cancelled review should neither prepare nor start pi")
     (should (equal nil (+ai-trust-test--with-launch-spies nil
-                         (+ai--launch-pi "/r/" "/feature X" (lambda () (push 'prepare calls))))))))
+                         (+ai--launch-pi "/r/" :draft "/feature X"
+                                         :prepare (lambda () (push 'prepare calls))))))))
 
 (ert-deftest +ai--launch-pi/prepares-after-gate-then-starts ()
   (ert-info ("an allowed start should prepare, start pi with the verdict's policy, then prefill")
-    (should (equal '(prepare (pilish no-approve nil) (prefill "/feature X"))
+    (should (equal '(prepare (pilish no-approve ("-e" "ext.ts") nil) (prefill "/feature X" nil))
                    (+ai-trust-test--with-launch-spies 'untrusted-once
-                     (+ai--launch-pi "/r/" "/feature X" (lambda () (push 'prepare calls))))))))
+                     (+ai--launch-pi "/r/" :draft "/feature X"
+                                     :prepare (lambda () (push 'prepare calls))))))))
+
+(ert-deftest +ai--launch-pi/named-session-with-model ()
+  (ert-info ("a task start should open its own named session on the task's model")
+    (should (equal '((pilish default ("-e" "ext.ts" "--model" "qwopus-coder") "feat/x")
+                     (prefill "/feature X" "feat/x"))
+                   (+ai-trust-test--with-launch-spies 'unchanged
+                     (+ai--launch-pi "/r/" :draft "/feature X" :session "feat/x" :model "local"))))))
+
+(ert-deftest +ai--pi-model-args/maps-task-models ()
+  (let ((+ai-pi-model-args '(("local" "--model" "qwopus-coder"))))
+    (pcase-dolist (`(,model ,expected ,why)
+                   '(("local" ("--model" "qwopus-coder") "pass the mapped flags")
+                     ("unknown" nil "leave pi's default model for an unmapped name")
+                     (nil nil "leave pi's default model when the task names none")))
+      (ert-info ((format "pi-model-args should %s" why))
+        (should (equal expected (+ai--pi-model-args model)))))))
 
 (ert-deftest +ai--prefill-pilish-input/falls-back-to-kill-ring ()
   (pcase-dolist (`(,existing ,expected-input ,expected-kill ,why)
