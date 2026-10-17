@@ -7,7 +7,8 @@
   [["Task"
     ("i" "new idea" +tasks/idea)
     ("I" "sub-idea under task" +tasks/sub-idea)
-    ("s" "start leaf: worktree, TODO, Active, pi" +tasks/start)
+    ("n" "next: advance task at point" +tasks/next)
+    ("s" "start leaf: worktree, PLAN, Active, pi" +tasks/start)
     ("c" "continue: worktree, pi session" +tasks/resume)
     ("a" "set ACCEPT" +tasks/accept)
     ("w" "wait: park with a reason" +tasks/wait)]

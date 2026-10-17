@@ -1296,3 +1296,71 @@
                 (buffer-string))))
     (ert-info ("the menu should bind O to flipping the board between this project and all")
       (should (string-search "(\"O\" \"board: this project / all\" +tasks/toggle-board-scope)" text)))))
+
+;;; next: one key moves the task at point along
+
+(ert-deftest +tasks--next-step/maps-each-state-to-the-command-that-moves-it ()
+  (pcase-dolist (`(,state . ,command) '(("IDEA" . +tasks/start) ("TODO" . +tasks/start)
+                                        ("PLAN" . +tasks/test) ("RED" . +tasks/test)
+                                        ("GREEN" . +tasks/review) ("REVIEW" . +tasks/done)
+                                        ("WAIT" . +tasks/unpark)
+                                        ("DONE" . org-archive-subtree) ("DROPPED" . org-archive-subtree)))
+    (ert-info ((format "next on a %s task should run %s" state command))
+      (should (eq command (+tasks--next-step state))))))
+
+(ert-deftest +tasks--next-step/refuses-a-heading-with-no-state ()
+  (ert-info ("next on a plain heading should have nothing to do"))
+  (should-not (+tasks--next-step nil)))
+
+(ert-deftest +tasks/next/runs-the-step-for-the-heading-at-point ()
+  (+tasks-test--in-tasks-buffer "** GREEN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (setq buffer-file-name (expand-file-name "tasks.org" temporary-file-directory))
+    (+tasks-test--goto-heading "Thing")
+    (let (ran)
+      (cl-letf (((symbol-function '+tasks/review) (lambda () (setq ran (org-get-heading t t t t)))))
+        (+tasks/next))
+      (ert-info ("next on a GREEN heading should review it")
+        (should (equal "Thing" ran))))
+    (setq buffer-file-name nil)))
+
+(ert-deftest +tasks/next/follows-a-board-row-to-its-heading ()
+  (+tasks-test--in-tasks-buffer "** PLAN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (setq buffer-file-name (expand-file-name "tasks.org" temporary-file-directory))
+    (+tasks-test--goto-heading "Thing")
+    (let ((marker (point-marker))
+          ran)
+      (with-temp-buffer
+        (insert (propertize " tasks: PLAN Thing" 'org-hd-marker marker))
+        (org-agenda-mode)
+        (goto-char (point-min))
+        (cl-letf (((symbol-function '+tasks/test) (lambda () (setq ran (list (buffer-name) (org-get-heading t t t t))))))
+          (+tasks/next)))
+      (ert-info ("next on a board row should act in tasks.org at that row's heading")
+        (should (equal (list (buffer-name) "Thing") ran))))
+    (setq buffer-file-name nil)))
+
+(ert-deftest +tasks/next/says-when-there-is-nothing-to-advance ()
+  (+tasks-test--in-tasks-buffer ""
+    (setq buffer-file-name (expand-file-name "tasks.org" temporary-file-directory))
+    (+tasks-test--goto-heading "Backlog")
+    (ert-info ("next on a structural heading should stop with a user error")
+      (should-error (+tasks/next) :type 'user-error))
+    (setq buffer-file-name nil)))
+
+(ert-deftest +tasks/unpark/returns-a-waiting-task-to-plan-and-resumes-it ()
+  (+tasks-test--in-tasks-buffer "** WAIT Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:REASON: API key\n:END:\n"
+    (+tasks-test--goto-heading "Thing")
+    (let (resumed)
+      (cl-letf (((symbol-function '+tasks--work-task) (let ((task (+tasks--task-plist))) (lambda () task)))
+                ((symbol-function '+tasks/resume) (lambda () (setq resumed t))))
+        (+tasks/unpark))
+      (ert-info ("unpark should put the task back in PLAN with its reason gone, and reopen its pi session")
+        (should (equal '("PLAN" nil) (+tasks-test--state-of (current-buffer) "Thing")))
+        (should resumed)))))
+
+(ert-deftest +tasks/menu-file/binds-next ()
+  (let ((text (with-temp-buffer
+                (insert-file-contents (expand-file-name "modules/my/tasks/menu.el" default-directory))
+                (buffer-string))))
+    (ert-info ("the menu should bind n to advancing the task at point")
+      (should (string-search "(\"n\" \"next: advance task at point\" +tasks/next)" text)))))

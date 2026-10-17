@@ -765,6 +765,49 @@ Nothing changes until the repo review lets pi start."
 
 (add-hook 'compilation-finish-functions #'+tasks--mark-compiled-tests)
 
+;;; next: the one key that moves the task at point along
+
+(defconst +tasks--next-steps
+  '(("IDEA" . +tasks/start) ("TODO" . +tasks/start)
+    ("PLAN" . +tasks/test) ("RED" . +tasks/test)
+    ("GREEN" . +tasks/review) ("REVIEW" . +tasks/done)
+    ("WAIT" . +tasks/unpark)
+    ("DONE" . org-archive-subtree) ("DROPPED" . org-archive-subtree))
+  "For each state, the command that takes a task to its next stage.")
+
+(defun +tasks--next-step (state)
+  (cdr (assoc state +tasks--next-steps)))
+
+(defun +tasks/unpark ()
+  "Take a waiting task back to PLAN, dropping its reason, and reopen its pi session."
+  (interactive)
+  (+tasks--set-state (+tasks--work-task) "PLAN")
+  (+tasks/resume))
+
+(defun +tasks--row-marker ()
+  (and (derived-mode-p 'org-agenda-mode)
+       (or (org-get-at-bol 'org-hd-marker) (org-get-at-bol 'org-marker))))
+
+(defun +tasks--at-heading-of-row (thunk)
+  "Run THUNK in the org buffer at the heading a board row points to, or here."
+  (if-let* ((marker (+tasks--row-marker)))
+      (progn
+        (pop-to-buffer (marker-buffer marker))
+        (goto-char marker)
+        (funcall thunk))
+    (funcall thunk)))
+
+(defun +tasks--advance-here ()
+  (org-back-to-heading t)
+  (if-let* ((step (+tasks--next-step (org-get-todo-state))))
+      (funcall step)
+    (user-error "Nothing to advance at %s" (org-get-heading t t t t))))
+
+(defun +tasks/next ()
+  "Do what moves the task at point along: start, test, review, finish, unpark or archive."
+  (interactive)
+  (+tasks--at-heading-of-row #'+tasks--advance-here))
+
 ;;; review, test, done
 
 (defun +tasks--task-plist ()
@@ -1158,4 +1201,9 @@ A task's run leaves it GREEN or RED when it finishes."
 
 (map! :map +tasks-file-mode-map
       :localleader
-      :desc "tasks menu" "w" #'+tasks/menu)
+      :desc "tasks menu" "w" #'+tasks/menu
+      :desc "next stage" "n" #'+tasks/next)
+
+(map! :map org-agenda-mode-map
+      :localleader
+      :desc "next stage" "n" #'+tasks/next)
