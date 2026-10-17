@@ -155,7 +155,7 @@ that is the config Emacs loads: a restart mid-task never loads the agent's code.
 | `c` | continue a started task: open its worktree (adding one for a branch without) and focus its pi session |
 | `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
 | `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) |
-| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*`, the guard note first |
+| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first |
 | `t` | in the jail: `just test` when the justfile has a `test` recipe and `just` is installed, else projectile's test command (says so when `just` is missing); on a task in `tasks.org`, in its worktree |
 | `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run tests in the worktree in the jail (stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Nothing is pushed; quit the task's pi session afterwards |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
