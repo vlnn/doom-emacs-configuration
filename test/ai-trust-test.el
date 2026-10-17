@@ -543,3 +543,19 @@
   "PID's state letter as ps reports it, nil once it is gone; a zombie counts as ended."
   (let ((out (string-trim (shell-command-to-string (format "ps -o stat= -p %s" pid)))))
     (unless (string-empty-p out) (substring out 0 1))))
+
+(ert-deftest +ai--send-pilish-input/sends-a-prefilled-draft-or-keeps-a-busy-input ()
+  (pcase-dolist (`(,existing ,expected-sent ,expected-kill ,why)
+                 '(("" t nil "fill an empty session input and send it")
+                   ("typing" nil "Plan approved" "leave typed text alone, send nothing and keep the line on the kill ring")))
+    (with-temp-buffer
+      (insert existing)
+      (let ((input (current-buffer))
+            (kill-ring nil)
+            sent)
+        (cl-letf (((symbol-function '+ai--pilish-input-buffer) (lambda (&optional _) input))
+                  ((symbol-function 'pilish-send) (lambda () (setq sent (equal (current-buffer) input))))
+                  ((symbol-function 'message) #'ignore))
+          (with-temp-buffer (+ai--send-pilish-input "Plan approved")))
+        (ert-info ((format "send-pilish-input should %s" why))
+          (should (equal (list expected-sent expected-kill) (list sent (car kill-ring)))))))))

@@ -495,12 +495,21 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
       (buffer-local-value 'pilish--input-buffer chat))))
 
 (defun +ai--prefill-pilish-input (draft &optional session)
+  "Put DRAFT into SESSION's empty input and return that buffer; a busy input gets it on the kill ring."
   (when draft
     (let ((input (+ai--pilish-input-buffer session)))
-      (unless (and (buffer-live-p input)
-                   (with-current-buffer input (+ai--insert-draft-if-empty draft)))
+      (if (and (buffer-live-p input)
+               (with-current-buffer input (+ai--insert-draft-if-empty draft)))
+          input
         (kill-new draft)
-        (message "pi input already has text; draft is on the kill ring: %s" draft)))))
+        (message "pi input already has text; draft is on the kill ring: %s" draft)
+        nil))))
+
+(defun +ai--send-pilish-input (line &optional session)
+  "Send LINE to SESSION's pi when its input is free; pilish queues it while pi is busy."
+  (when-let* ((input (+ai--prefill-pilish-input line session)))
+    (with-current-buffer input
+      (pilish-send))))
 
 (defvar +ai-pi-model-args
   '(("local" "--model" "qwopus-coder")

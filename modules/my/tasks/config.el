@@ -97,7 +97,7 @@ Empty, it is `org-directory', as Doom's default would have it."
 (defconst +tasks--board-stages
   '(("IDEA" "Ideas" t)
     ("TODO" "Ready" t)
-    ("PLAN" "Plan: just started")
+    ("PLAN" "Plan: interview running, or waiting for your approval")
     ("RED" "Red: pi is working")
     ("GREEN" "Green: tests pass, review it")
     ("REVIEW" "Review: needs you")
@@ -773,7 +773,7 @@ Nothing changes until the repo review lets pi start."
 
 (defconst +tasks--next-steps
   '(("IDEA" . +tasks/start) ("TODO" . +tasks/start)
-    ("PLAN" . +tasks/test) ("RED" . +tasks/test)
+    ("PLAN" . +tasks/approve-plan) ("RED" . +tasks/test)
     ("GREEN" . +tasks/review) ("REVIEW" . +tasks/done)
     ("WAIT" . +tasks/unpark)
     ("DONE" . org-archive-subtree) ("DROPPED" . org-archive-subtree))
@@ -783,9 +783,10 @@ Nothing changes until the repo review lets pi start."
   (cdr (assoc state +tasks--next-steps)))
 
 (defun +tasks/unpark ()
-  "Take a waiting task back to PLAN, dropping its reason, and reopen its pi session."
+  "Take a waiting task back to RED, or to PLAN while its plan is not approved, and reopen its pi session."
   (interactive)
-  (+tasks--set-state (+tasks--work-task) "PLAN")
+  (let ((task (+tasks--work-task)))
+    (+tasks--set-state task (+tasks--unparked-state task)))
   (+tasks/resume))
 
 (defun +tasks--row-marker ()
