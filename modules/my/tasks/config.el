@@ -7,6 +7,9 @@
 
 (defvar +tasks-file-name "tasks.org")
 
+(defvar +tasks-worktree-dir ".worktrees"
+  "Where task worktrees live, relative to the repo's main checkout.")
+
 (defvar +tasks-branch-prefixes '("feat/")
   "Git branch prefixes the branches block treats as tracked work.")
 
@@ -201,8 +204,16 @@
 (defun +tasks--project-root ()
   (or (projectile-project-root) default-directory))
 
+(defun +tasks--main-root (dir)
+  "The main checkout of the repo DIR is in, so a task worktree finds its tasks.org."
+  (let* ((default-directory dir)
+         (common (car (+tasks--git-lines "rev-parse" "--path-format=absolute" "--git-common-dir"))))
+    (if (and common (equal (file-name-nondirectory common) ".git"))
+        (file-name-directory common)
+      dir)))
+
 (defun +tasks--existing-project-file ()
-  (let ((file (+tasks--project-file (+tasks--project-root))))
+  (let ((file (+tasks--project-file (+tasks--main-root (+tasks--project-root)))))
     (unless (file-exists-p file)
       (user-error "No %s in this project; run M-x +tasks/init" +tasks-file-name))
     file))
@@ -210,7 +221,7 @@
 (defun +tasks/init ()
   "Write the tasks.org skeleton at the project root and open it."
   (interactive)
-  (let ((file (+tasks--project-file (+tasks--project-root))))
+  (let ((file (+tasks--project-file (+tasks--main-root (+tasks--project-root)))))
     (when (file-exists-p file)
       (user-error "%s already exists" file))
     (with-temp-file file (insert (+tasks--skeleton)))
@@ -218,7 +229,7 @@
     (find-file file)))
 
 (defun +tasks--excluded-files ()
-  (list +tasks-file-name (concat +tasks-file-name "_archive")))
+  (list +tasks-file-name (concat +tasks-file-name "_archive") (concat +tasks-worktree-dir "/")))
 
 (defun +tasks--exclude-lines (existing)
   (seq-difference (+tasks--excluded-files) (split-string existing "\n" t)))
@@ -479,18 +490,49 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (let ((accept (string-trim (read-string (format "ACCEPT for \"%s\" (one testable line): " heading)))))
     (unless (string-empty-p accept) accept)))
 
-(defun +tasks--checkout-branch (branch)
-  (unless (if (+tasks--git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/heads/" branch))
-              (+tasks--git-ok-p "switch" branch)
-            (+tasks--git-ok-p "switch" "-c" branch))
-    (user-error "git could not switch to %s; check uncommitted changes" branch))
-  (when (fboundp 'magit-refresh-all)
-    (magit-refresh-all)))
+(defun +tasks--worktree-path (root branch)
+  (file-name-as-directory
+   (expand-file-name (string-replace "/" "-" branch) (expand-file-name +tasks-worktree-dir root))))
 
-(cl-defun +tasks--hand-off (root &key draft prepare session model)
-  "Give a task to pi in ROOT; PREPARE runs only once the repo review allows it."
+(defun +tasks--parse-worktrees (lines)
+  "(BRANCH . DIR) for each worktree in `git worktree list --porcelain' LINES."
+  (let (dir result)
+    (dolist (line lines (nreverse result))
+      (cond ((string-prefix-p "worktree " line)
+             (setq dir (file-name-as-directory (substring line (length "worktree ")))))
+            ((string-prefix-p "branch refs/heads/" line)
+             (push (cons (substring line (length "branch refs/heads/")) dir) result))))))
+
+(defun +tasks--branch-worktree-in (root branch)
+  (let ((default-directory root))
+    (cdr (assoc branch (+tasks--parse-worktrees (+tasks--git-lines "worktree" "list" "--porcelain"))))))
+
+(defun +tasks--task-worktree (root branch)
+  "Where BRANCH's work happens: the worktree it is checked out in, else the one start will add."
+  (or (+tasks--branch-worktree-in root branch) (+tasks--worktree-path root branch)))
+
+(defun +tasks--worktree-add-args (tree branch)
+  (if (+tasks--git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/heads/" branch))
+      (list tree branch)
+    (list "-b" branch tree)))
+
+(defun +tasks--add-worktree (root branch)
+  "The worktree BRANCH is checked out in, adding one under ROOT's `+tasks-worktree-dir' if none."
+  (let ((default-directory root))
+    (or (+tasks--branch-worktree-in root branch)
+        (let ((tree (+tasks--worktree-path root branch)))
+          (+tasks--exclude-from-git)
+          (unless (apply #'+tasks--git-ok-p "worktree" "add" "--quiet" (+tasks--worktree-add-args tree branch))
+            (user-error "git could not add a worktree for %s at %s" branch tree))
+          (when (fboundp 'magit-refresh-all)
+            (magit-refresh-all))
+          tree))))
+
+(cl-defun +tasks--hand-off (root &key draft prepare session model review-root)
+  "Give a task to pi in ROOT; PREPARE runs only once REVIEW-ROOT's review allows it."
   (if (fboundp '+ai--launch-pi)
-      (+ai--launch-pi root :draft draft :prepare prepare :session session :model model)
+      (+ai--launch-pi root :draft draft :prepare prepare :session session :model model
+                      :review-root review-root)
     (when prepare
       (funcall prepare))
     (when draft
@@ -501,17 +543,17 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (or (org-entry-get nil "BRANCH")
       (+tasks--branch-name (+tasks--read-prefix) heading)))
 
-(defun +tasks--start-at (marker branch accept)
+(defun +tasks--start-at (marker root branch accept)
   (with-current-buffer (marker-buffer marker)
     (save-excursion
       (goto-char marker)
-      (+tasks--checkout-branch branch)
+      (+tasks--add-worktree root branch)
       (+tasks--start-entry branch accept)
       (+tasks/refresh-branches)
       (save-buffer))))
 
 (defun +tasks/start ()
-  "Branch, link, promote and refile a task, then open pi on it.
+  "Branch into a worktree, link, promote and refile a task, then open pi there.
 Only leaves start: on a parent with open sub-tasks, asks for one of its
 leaves; elsewhere, asks for any leaf, deepest first within each tree.
 Nothing changes until the repo review lets pi start."
@@ -520,13 +562,15 @@ Nothing changes until the repo review lets pi start."
     (with-current-buffer buffer
       (goto-char pos)
       (let* ((marker (point-marker))
+             (root (file-name-as-directory (file-truename default-directory)))
              (heading (org-get-heading t t t t))
              (branch (read-string "Branch: " (+tasks--proposed-branch heading)))
              (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading))))
-        (+tasks--hand-off (+tasks--project-root)
+        (+tasks--hand-off (+tasks--task-worktree root branch)
+                          :review-root root
                           :draft (+tasks--feature-prompt heading (or accept (org-entry-get nil "ACCEPT"))
                                                          (+tasks--task-parents))
-                          :prepare (lambda () (+tasks--start-at marker branch accept))
+                          :prepare (lambda () (+tasks--start-at marker root branch accept))
                           :session branch
                           :model (or (org-entry-get nil "MODEL") "local"))))))
 
@@ -669,13 +713,14 @@ inputs and files Emacs or the test run act on with your rights, in the second.")
       (user-error "Stopped before merging %s" branch))))
 
 (defun +tasks/resume ()
-  "Switch to a started task's branch and focus its pi session."
+  "Open a started task's worktree and focus its pi session."
   (interactive)
   (let* ((task (+tasks--work-task))
          (branch (plist-get task :branch))
-         (root (+tasks--task-root task)))
-    (+tasks--hand-off root
-                      :prepare (lambda () (let ((default-directory root)) (+tasks--switch branch)))
+         (root (file-name-as-directory (file-truename (+tasks--task-root task)))))
+    (+tasks--hand-off (+tasks--task-worktree root branch)
+                      :review-root root
+                      :prepare (lambda () (+tasks--add-worktree root branch))
                       :session branch
                       :model (plist-get task :model))))
 
@@ -774,10 +819,16 @@ Review this diff against it: what does not serve the criterion, missing or weak 
 (defun +tasks--shell-line (argv)
   (mapconcat #'shell-quote-argument argv " "))
 
+(defun +tasks--test-root ()
+  "The task worktree when point is on a linked task in tasks.org, else the current project."
+  (or (when-let* ((task (+tasks--linked-task-at-point)))
+        (+tasks--branch-worktree-in (+tasks--task-root task) (plist-get task :branch)))
+      (+tasks--project-root)))
+
 (defun +tasks/test ()
-  "Run the project's tests: `just test' when available, else projectile's command."
+  "Run the tests of the task at point, or of this project, in the agent jail."
   (interactive)
-  (let* ((default-directory (+tasks--project-root))
+  (let* ((default-directory (+tasks--test-root))
          (command (+tasks--project-test-command default-directory)))
     (if command
         (compile (+tasks--shell-line (+tasks--test-argv default-directory command)))
@@ -830,6 +881,30 @@ Review this diff against it: what does not serve the criterion, missing or weak 
              (y-or-n-p (format "Also delete origin/%s? " branch)))
     (+tasks--git-ok-p "push" "origin" "--delete" branch)))
 
+(defun +tasks--same-dir-p (a b)
+  (equal (file-name-as-directory (file-truename a)) (file-name-as-directory (file-truename b))))
+
+(defun +tasks--own-worktree (root branch)
+  "BRANCH's worktree, unless it is checked out in ROOT itself (the old flow) or nowhere."
+  (when-let* ((tree (+tasks--branch-worktree-in root branch)))
+    (unless (+tasks--same-dir-p tree root)
+      tree)))
+
+(defun +tasks--worktree-dirty-p (tree)
+  (let ((default-directory tree))
+    (+tasks--git-lines "status" "--porcelain")))
+
+(defun +tasks--test-branch (root branch tree)
+  "Test BRANCH in its worktree TREE, or checked out in ROOT when it has none."
+  (if tree
+      (+tasks--run-tests-or-confirm tree)
+    (+tasks--switch branch)
+    (+tasks--run-tests-or-confirm root)))
+
+(defun +tasks--remove-worktree (tree)
+  (unless (+tasks--git-ok-p "worktree" "remove" tree)
+    (user-error "Merged, but git could not remove %s; run git worktree remove there" tree)))
+
 (defun +tasks--mark-done (branch buffer)
   (with-current-buffer buffer
     (goto-char (nth 2 (+tasks--branch-task branch)))
@@ -838,23 +913,28 @@ Review this diff against it: what does not serve the criterion, missing or weak 
     (save-buffer)))
 
 (defun +tasks/done ()
-  "Test the task's branch, merge it --no-ff, delete it and mark the task DONE."
+  "Test the task's branch in its worktree, merge it --no-ff, remove both and mark the task DONE."
   (interactive)
   (let* ((task (+tasks--work-task))
          (branch (plist-get task :branch))
          (default-directory (+tasks--task-root task))
-         (main (+tasks--default-branch)))
+         (main (+tasks--default-branch))
+         (tree (+tasks--own-worktree default-directory branch)))
     (when (+tasks--dirty-p)
       (user-error "Commit or stash your changes first"))
+    (when (and tree (+tasks--worktree-dirty-p tree))
+      (user-error "Commit or remove the uncommitted work in %s first" tree))
     (+tasks--confirm-guarded branch (+tasks--changed-files main branch))
-    (+tasks--switch branch)
-    (+tasks--run-tests-or-confirm default-directory)
+    (+tasks--test-branch default-directory branch tree)
     (+tasks--merge branch main (plist-get task :heading))
+    (when tree
+      (+tasks--remove-worktree tree))
     (+tasks--delete-branch branch)
     (+tasks--mark-done branch (plist-get task :buffer))
     (when (fboundp 'magit-refresh-all)
       (magit-refresh-all))
-    (message "%s merged into %s; task done" branch main)))
+    (message "%s merged into %s; task done%s" branch main
+             (if tree "; quit its pi session, its worktree is gone" ""))))
 
 ;;; tasks.org buffers
 

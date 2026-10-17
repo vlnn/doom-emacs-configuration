@@ -237,22 +237,25 @@
     (ert-info ("task-plist should carry :MODEL: so resume opens the session on it")
       (should (equal "claude" (plist-get (+tasks--task-plist) :model))))))
 
-(ert-deftest +tasks/resume/switches-branch-and-focuses-its-session ()
-  (let (launched switched)
+(ert-deftest +tasks/resume/opens-the-task-worktree-and-focuses-its-session ()
+  (let (launched added)
     (cl-letf (((symbol-function '+tasks--work-task)
                (lambda () (list :buffer (current-buffer) :heading "X" :branch "feat/x" :model "local")))
-              ((symbol-function '+tasks--switch) (lambda (branch) (setq switched branch)))
+              ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) nil))
+              ((symbol-function '+tasks--add-worktree) (lambda (root branch) (setq added (list root branch))))
               ((symbol-function '+tasks--hand-off)
                (lambda (root &rest args) (setq launched (cons root args)) (funcall (plist-get args :prepare)))))
       (with-temp-buffer
         (setq default-directory "/r/")
         (+tasks/resume)))
-    (ert-info ("resume should switch to the task's branch once the review allows it")
-      (should (equal "feat/x" switched)))
-    (ert-info ("resume should open the session named after the branch, on the task's model, with no draft")
-      (should (equal '("/r/" "feat/x" "local" nil)
+    (ert-info ("resume should make sure the task's worktree exists once the review allows it")
+      (should (equal '("/r/" "feat/x") added)))
+    (ert-info ("resume should open the session named after the branch, in its worktree, on the task's model")
+      (should (equal '("/r/.worktrees/feat-x/" "feat/x" "local" nil)
                      (list (car launched) (plist-get (cdr launched) :session)
-                           (plist-get (cdr launched) :model) (plist-get (cdr launched) :draft)))))))
+                           (plist-get (cdr launched) :model) (plist-get (cdr launched) :draft)))))
+    (ert-info ("resume should review the repo, not the worktree")
+      (should (equal "/r/" (plist-get (cdr launched) :review-root))))))
 
 (ert-deftest +tasks--open-tasks/in-flight-states ()
   (+tasks-test--in-tasks-buffer "** IDEA Idle\n"
@@ -340,9 +343,9 @@
         (should (string-search needle prompt))))))
 
 (ert-deftest +tasks--exclude-lines/adds-only-missing-entries ()
-  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive"))
-                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive"))
-                                            ("tasks.org\ntasks.org_archive\n" . ())))
+  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive" ".worktrees/"))
+                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive" ".worktrees/"))
+                                            ("tasks.org\ntasks.org_archive\n.worktrees/\n" . ())))
     (ert-info ((format "exclude-lines for %S should be %S" existing expected))
       (should (equal expected (+tasks--exclude-lines existing))))))
 
@@ -509,10 +512,12 @@
 
 (defmacro +tasks-test--in-git-repo (&rest body)
   "Run BODY with `default-directory' in a fresh repo holding one commit on main."
-  `(let ((default-directory (file-name-as-directory (make-temp-file "tasks-git-test" t))))
+  `(let ((default-directory (file-name-as-directory (file-truename (make-temp-file "tasks-git-test" t)))))
      (unwind-protect
          (progn
            (+tasks-test--git "init" "-q" "-b" "main")
+           (+tasks-test--git "config" "user.email" "test@example.com")
+           (+tasks-test--git "config" "user.name" "test")
            (+tasks-test--commit-file "README.md" "readme")
            ,@body)
        (delete-directory default-directory t))))
@@ -638,3 +643,161 @@
     (ert-info ("SPC 5 t should run the jailed command as one shell-quoted line")
       (should (string-prefix-p "sandbox-exec -f /p/agent.sb " compiled))
       (should (string-suffix-p (shell-quote-argument "bin/test") compiled)))))
+
+;;; task worktrees
+
+(defun +tasks-test--current-branch (dir)
+  (let ((default-directory dir))
+    (car (+tasks--git-lines "branch" "--show-current"))))
+
+(ert-deftest +tasks--worktree-path/one-dir-per-branch-under-the-repo ()
+  (ert-info ("worktree-path should keep task worktrees under .worktrees, slashes flattened")
+    (should (equal "/r/.worktrees/feat-a-b/" (+tasks--worktree-path "/r/" "feat/a-b")))))
+
+(ert-deftest +tasks--parse-worktrees/maps-branches-to-dirs ()
+  (ert-info ("parse-worktrees should map each checked-out branch to its dir and skip detached ones")
+    (should (equal '(("main" . "/r/") ("feat/x" . "/r/.worktrees/feat-x/"))
+                   (+tasks--parse-worktrees
+                    '("worktree /r" "HEAD abc" "branch refs/heads/main"
+                      "worktree /r/.worktrees/feat-x" "HEAD def" "branch refs/heads/feat/x"
+                      "worktree /tmp/d" "HEAD 123" "detached"))))))
+
+(ert-deftest +tasks--main-root/finds-the-repo-from-a-worktree ()
+  (+tasks-test--in-git-repo
+   (+tasks-test--git "worktree" "add" "-q" "-b" "feat/x" ".worktrees/feat-x")
+   (ert-info ("main-root should find the repo from inside a task worktree, where tasks.org is not")
+     (should (equal default-directory (+tasks--main-root (expand-file-name ".worktrees/feat-x/")))))
+   (ert-info ("main-root should keep the main checkout")
+     (should (equal default-directory (+tasks--main-root default-directory))))))
+
+(ert-deftest +tasks--add-worktree/creates-a-branch-worktree-leaving-main-alone ()
+  (+tasks-test--in-git-repo
+   (let ((tree (+tasks--add-worktree default-directory "feat/x")))
+     (ert-info ("add-worktree should create the planned worktree")
+       (should (equal (+tasks--worktree-path default-directory "feat/x") tree))
+       (should (file-directory-p tree)))
+     (ert-info ("the worktree should be on the new branch")
+       (should (equal "feat/x" (+tasks-test--current-branch tree))))
+     (ert-info ("the main checkout, the one Emacs loads, should stay on main")
+       (should (equal "main" (+tasks-test--current-branch default-directory))))
+     (ert-info ("worktrees should be kept out of git status")
+       (should-not (+tasks--git-lines "status" "--porcelain"))))))
+
+(ert-deftest +tasks--add-worktree/reuses-what-a-branch-has ()
+  (+tasks-test--in-git-repo
+   (+tasks-test--git "branch" "feat/old")
+   (let ((tree (+tasks--add-worktree default-directory "feat/old")))
+     (ert-info ("add-worktree should check out an existing branch")
+       (should (equal "feat/old" (+tasks-test--current-branch tree))))
+     (ert-info ("add-worktree should return the worktree a branch already has instead of failing")
+       (should (equal tree (+tasks--add-worktree default-directory "feat/old")))))
+   (+tasks-test--git "switch" "-q" "-c" "feat/legacy")
+   (ert-info ("a branch checked out in the main checkout by the old flow should be used where it is")
+     (should (equal default-directory (+tasks--add-worktree default-directory "feat/legacy"))))))
+
+(ert-deftest +tasks/start/hands-pi-the-task-worktree ()
+  (let (handed
+        (repo (file-name-as-directory (file-truename temporary-file-directory))))
+    (+tasks-test--in-tasks-buffer "** IDEA Fix it\n"
+      (setq default-directory repo)
+      (+tasks-test--goto-heading "Fix it")
+      (cl-letf (((symbol-function '+tasks--task-to-start) (lambda () (cons (current-buffer) (line-beginning-position))))
+                ((symbol-function 'read-string) (lambda (_prompt &optional initial &rest _) (or initial "it works")))
+                ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) nil))
+                ((symbol-function '+tasks--hand-off) (lambda (root &rest args) (setq handed (cons root args)))))
+        (+tasks/start)))
+    (ert-info ("start should open pi in the task's own worktree")
+      (should (equal (+tasks--worktree-path repo "feat/fix-it") (car handed))))
+    (ert-info ("start should review the repo, since the worktree only exists once the review allows it")
+      (should (equal repo (plist-get (cdr handed) :review-root))))))
+
+(ert-deftest +tasks--test-root/tests-the-task-worktree-from-tasks-org ()
+  (cl-letf (((symbol-function '+tasks--linked-task-at-point)
+             (lambda () (list :buffer (current-buffer) :branch "feat/x")))
+            ((symbol-function '+tasks--branch-worktree-in) (lambda (_root branch) (and (equal branch "feat/x") "/r/.worktrees/feat-x/"))))
+    (ert-info ("SPC 5 t on a task should test its worktree, not the main checkout")
+      (should (equal "/r/.worktrees/feat-x/" (+tasks--test-root))))))
+
+(ert-deftest +tasks--test-root/falls-back-to-the-project ()
+  (cl-letf (((symbol-function '+tasks--linked-task-at-point) #'ignore)
+            ((symbol-function '+tasks--project-root) (lambda () "/p/")))
+    (ert-info ("SPC 5 t elsewhere should test the current project")
+      (should (equal "/p/" (+tasks--test-root))))))
+
+(defun +tasks-test--write-active-task (buffer heading branch)
+  (with-current-buffer buffer
+    (insert (+tasks--skeleton))
+    (goto-char (point-min))
+    (re-search-forward "^\\* Active\n")
+    (insert (format "** TODO %s\n:PROPERTIES:\n:BRANCH: %s\n:END:\n" heading branch))
+    (save-buffer)
+    (org-mode)))
+
+(defun +tasks-test--task-in (buffer heading)
+  (with-current-buffer buffer
+    (save-excursion
+      (+tasks-test--goto-heading heading)
+      (+tasks--task-plist))))
+
+(ert-deftest +tasks/done/merges-the-worktree-and-removes-it ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (buffer (find-file-noselect (expand-file-name "tasks.org" repo))))
+     (unwind-protect
+         (progn
+           (let ((default-directory tree))
+             (+tasks-test--commit-file "feature.txt" "done"))
+           (+tasks-test--write-active-task buffer "Ship it" "feat/x")
+           (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Ship it")))
+                     ((symbol-function '+tasks--project-test-command) (lambda (_) "true"))
+                     ((symbol-function 'message) #'ignore))
+             (+tasks/done))
+           (ert-info ("done should merge the branch into main in the main checkout")
+             (should (file-exists-p (expand-file-name "feature.txt" repo)))
+             (should (equal "main" (+tasks-test--current-branch repo))))
+           (ert-info ("done should remove the task worktree")
+             (should-not (file-exists-p tree)))
+           (ert-info ("done should delete the merged branch")
+             (should-not (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x")))
+           (ert-info ("done should mark the task DONE")
+             (should (equal "DONE" (with-current-buffer buffer
+                                     (+tasks-test--goto-heading "Ship it")
+                                     (org-get-todo-state))))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))
+
+(ert-deftest +tasks/done/refuses-a-worktree-with-uncommitted-work ()
+  (+tasks-test--in-git-repo
+   (let ((tree (+tasks--add-worktree default-directory "feat/x")))
+     (with-temp-file (expand-file-name "forgotten_test.py" tree) (insert "x"))
+     (cl-letf (((symbol-function '+tasks--work-task)
+                (lambda () (list :buffer (current-buffer) :heading "X" :branch "feat/x"))))
+       (ert-info ("done should stop when the worktree holds work nobody committed, untracked files included")
+         (should-error (+tasks/done) :type 'user-error)))
+     (ert-info ("a refused done should leave the worktree in place")
+       (should (file-exists-p (expand-file-name "forgotten_test.py" tree)))))))
+
+(ert-deftest +tasks--start-at/adds-the-worktree-and-keeps-main-checked-out ()
+  (+tasks-test--in-git-repo
+   (let ((repo default-directory)
+         (buffer (find-file-noselect (expand-file-name "tasks.org" default-directory))))
+     (unwind-protect
+         (progn
+           (with-current-buffer buffer
+             (insert (replace-regexp-in-string "^\\* Ideas\n" "* Ideas\n** IDEA Fix it\n" (+tasks--skeleton)))
+             (save-buffer)
+             (org-mode)
+             (+tasks-test--goto-heading "Fix it")
+             (+tasks--start-at (point-marker) repo "feat/fix-it" "it works"))
+           (ert-info ("start should put the branch in its own worktree")
+             (should (equal "feat/fix-it" (+tasks-test--current-branch (+tasks--worktree-path repo "feat/fix-it")))))
+           (ert-info ("start should leave the main checkout, the config Emacs loads, on main")
+             (should (equal "main" (+tasks-test--current-branch repo))))
+           (ert-info ("start should still link and promote the task")
+             (should (equal '("TODO" "feat/fix-it")
+                            (with-current-buffer buffer
+                              (+tasks-test--goto-heading "Fix it")
+                              (list (org-get-todo-state) (org-entry-get nil "BRANCH")))))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))

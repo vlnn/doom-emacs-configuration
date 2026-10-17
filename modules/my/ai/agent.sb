@@ -30,10 +30,12 @@
   (regex #"^/dev/ttys[0-9]+$")
   (regex #"^/dev/fd/[0-9]+$"))
 
-;; files that run or load later with your rights: git hooks and config, agent inputs, dir-locals
+;; files that run or load later with your rights: git hooks and config, agent inputs, dir-locals;
+;; other tasks' worktrees, when the agent runs in the main checkout
 (deny file-write*
   (subpath (project "/.git"))
   (subpath (project "/.pi"))
+  (subpath (project "/.worktrees"))
   (regex #"/AGENTS\.md$")
   (regex #"/\.dir-locals(-2)?\.el$"))
 

@@ -83,6 +83,7 @@
                      ("(subpath (param \"PROJECT\"))" . "allow writes in the project")
                      ("(subpath (project \"/\\.git\"))" . "deny writes to git state, hooks and config included")
                      ("(subpath (project \"/\\.pi\"))" . "deny writes to the project's pi inputs")
+                     ("(subpath (project \"/\\.worktrees\"))" . "deny writes to other tasks' worktrees")
                      ("AGENTS" . "deny writes to AGENTS.md")
                      ("dir-locals" . "deny writes to dir-locals Emacs would evaluate")
                      ("(subpath (home \"/\\.ssh\"))" . "deny reading ssh keys")

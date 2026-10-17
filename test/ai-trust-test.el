@@ -355,3 +355,62 @@
         (ert-info ((format "prefill should %s" why))
           (should (equal (list expected-input expected-kill)
                          (list (buffer-string) (car kill-ring)))))))))
+
+;;; task worktrees
+
+(defun +ai-trust-test--git (dir &rest args)
+  (apply #'call-process "git" nil nil nil "-C" dir
+         "-c" "user.email=test@example.com" "-c" "user.name=test" args))
+
+(defun +ai-trust-test--repo-with-worktree ()
+  "A temp repo on main and a worktree of it on feat/x, as (REPO . WORKTREE)."
+  (let* ((repo (file-name-as-directory (file-truename (make-temp-file "ai-trust-wt" t))))
+         (tree (expand-file-name ".worktrees/feat-x/" repo)))
+    (+ai-trust-test--git repo "init" "-q" "-b" "main")
+    (+ai-trust-test--git repo "commit" "-q" "--allow-empty" "-m" "init")
+    (+ai-trust-test--git repo "worktree" "add" "-q" "-b" "feat/x" tree)
+    (cons repo tree)))
+
+(ert-deftest +ai--main-checkout/maps-a-worktree-to-its-repo ()
+  (pcase-let ((`(,repo . ,tree) (+ai-trust-test--repo-with-worktree)))
+    (unwind-protect
+        (progn
+          (ert-info ("main-checkout should map a task worktree to the repo it belongs to")
+            (should (equal repo (+ai--main-checkout tree))))
+          (ert-info ("main-checkout should keep the main checkout as it is")
+            (should (equal repo (+ai--main-checkout repo)))))
+      (delete-directory repo t))))
+
+(ert-deftest +ai--main-checkout/keeps-dirs-outside-git ()
+  (+ai-trust-test--in-temp-dir
+   (ert-info ("main-checkout should return a dir outside any repo unchanged")
+     (should (equal root (+ai--main-checkout root))))))
+
+(ert-deftest +ai--launch-pi/reviews-the-repo-and-starts-in-the-worktree ()
+  (let (gated started)
+    (cl-letf (((symbol-function '+ai-trust--gate)
+               (lambda (_agent root on-allow) (setq gated root) (funcall on-allow 'unchanged)))
+              ((symbol-function '+ai--start-pi) (lambda (root &rest _) (setq started root))))
+      (+ai--launch-pi "/r/.worktrees/feat-x/" :review-root "/r/" :session "feat/x"))
+    (ert-info ("launch-pi should review the repo a not-yet-created worktree comes from")
+      (should (equal "/r/" gated)))
+    (ert-info ("launch-pi should start pi in the worktree itself")
+      (should (equal "/r/.worktrees/feat-x/" started)))))
+
+(ert-deftest +ai--live-pilish-session-p/no-session-in-a-missing-dir ()
+  (cl-letf (((symbol-function 'pilish--find-session) (lambda (&rest _) (error "Should not look"))))
+    (ert-info ("a worktree that does not exist yet should have no live session, without asking pilish")
+      (should-not (+ai--live-pilish-session-p "/no/such/worktree/" "feat/x")))))
+
+(ert-deftest +ai/hax/reviews-the-repo-of-a-worktree ()
+  (pcase-let ((`(,repo . ,tree) (+ai-trust-test--repo-with-worktree))
+              (gated nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'executable-find) (lambda (&rest _) "/bin/hax"))
+                  ((symbol-function '+ai--project-root) (lambda () tree))
+                  ((symbol-function '+ai--live-buffer) #'ignore)
+                  ((symbol-function '+ai-trust--gate) (lambda (_agent root _on-allow) (setq gated root))))
+          (+ai/hax)
+          (ert-info ("hax in a task worktree should share the review of its repo, not ask again per worktree")
+            (should (equal repo gated))))
+      (delete-directory repo t))))

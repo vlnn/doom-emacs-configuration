@@ -321,6 +321,16 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 (defun +ai-trust--canonical (root)
   (directory-file-name (file-truename root)))
 
+(defun +ai--git-common-dir (root)
+  (car (+ai-trust--git root "rev-parse" "--path-format=absolute" "--git-common-dir")))
+
+(defun +ai--main-checkout (root)
+  "The repo ROOT belongs to: its main checkout for a worktree, else ROOT itself."
+  (let ((common (and (file-directory-p root) (+ai--git-common-dir root))))
+    (if (and common (equal (file-name-nondirectory common) ".git"))
+        (file-name-as-directory (file-name-directory common))
+      root)))
+
 (defun +ai--hax-buffer-name (root)
   (format "*hax:%s*" (file-name-nondirectory (directory-file-name root))))
 
@@ -488,11 +498,13 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 
 (defun +ai--live-pilish-session-p (root &optional session)
   (let ((default-directory root))
-    (when-let* ((chat (and (fboundp 'pilish--find-session)
+    (when-let* ((chat (and (file-directory-p root)
+                           (fboundp 'pilish--find-session)
                            (pilish--find-session (pilish--session-directory) session))))
       (process-live-p (buffer-local-value 'pilish--process chat)))))
 
-(cl-defun +ai--start-pi (root verdict &key draft prepare session model)
+(cl-defun +ai--start-pi (root verdict &key draft prepare session model review-root)
+  (ignore review-root)
   (when prepare
     (funcall prepare))
   (require 'pilish nil t)
@@ -505,16 +517,19 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
     (pilish session)
     (+ai--prefill-pilish-input draft session)))
 
-(cl-defun +ai--launch-pi (root &rest args &key draft prepare session model)
+(cl-defun +ai--launch-pi (root &rest args &key draft prepare session model review-root)
   "Start or focus pi in ROOT once the repo review allows it.
 PREPARE runs after the review and before pi starts; DRAFT fills its empty input.
 SESSION names a separate session; MODEL picks flags from
-`+ai-pi-model-args' for a session that is not running yet. A running session
+`+ai-pi-model-args' for a session that is not running yet. REVIEW-ROOT is the
+repo to review, by default the one ROOT belongs to, so task worktrees share
+their repo's review; pass it when PREPARE creates ROOT. A running session
 skips the review: its inputs are already loaded."
   (ignore draft prepare model)
   (if (+ai--live-pilish-session-p root session)
       (apply #'+ai--start-pi root 'live args)
-    (+ai-trust--gate 'pi root (lambda (verdict) (apply #'+ai--start-pi root verdict args)))))
+    (+ai-trust--gate 'pi (or review-root (+ai--main-checkout root))
+                     (lambda (verdict) (apply #'+ai--start-pi root verdict args)))))
 
 (defun +ai/pi ()
   "Start or focus this project's pi session, reviewing the repo first when due.
@@ -533,7 +548,8 @@ Inside a pi buffer, hide the session instead."
          (name (+ai--hax-buffer-name root)))
     (if-let* ((live (+ai--live-buffer name)))
         (pop-to-buffer live)
-      (+ai-trust--gate 'hax root (lambda (_verdict) (+ai--eat-in root name (+ai--jailed root '("hax"))))))))
+      (+ai-trust--gate 'hax (+ai--main-checkout root)
+                       (lambda (_verdict) (+ai--eat-in root name (+ai--jailed root '("hax"))))))))
 
 (set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select t :quit t)
 (set-popup-rule! "^\\*\\(hax\\|pi-trust\\):" :side 'right :size 0.4 :select t :quit nil :ttl nil)
