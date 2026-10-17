@@ -163,9 +163,12 @@ that is the config Emacs loads: a restart mid-task never loads the agent's code.
 
 The `branches` block only matches headings with a TODO keyword, so a stray
 `:BRANCH:` on `* Branches` shows as `NONE`. `org-agenda-files` is extended, not
-replaced: on every agenda command it is reset to `org-directory` plus the
-`tasks.org` of each known projectile project (remote projects skipped); each
-file's agenda category is its repo name.
+replaced: every agenda command adds the `tasks.org` of each known projectile
+project (remote projects skipped) to whatever it holds, `org-directory` when
+it holds nothing, and drops the ones a project no longer has; each file's
+agenda category is its repo name. The Board (`b`), Last week (`w`) and Needs
+my review (`r`) views join `org-agenda-custom-commands`, replacing only
+commands of yours under those keys.
 `+tasks-branch-prefixes` (default `("feat/")`, safe as a dir-local) picks the
 branches the block lists; with more than one prefix, `start` asks which.
 `:MODEL:` maps to pi flags through `+ai-pi-model-args` (`local`, `claude`);

@@ -33,13 +33,68 @@
 
 (ert-deftest +tasks--agenda-files/extends-base ()
   (+tasks-test--with-projects '("a")
-    (let ((tasks (expand-file-name "a/tasks.org" root)))
+    (let ((tasks (file-truename (expand-file-name "a/tasks.org" root))))
       (+tasks-test--touch tasks)
       (ert-info ("agenda-files should keep the base and add each project's tasks.org once")
         (should (equal (list "~/org/" tasks)
                        (+tasks--agenda-files
                         '("~/org/")
                         (list (expand-file-name "a/" root) (expand-file-name "a/" root)))))))))
+
+(defvar projectile-known-projects)
+
+(defmacro +tasks-test--agenda (agenda-files &rest body)
+  "Run BODY with project a, holding a tasks.org, known to projectile and AGENDA-FILES as yours."
+  (declare (indent 1))
+  `(+tasks-test--with-projects '("a")
+     (let* ((tasks (file-truename (expand-file-name "a/tasks.org" root)))
+            (projectile-known-projects (list (expand-file-name "a/" root)))
+            (org-agenda-files ,agenda-files)
+            (+tasks--added-agenda-files nil))
+       (+tasks-test--touch tasks)
+       ,@body)))
+
+(ert-deftest +tasks--refresh-agenda-files/keeps-your-agenda-files ()
+  (+tasks-test--agenda (list "~/org/" "/x/work.org")
+    (+tasks--refresh-agenda-files)
+    (ert-info ("refreshing should add each project's tasks.org after your own agenda files and dirs")
+      (should (equal (list "~/org/" "/x/work.org" tasks) org-agenda-files)))))
+
+(ert-deftest +tasks--refresh-agenda-files/drops-tasks-files-that-went-away ()
+  (+tasks-test--agenda (list "~/org/")
+    (+tasks--refresh-agenda-files)
+    (delete-file tasks)
+    (+tasks--refresh-agenda-files)
+    (ert-info ("a tasks.org that no longer exists should leave the agenda, your own files should not")
+      (should (equal (list "~/org/") org-agenda-files)))))
+
+(ert-deftest +tasks--refresh-agenda-files/keeps-files-you-add-later ()
+  (+tasks-test--agenda (list "~/org/")
+    (+tasks--refresh-agenda-files)
+    (push "/y/new.org" org-agenda-files)
+    (+tasks--refresh-agenda-files)
+    (ert-info ("an agenda file you add between refreshes should stay, with tasks.org listed once")
+      (should (equal (list "/y/new.org" "~/org/" tasks) org-agenda-files)))))
+
+(ert-deftest +tasks--refresh-agenda-files/starts-from-org-directory-when-you-have-none ()
+  (+tasks-test--agenda nil
+    (let ((org-directory "~/org/"))
+      (+tasks--refresh-agenda-files)
+      (ert-info ("with no agenda files of your own the agenda should keep org-directory, as before")
+        (should (equal (list "~/org/" tasks) org-agenda-files))))))
+
+(ert-deftest +tasks--refresh-agenda-files/works-before-projectile-loads ()
+  (skip-unless (not (boundp 'projectile-known-projects)))
+  (let ((org-agenda-files (list "~/org/"))
+        (+tasks--added-agenda-files nil))
+    (ert-info ("opening the agenda before projectile has loaded should keep your files and not signal")
+      (should (equal (list "~/org/") (+tasks--refresh-agenda-files))))))
+
+(ert-deftest +tasks--with-agenda-commands/adds-ours-replacing-same-keys ()
+  (ert-info ("agenda commands should keep yours and replace only the ones under our keys")
+    (should (equal '(("x" "Mine" todo "NEXT") ("b" "Board" todo "TODO"))
+                   (+tasks--with-agenda-commands '(("x" "Mine" todo "NEXT") ("b" "Old board" todo "X"))
+                                                 '(("b" "Board" todo "TODO")))))))
 
 (ert-deftest +tasks--branch-patterns/globs-each-prefix ()
   (pcase-dolist (`(,prefixes . ,expected) '((("feat/") . ("feat/*"))

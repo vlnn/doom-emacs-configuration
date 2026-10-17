@@ -52,9 +52,21 @@
 (defun +tasks--agenda-files (base roots)
   (seq-uniq (append base (+tasks--project-files roots))))
 
+(defvar +tasks--added-agenda-files nil
+  "The tasks.org files the last refresh added to `org-agenda-files'.")
+
+(defun +tasks--agenda-base (current added)
+  "CURRENT `org-agenda-files' as a list, less the tasks.org files a refresh ADDED to it.
+Empty, it is `org-directory', as Doom's default would have it."
+  (or (seq-difference (if (listp current) current (org-agenda-files t)) added)
+      (list org-directory)))
+
 (defun +tasks--refresh-agenda-files (&rest _)
-  (setq org-agenda-files
-        (+tasks--agenda-files (list org-directory) projectile-known-projects)))
+  "Add each known project's tasks.org to `org-agenda-files', keeping whatever else it holds."
+  (let ((base (+tasks--agenda-base org-agenda-files +tasks--added-agenda-files)))
+    (setq org-agenda-files (+tasks--agenda-files base (bound-and-true-p projectile-known-projects))
+          +tasks--added-agenda-files (seq-difference org-agenda-files base))
+    org-agenda-files))
 
 (defun +tasks--advise-agenda-commands ()
   (dolist (command +tasks-agenda-commands)
@@ -72,9 +84,14 @@
       (org-agenda-start-with-log-mode '(state closed))))
     ("r" "Needs my review" todo "REVIEW")))
 
+(defun +tasks--with-agenda-commands (commands ours)
+  "COMMANDS plus OURS, which replace any command under the same key."
+  (append (seq-remove (lambda (command) (assoc (car command) ours)) commands) ours))
+
 (after! org-agenda
   (+tasks--advise-agenda-commands)
-  (setq org-agenda-custom-commands +tasks--agenda-custom-commands))
+  (setq org-agenda-custom-commands
+        (+tasks--with-agenda-commands org-agenda-custom-commands +tasks--agenda-custom-commands)))
 
 ;;; branches dynamic block
 
