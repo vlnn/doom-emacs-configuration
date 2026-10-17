@@ -469,9 +469,9 @@
         (should (string-search needle prompt))))))
 
 (ert-deftest +tasks--exclude-lines/adds-only-missing-entries ()
-  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive" ".worktrees/"))
-                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive" ".worktrees/"))
-                                            ("tasks.org\ntasks.org_archive\n.worktrees/\n" . ())))
+  (pcase-dolist (`(,existing . ,expected) '(("" . ("tasks.org" "tasks.org_archive" ".worktrees/" "PLAN.md"))
+                                            ("# git ls-files\ntasks.org\n" . ("tasks.org_archive" ".worktrees/" "PLAN.md"))
+                                            ("tasks.org\ntasks.org_archive\n.worktrees/\nPLAN.md\n" . ())))
     (ert-info ((format "exclude-lines for %S should be %S" existing expected))
       (should (equal expected (+tasks--exclude-lines existing))))))
 
@@ -1239,7 +1239,7 @@
         (should (equal expected (+tasks--agenda-prefix)))))))
 
 (ert-deftest +tasks--agenda-prefix/keeps-to-its-column ()
-  (+tasks-test--in-tasks-buffer "** PLAN Long\n:PROPERTIES:\n:BRANCH: feat/add-separate-keybinding-for-all-tasks\n:END:\n"
+  (+tasks-test--in-tasks-buffer "** RED Long\n:PROPERTIES:\n:BRANCH: feat/add-separate-keybinding-for-all-tasks\n:END:\n"
     (+tasks-test--goto-heading "Long")
     (ert-info ("a branch longer than the board column should be cut with an ellipsis, not run into the keyword")
       (should (equal "feat/add-separate-keybi…" (+tasks--agenda-prefix))))))

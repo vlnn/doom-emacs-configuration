@@ -21,7 +21,8 @@
                   "modules/my/ai/jail.el"
                   "modules/my/ai/trust.el"
                   "modules/my/vc/config.el"
-                  "modules/my/tasks/config.el"))
+                  "modules/my/tasks/config.el"
+                  "modules/my/tasks/plan.el"))
     (load (expand-file-name file root) nil t))
   (dolist (test (directory-files (expand-file-name "test" root) t "-test\\.el\\'"))
     (load test nil t))
