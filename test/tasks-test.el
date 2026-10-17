@@ -1238,6 +1238,16 @@
       (ert-info ((format "the board prefix of %s should read %S" heading expected))
         (should (equal expected (+tasks--agenda-prefix)))))))
 
+(ert-deftest +tasks--agenda-prefix/keeps-to-its-column ()
+  (+tasks-test--in-tasks-buffer "** PLAN Long\n:PROPERTIES:\n:BRANCH: feat/add-separate-keybinding-for-all-tasks\n:END:\n"
+    (+tasks-test--goto-heading "Long")
+    (ert-info ("a branch longer than the board column should be cut with an ellipsis, not run into the keyword")
+      (should (equal "feat/add-separate-keybi…" (+tasks--agenda-prefix))))))
+
+(ert-deftest +tasks--board-prefix-format/separates-the-column-from-the-heading ()
+  (ert-info ("the prefix column should end in a space so a full-width value never touches the keyword")
+    (should (string-suffix-p "(+tasks--agenda-prefix) " (cdr (assq 'todo +tasks--board-prefix-format))))))
+
 (ert-deftest +tasks/menu-file/binds-wait ()
   (let ((text (with-temp-buffer
                 (insert-file-contents (expand-file-name "modules/my/tasks/menu.el" default-directory))

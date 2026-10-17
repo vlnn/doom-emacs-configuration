@@ -74,13 +74,17 @@ Empty, it is `org-directory', as Doom's default would have it."
   (dolist (command +tasks-agenda-commands)
     (advice-add command :before #'+tasks--refresh-agenda-files)))
 
-(defconst +tasks--board-prefix-format '((todo . " %-12:c %-24(+tasks--agenda-prefix)")))
+(defconst +tasks--board-prefix-width 24)
+
+(defconst +tasks--board-prefix-format
+  `((todo . ,(format " %%-12:c %%-%d(+tasks--agenda-prefix) " +tasks--board-prefix-width))))
 
 (defun +tasks--agenda-prefix ()
   "What the board shows before a task: why it waits, else its branch, else nothing."
-  (or (and (equal (org-get-todo-state) "WAIT") (org-entry-get nil "REASON"))
-      (org-entry-get nil "BRANCH")
-      ""))
+  (truncate-string-to-width (or (and (equal (org-get-todo-state) "WAIT") (org-entry-get nil "REASON"))
+                                (org-entry-get nil "BRANCH")
+                                "")
+                            +tasks--board-prefix-width nil nil "…"))
 
 (defun +tasks--board-block (state header &optional leaves-only)
   `(todo ,state ((org-agenda-overriding-header ,header)
