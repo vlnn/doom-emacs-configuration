@@ -45,9 +45,10 @@ bin/compile-check  # byte-compile every config file with Doom macros stubbed
 bin/jail-check     # macOS: run probes under agent.sb, check what the jail allows
 ```
 
-Both run in GitHub Actions on Emacs 29 and 30 (`.github/workflows/test.yml`);
-the compile check is advisory there. `doom sync && doom doctor` stays a
-local step.
+The first two run in GitHub Actions on Emacs 29 and 30
+(`.github/workflows/test.yml`); the compile check is advisory there.
+`bin/jail-check` needs a Mac, and `doom sync && doom doctor` stays a local
+step.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; tests cover the pure functions
@@ -159,8 +160,8 @@ that is the config Emacs loads: a restart mid-task never loads the agent's code.
 | `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
 | `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) |
 | `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first |
-| `t` | in the jail: `just test` when the justfile has a `test` recipe and `just` is installed, else projectile's test command (says so when `just` is missing); on a task in `tasks.org`, in its worktree |
-| `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run tests in the worktree in the jail (stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Nothing is pushed; quit the task's pi session afterwards |
+| `t` | run the tests of the tree at hand in the jail: the task's worktree on a task in `tasks.org`, else the current project. The command is that tree's: `just test` when its justfile has a `test` recipe and `just` is installed, else projectile's test command with that tree's dir-locals applied (so a committed `.dir-locals.el` setting `projectile-project-test-cmd` works from any buffer); says so when `just` is missing |
+| `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Nothing is pushed; quit the task's pi session afterwards |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |
 | `o` / `f` | Board agenda / visit `tasks.org` |
@@ -202,7 +203,8 @@ before.
 The block's State column reads `ahead N` (commits not on main), `merged`, or
 `DONE! …` once the task is done; `DONE! delete branch` marks leftovers. Main
 is `origin/HEAD`, else `main`, else `master`. `r`, `R`, `t` and `d` act on the
-linked row or task at point, else the task on the current branch, else ask;
+linked task at point, else the task linked to the `branches` row at point,
+else the task on the current branch (so any buffer of a worktree), else ask;
 so does `c`.
 
 `docs/flow-walkthrough.md` follows one task from capture to merge, using this

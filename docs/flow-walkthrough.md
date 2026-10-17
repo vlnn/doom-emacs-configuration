@@ -67,9 +67,11 @@ saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
    ((nil . ((projectile-project-test-cmd . "bin/test"))))
    ```
 
-   Commit it, so every task worktree has it too. Without it, `SPC 5 d` asks
-   whether to merge with no tests run. Agents cannot rewrite it: the jail keeps
-   dir-locals read-only, since Emacs evaluates them with your rights.
+   Commit it: `SPC 5 t` and `SPC 5 d` read the test command from the tree
+   they test, the task's worktree, so it has to be on the branch. Without it
+   `SPC 5 d` asks whether to merge with no tests run. Agents cannot rewrite
+   it: the jail keeps dir-locals read-only, since Emacs evaluates them with
+   your rights, and a change to it on the branch shows up in the guard note.
 4. Optional `AGENTS.md` at the root with the same house rules, committed for
    the same reason. Adding one makes the first `SPC 3` / `SPC 5 s` show the
    review in `*agent-review:…*` (pi has no decision for `$DOOMDIR` yet);
@@ -198,8 +200,8 @@ branch and session.
 
 ## 6. REVIEW
 
-`SPC m t` → `REVIEW`; it now shows in `SPC o A r`. With point on the task (or
-in any buffer of its worktree):
+`SPC m t` → `REVIEW`; it now shows in `SPC o A r`. With point on the task or
+on its `branches` row (or in any buffer of its worktree):
 
 - `SPC 5 r`: magit diff `main...feat/start-drops-…`, the task's `ACCEPT` in the
   echo area, and `Touches agent guards: modules/my/tasks/config.el, …`: this
