@@ -87,18 +87,27 @@ profile is read from the live config, so an agent editing its project's copy
 changes nothing until you merge and reload. In the jail:
 
 - writes reach only the project, temp dirs, `~/.pi/agent/sessions`, hax's
-  state and cache, and the uv, Maven and gitlibs caches the project's tests
-  need;
-- `.git` (hooks, config, refs), `.pi/`, `.worktrees/`, any `AGENTS.md` and
-  `.dir-locals.el` stay read-only: they run or load later with your rights.
-  Agents read git but cannot stage or commit; that stays yours, in magit;
-- ssh, gpg, AWS and gh credentials, `~/.authinfo*`, `~/.netrc` and any
-  `secrets.el` are unreadable;
+  state and cache, and `~/.cache/agent-jail`, where jailed runs keep their
+  own uv cache and gitlibs (`UV_CACHE_DIR`, `GITLIBS`). The shared
+  `~/.cache/uv`, `~/.m2` and `~/.gitlibs` stay read-only, since your REPLs
+  and dape run what they hold; a test that needs a new Maven dependency
+  fails until you fetch it outside (`clojure -P`) after reading the diff;
+- `.git` (hooks, config, refs) of the project and of any repo nested in it,
+  `.pi/`, `.worktrees/`, any `AGENTS.md` and `.dir-locals.el` stay
+  read-only: they run or load later with your rights. Agents read git but
+  cannot stage or commit; that stays yours, in magit. Repos under the temp
+  dirs stay writable for tests;
+- ssh, gpg, AWS, gcloud, kube, gh, docker, npm, PyPI and cargo credentials,
+  `~/.git-credentials`, `~/.authinfo*`, `~/.netrc` and any `secrets.el` are
+  unreadable;
 - the Emacs server socket (`emacsclient --eval` would reach your Emacs),
-  ssh-agent, gpg-agent, the Docker socket, LaunchServices and AppleEvents
-  (`open`, `osascript`) are off limits;
-- a `:MODEL: local` task session gets loopback only, enough for llama-server
-  (`+ai-pi-model-networks`); every other session has the network open.
+  ssh-agent (launchd's and whatever `SSH_AUTH_SOCK` names), gpg-agent, the
+  Docker socket, LaunchServices and AppleEvents (`open`, `osascript`) are
+  off limits;
+- a `:MODEL: local` task session reaches only llama-server's port 8080 on
+  loopback, with no name lookups, so a local provider in pi's `models.json`
+  must use `127.0.0.1`, not `localhost` (`+ai-pi-model-networks`); every other
+  session has the network open.
 
 The pi opened to record a trust decision runs outside, since it writes
 `~/.pi/agent/trust.json`. Without `sandbox-exec` (Linux) or for remote

@@ -11,7 +11,12 @@
   "Seatbelt profile for agents, read from the live config so a project cannot swap it.")
 
 (defconst +ai-jail-networks '("open" "local")
-  "Network modes agent.sb knows: everything, or loopback only.")
+  "Network modes agent.sb knows: everything, or llama-server's port only.")
+
+(defvar +ai-jail-cache-dir (expand-file-name "~/.cache/agent-jail/")
+  "Dependency caches only jailed runs use; the shared ones stay read-only to them.")
+
+(defconst +ai-jail-cache-vars '(("UV_CACHE_DIR" . "uv") ("GITLIBS" . "gitlibs")))
 
 (defvar +ai--jail-warned nil)
 
@@ -24,11 +29,22 @@
 (defun +ai--jail-param (name value)
   (list "-D" (concat name "=" value)))
 
+(defun +ai--ssh-agent-socket ()
+  (if-let* ((sock (getenv "SSH_AUTH_SOCK")))
+      (file-truename sock)
+    "/nonexistent"))
+
 (defun +ai--jail-params (root network)
   (append (+ai--jail-param "PROJECT" (+ai--real-dir root))
           (+ai--jail-param "HOME" (+ai--real-dir "~"))
           (+ai--jail-param "TMPDIR" (+ai--real-dir temporary-file-directory))
-          (+ai--jail-param "NETWORK" network)))
+          (+ai--jail-param "NETWORK" network)
+          (+ai--jail-param "SSH_AUTH_SOCK" (+ai--ssh-agent-socket))))
+
+(defun +ai--jail-cache-env ()
+  (cons "env" (mapcar (pcase-lambda (`(,var . ,dir))
+                        (concat var "=" (expand-file-name dir +ai-jail-cache-dir)))
+                      +ai-jail-cache-vars)))
 
 (defun +ai--warn-unjailed ()
   (unless +ai--jail-warned
@@ -43,4 +59,5 @@ NETWORK is \"open\" (the default) or \"local\" for loopback only."
       (error "Unknown jail network %S; expected one of %S" network +ai-jail-networks))
     (cond ((or (not +ai-jail-enabled) (file-remote-p root)) command)
           ((not (+ai--jail-available-p)) (+ai--warn-unjailed) command)
-          (t (append (list "sandbox-exec" "-f" +ai-jail-profile) (+ai--jail-params root network) command)))))
+          (t (append (list "sandbox-exec" "-f" +ai-jail-profile) (+ai--jail-params root network)
+                     (+ai--jail-cache-env) command)))))

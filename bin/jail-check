@@ -9,8 +9,9 @@ cd "$(dirname "$0")/.."
 profile="$PWD/modules/my/ai/agent.sb"
 real_home="$(cd ~ && pwd -P)"
 real_tmp="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
-project="$(cd "$(mktemp -d)" && pwd -P)"
+project="$(mktemp -d "$real_home/.jail-check-project.XXXXXX")"
 outside="$(mktemp -d "$real_home/.jail-check.XXXXXX")"
+jail_cache="$real_home/.cache/agent-jail"
 label="org.jail-check.$$"
 server=""
 
@@ -25,11 +26,20 @@ git -C "$project" init -q
 failures=0
 network=open
 
+real_path() {
+  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+ssh_sock="$(if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then real_path "$SSH_AUTH_SOCK"; else echo /nonexistent; fi)"
+
 jailed() {
   sandbox-exec -f "$profile" \
     -D PROJECT="$project" -D HOME="$real_home" -D TMPDIR="$real_tmp" -D NETWORK="$network" \
+    -D SSH_AUTH_SOCK="$ssh_sock" \
     "$@"
 }
+
+github_credential="printf 'protocol=https\nhost=github.com\n\n' | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null | grep -q '^password='"
 
 expect() {
   local wanted="$1" message="$2" actual
@@ -71,6 +81,8 @@ fi
 
 expect denied "a nested repo's git config should not be writable" \
   sh -c "mkdir -p '$project/sub/.git' && echo '[core]' >'$project/sub/.git/config'"
+expect allowed "a scratch repo in the temp dir should stay writable, tests git init there" \
+  sh -c 'git init -q "$(mktemp -d)"'
 expect denied "a hard link should not open git config for writing" \
   sh -c "ln '$project/.git/config' '$project/cfg' && echo >>'$project/cfg'"
 expect denied "AGENTS.md in another case should not be writable" touch "$project/agents.md"
@@ -78,7 +90,8 @@ expect denied ".pi in another case should not be writable" mkdir "$project/.PI"
 expect denied "dir-locals in another case should not be writable" touch "$project/.Dir-Locals.el"
 expect denied ".git in another case should not be writable" touch "$project/.GIT/hooks/pre-commit"
 
-for secret in .config/gcloud .kube .docker/config.json .git-credentials .npmrc .pypirc; do
+for secret in .config/gcloud .kube .docker/config.json .git-credentials .config/git/credentials \
+              .npmrc .pypirc .cargo/credentials .cargo/credentials.toml; do
   if [[ -e "$real_home/$secret" ]]; then
     expect denied "~/$secret should not be readable" ls "$real_home/$secret"
   fi
@@ -90,6 +103,12 @@ for cache in .cache/uv .m2/repository .gitlibs; do
       sh -c "f='$real_home/$cache/.jail-check' && touch \"\$f\" && rm \"\$f\""
   fi
 done
+expect allowed "the jail's own caches should be writable, gitlibs checkouts included" \
+  sh -c "d='$jail_cache/gitlibs/.jail-check/.git' && mkdir -p \"\$d\" && touch \"\$d/config\" && rm -r '$jail_cache/gitlibs/.jail-check'"
+
+if sh -c "$github_credential"; then
+  expect denied "git's credential helper should not hand the jail your GitHub token" sh -c "$github_credential"
+fi
 
 if command -v emacsclient >/dev/null && emacsclient --eval t >/dev/null 2>&1; then
   expect denied "the Emacs server should not take commands from the jail" emacsclient --eval t
@@ -107,6 +126,7 @@ expect denied "launchd should not start jobs for the jail" \
 
 python3 -m http.server 8765 --bind 127.0.0.1 --directory "$outside" >/dev/null 2>&1 &
 server=$!
+disown "$server"
 sleep 1
 network=local
 expect denied "a local-model session should reach only llama-server's port" \
