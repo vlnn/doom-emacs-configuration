@@ -1,7 +1,7 @@
 # Walkthrough: the config fixes itself
 
 A realistic end-to-end run of the agent task flow (`tasks` module + pilish +
-`trust.el`) where the repo being worked on is this `$DOOMDIR`. The bug is a
+`trust.el` + the agent jail) where the repo being worked on is this `$DOOMDIR`. The bug is a
 real one in `+tasks/start`, found by using the flow.
 
 ## The flow in one table
@@ -9,10 +9,10 @@ real one in `+tasks/start`, found by using the flow.
 | state | who moves it there | how |
 |---|---|---|
 | `IDEA` | you | `SPC 5 i` (capture into `* Ideas`), `SPC 5 I` (sub-idea under the task at point) |
-| `TODO` | `+tasks/start` | `SPC 5 s` on a leaf: repo review if due, branch, `:BRANCH:`, `:ACCEPT:`, `:MODEL:`, refile its tree to `* Active`, pi session named after the branch |
+| `TODO` | `+tasks/start` | `SPC 5 s` on a leaf: repo review if due, branch in its own worktree, `:BRANCH:`, `:ACCEPT:`, `:MODEL:`, refile its tree to `* Active`, jailed pi session there named after the branch |
 | `PLAN` → `RED` → `GREEN` | you, as the agent reports | `SPC m t` in `tasks.org`; each change is timestamped (`!`) |
 | `REVIEW` | you, when the agent says it is done | `SPC 5 r` / `SPC 5 R`; listed in `SPC o A r` ("Needs my review") |
-| `DONE` | `+tasks/done` | `SPC 5 d`: tests on the branch, merge `--no-ff`, delete the branch, DONE |
+| `DONE` | `+tasks/done` | `SPC 5 d`: guard check, jailed tests in the worktree, merge `--no-ff`, remove worktree and branch, DONE |
 | `DROPPED` | you, on abandon | `SPC m t`; asks for a note (`@`) |
 
 `TODO` and `DONE` are set for you; the states in between are a log of what you
@@ -21,9 +21,9 @@ saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
 
 ## One-time setup for this repo
 
-1. `M-x +tasks/init` in `$DOOMDIR` writes `tasks.org` and adds it and
-   `tasks.org_archive` to `.git/info/exclude`, so branch switches never touch
-   them.
+1. `M-x +tasks/init` in `$DOOMDIR` writes `tasks.org` and adds it,
+   `tasks.org_archive` and `.worktrees/` to `.git/info/exclude`. Task worktrees
+   live in `.worktrees/`, so the checkout Emacs loads stays on `main`.
 2. `/feature` is a pi prompt template and does not live in this repo. Put it in
    `~/.pi/agent/prompts/feature.md`, for example:
 
@@ -32,7 +32,8 @@ saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
    description: Work one tasks.org task, TDD
    argument-hint: <heading>
    ---
-   Work on this task from tasks.org at the repo root:
+   Work on this task from tasks.org (in the main checkout; from a task
+   worktree that is ../../tasks.org):
 
    $@
 
@@ -44,8 +45,8 @@ saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
       functions they need. Stop and wait for my go.
    2. RED: add the first test under test/, run bin/test, show the failure.
    3. GREEN: smallest change that passes; run bin/test and bin/compile-check.
-   4. Repeat 2–3 per test. Do not commit. Finish with a summary of the diff
-      and how ACCEPT is met.
+   4. Repeat 2–3 per test. Do not stage or commit (the jail refuses it anyway).
+      Finish with a summary of the diff and how ACCEPT is met.
 
    Follow README.md: +scope/command, +scope--helper, no comments unless the
    why is non-obvious, every should wrapped in ert-info "X should Y".
@@ -60,13 +61,19 @@ saw, not something pi updates. The Board (`SPC 5 o`) and "Last week"
    ((nil . ((projectile-project-test-cmd . "bin/test"))))
    ```
 
-   Without it, `SPC 5 d` asks whether to merge with no tests run.
-4. Optional `AGENTS.md` at the root with the same house rules. Adding one makes
-   the first `SPC 3` / `SPC 5 s` show the review in `*agent-review:…*` (pi has
-   no decision for `$DOOMDIR` yet); `C-c C-c` trusts it.
+   Commit it, so every task worktree has it too. Without it, `SPC 5 d` asks
+   whether to merge with no tests run. Agents cannot rewrite it: the jail keeps
+   dir-locals read-only, since Emacs evaluates them with your rights.
+4. Optional `AGENTS.md` at the root with the same house rules, committed for
+   the same reason. Adding one makes the first `SPC 3` / `SPC 5 s` show the
+   review in `*agent-review:…*` (pi has no decision for `$DOOMDIR` yet);
+   `C-c C-c` trusts it. Task worktrees share that review.
+5. On the Mac, `bin/jail-check` once: it runs probes under
+   `modules/my/ai/agent.sb` and should end with `jail behaves as agent.sb says`.
 
-`:MODEL: local` runs pi with `--model qwopus-coder`, `claude` with Anthropic's
-Sonnet (`+ai-pi-model-args`); the flags apply when a task's session starts.
+`:MODEL: local` runs pi with `--model qwopus-coder` and loopback-only network,
+`claude` with Anthropic's Sonnet and the network open (`+ai-pi-model-args`,
+`+ai-pi-model-networks`); both apply when a task's session starts.
 
 ## 1. The trigger
 
@@ -74,17 +81,18 @@ You tag the `* Active` heading in some project's `tasks.org` (`* Active :work:`)
 and press `SPC 5 s` on an IDEA there. Once the review lets pi start, Emacs
 reports `Search failed`, and:
 
-- git is already on the new `feat/...` branch;
+- `.worktrees/feat-…` and its `feat/...` branch already exist;
 - the IDEA vanished from the buffer (unsaved);
 - pi did not open.
 
-Cause, in `modules/my/tasks/config.el`: `+tasks--start-at` switches branch
+Cause, in `modules/my/tasks/config.el`: `+tasks--start-at` adds the worktree
 before anything that can fail, then `+tasks--move-under` deletes the subtree
 *before* `+tasks--top-heading-end` looks for `^\* Active[ \t]*$`, which a tagged
 heading does not match.
 
 Recover first: `u` in `tasks.org` brings the task back,
-`git switch - && git branch -d feat/<slug>` undoes the empty branch.
+`git worktree remove .worktrees/feat-<slug> && git branch -d feat/<slug>`
+undoes the empty worktree and branch.
 
 ## 2. Capture and start
 
@@ -96,28 +104,32 @@ In `$DOOMDIR`:
 3. Point on the IDEA, `SPC 5 s`:
    - `Branch:` prefilled `feat/start-drops-the-task-if-active-is-tagged`
      (slug capped at 40 chars); accept or shorten.
-   - `ACCEPT for "…":` e.g. `start refiles under a tagged * Active; with none it errors before git switch and loses nothing`.
+   - `ACCEPT for "…":` e.g. `start refiles under a tagged * Active; with none it errors before adding the worktree and loses nothing`.
    - The repo review, if due. Nothing has changed yet; `q` cancels cleanly.
    - Then the entry gets `:BRANCH:`, `:ACCEPT:`, `:MODEL: local`, becomes
      `TODO`, moves to `* Active` (with its whole tree, had it been nested); the
      `branches` block gains a row (`merged` until the first commit, since the
      empty branch is already in `main`); the file is saved.
-   - A pi session named `feat/start-drops-…` opens at the project root on the
-     local model, with `/feature Start drops the task if Active is tagged` and
+   - `.worktrees/feat-start-drops-…` is created on the new branch; `$DOOMDIR`
+     itself stays on `main`.
+   - A pi session named `feat/start-drops-…` opens in that worktree, jailed:
+     it can write only there (plus temp and its session files), on the local
+     model with loopback-only network, with `/feature Start drops the task if Active is tagged` and
      its `ACCEPT:` line in the input (on the kill ring instead if the input
      already had text).
 
 If the task looks too big for one branch, split it instead of step 3: with
 point on the IDEA, `SPC 5 I` once per part (say `Tagged Active in
-top-heading-end` and `Guard start before git switch`). The IDEA is now a
+top-heading-end` and `Guard start before adding the worktree`). The IDEA is now a
 parent, so `SPC 5 s` on it offers only those parts, deepest first; each part
-gets its own branch and session, and its draft carries a
+gets its own branch, worktree and session, and its draft carries a
 `PART OF: Start drops the task if Active is tagged` line. The first start moves
 the parent, still IDEA, under `* Active`; `tasks.org` refuses to close it until
 every part is DONE or DROPPED, after which it can be started itself.
 
-Coming back later, from another buffer or after a restart: `SPC 5 c` switches
-to the task's branch and focuses its session. `SPC 3` inside pi hides it.
+Coming back later, from another buffer or after a restart: `SPC 5 c` opens
+the task's worktree and focuses its session. A restart is safe mid-task: Doom
+loads `$DOOMDIR`, which never left `main`. `SPC 3` inside pi hides it.
 
 ## 3. PLAN
 
@@ -127,7 +139,7 @@ Send the prefilled input. A good plan for this bug:
 2. With no `* Active`, it signals a `user-error` naming the heading.
 3. `+tasks--move-under` leaves the buffer untouched when the target is missing
    (look the target up before deleting).
-4. `+tasks--start-at` checks the target heading before `+tasks--checkout-branch`.
+4. `+tasks--start-at` checks the target heading before `+tasks--add-worktree`.
 
 `SPC m t` → `PLAN`. Push back now if a step is missing; it is the cheapest
 point to redirect.
@@ -164,38 +176,49 @@ Both fail (`search-failed`, not `user-error`). `SPC m t` → `RED`.
 ## 5. GREEN
 
 The agent edits `+tasks--top-heading-end`, `+tasks--move-under` and
-`+tasks--start-at`; `SPC 5 t` runs `bin/test` in a compilation buffer, and
+`+tasks--start-at` in its worktree; `SPC 5 t` on the task runs `bin/test` there,
+in the jail, in a compilation buffer, and
 `bin/compile-check` stays clean. `global-auto-revert-mode` keeps any open
 buffers of those files current. `SPC m t` → `GREEN`.
 
 Batch tests prove the pure functions; the running Emacs still has the old
-definitions. Load the new ones without restarting: open the file, `C-M-x` on
-each changed `defun` (or `SPC h r r` for module-level changes). Then dogfood
-`ACCEPT` by hand: tag `* Active` again, capture a throwaway IDEA, `SPC 5 s`,
-check it lands under `* Active :work:`; delete it, its branch and its session.
+definitions, and loading new ones runs the agent's code with your rights, so
+read the diff first (`SPC 5 r`, next section). Then open the file in the
+worktree and `C-M-x` each changed `defun`, or `M-x load-file` it for
+module-level changes; `SPC h r r` would reload `$DOOMDIR`, still on `main`.
+Dogfood `ACCEPT` by hand: tag `* Active` again, capture a throwaway IDEA,
+`SPC 5 s`, check it lands under `* Active :work:`; delete it, its worktree,
+branch and session.
 
 ## 6. REVIEW
 
 `SPC m t` → `REVIEW`; it now shows in `SPC o A r`. With point on the task (or
-anywhere while its branch is checked out):
+in any buffer of its worktree):
 
 - `SPC 5 r`: magit diff `main...feat/start-drops-…`, the task's `ACCEPT` in the
-  echo area.
+  echo area, and `Touches agent guards: modules/my/tasks/config.el, …`: this
+  fix edits the flow itself, which is exactly what deserves a slow read.
 - `SPC 5 R`: a fresh local-model review of that diff against `ACCEPT` in
-  `*tasks-review:feat/…*`; it has not seen the pi conversation.
+  `*tasks-review:feat/…*`, the guard note on top; it has not seen the pi
+  conversation.
 - A dense hunk: select it, `SPC o l E` for line-by-line notes.
-- The agent did not commit: stage and commit on the branch in magit
+- The agent could not commit: stage and commit in magit, in the worktree
   (gptel-magit drafts the message from the staged diff).
 
 ## 7. Done
 
 `SPC 5 d` with point on the task:
 
-1. refuses if the tree is dirty;
-2. runs `bin/test` on the branch and stops on failure;
-3. merges `--no-ff` into `main` as `Merge feat/start-drops-…: Start drops…`;
-4. deletes the branch (asks about `origin/…` if it exists);
-5. marks the task `DONE`, logging `CLOSED`, and refreshes the `branches` block.
+1. refuses if `$DOOMDIR` is dirty, or the worktree holds uncommitted or
+   untracked work (a test file the agent wrote and you forgot to add);
+2. asks before merging, since the diff touches agent guards;
+3. runs `bin/test` in the worktree, in the jail, and stops on failure;
+4. merges `--no-ff` into `main` as `Merge feat/start-drops-…: Start drops…`;
+5. removes the worktree and deletes the branch (asks about `origin/…` if it
+   exists);
+6. marks the task `DONE`, logging `CLOSED`, and refreshes the `branches` block.
+
+Quit the task's pi session afterwards; its worktree is gone.
 
 Nothing is pushed: `git push` from magit when you are happy. A row reading
 `DONE! delete branch` is a branch left over from a task finished by hand.
@@ -204,21 +227,35 @@ Archive with `SPC m A` when the `* Active` list gets long; entries go to
 
 ## When the fix breaks Emacs
 
-pilish and hax both run inside the Emacs you are changing. Before restarting:
+pilish and hax run inside the Emacs you are changing, but the agent's code
+reaches it only when you load it (`C-M-x`, `load-file`) or merge and restart.
+Before restarting after a merge:
 
-- `bin/test && bin/compile-check` from a terminal;
-- if Emacs no longer starts: `git -C $DOOMDIR switch main`, then
-  `doom doctor`; `emacs --debug-init` to see where it stops;
+- `bin/test && bin/compile-check` from a terminal in `$DOOMDIR`;
+- if Emacs no longer starts: `git -C $DOOMDIR reset --keep HEAD~1` undoes the
+  unpushed merge, then `doom doctor`; `emacs --debug-init` to see where it
+  stops;
 - for changes to `init.el`, `packages.el` or package recipes, run `doom sync`
-  and restart, and keep pi in a terminal for that session instead of `SPC 3`.
+  and restart, and keep pi in a terminal for that session instead of `SPC 3`;
+  that pi is not jailed unless you start it under `sandbox-exec` the way
+  `bin/jail-check` does.
 
 ## Sharp edges seen on the way
 
 - `/feature` and its behaviour live in `~/.pi/agent/prompts/`, not here; a
   fresh machine has the key binding but not the prompt.
 - `trust.el` treats commits from your `user.email` and `+ai-trust-own-emails` as
-  yours. An agent that commits with your git identity can change `AGENTS.md` or
-  `.pi/` without the "changed by someone else" report; read those diffs in magit.
+  yours. A jailed agent cannot commit or touch `AGENTS.md` or `.pi/`; one you run
+  unjailed (Linux, a remote project, a terminal) can, under your identity,
+  without the "changed by someone else" report. Read those diffs in magit; the
+  guard on `SPC 5 r`/`d` points at them.
+- The review for a task worktree is its repo's: it scans the main checkout. Agent
+  inputs someone else committed on the task branch show up in the guard note,
+  not in the review, until the merge.
+- The jail is macOS Seatbelt; elsewhere Emacs says once that agents run with
+  your full rights. When the jail denies something an agent legitimately
+  needs, `log stream --style compact --predicate 'sender == "Sandbox"'` names
+  the path; widening `agent.sb` is itself a guarded change.
 - In-flight states are manual, so the Board is only as fresh as your last
   `SPC m t`.
 - A parent with open parts cannot be DROPPED either: drop the parts first, or

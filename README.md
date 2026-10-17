@@ -18,9 +18,9 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el` |
+| `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote, ob-duckdb |
-| `tasks` | per-repo `tasks.org`: agenda views, `branches` block, `p i` idea capture, `+tasks/init` |
+| `tasks` | per-repo `tasks.org`: agenda views, `branches` block, a worktree per task, `p i` idea capture, `+tasks/init` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
 | `dirvish` | dired/dirvish |
 | `vc` | magit-todos, magit-delta, why-this, github-explorer |
@@ -42,6 +42,7 @@ machine-local values. Missing `secrets.el` is tolerated.
 ```sh
 bin/test           # ERT, plain `emacs --batch`, no Doom needed
 bin/compile-check  # byte-compile every config file with Doom macros stubbed
+bin/jail-check     # macOS: run probes under agent.sb, check what the jail allows
 ```
 
 Both run in GitHub Actions on Emacs 29 and 30 (`.github/workflows/test.yml`);
@@ -51,7 +52,10 @@ local step.
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; tests cover the pure functions
 (`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
-`+tasks--*`, `+ai-trust--*`).
+`+tasks--*`, `+ai-trust--*`, `+ai--jail*`); the tasks tests drive real git in
+temp repos for worktrees and `done`. ERT only checks the arguments the jail is
+started with; `bin/jail-check` checks the profile itself, so run it after
+editing `agent.sb`.
 
 ## Coding agents
 
@@ -72,26 +76,64 @@ except "untrusted once", which starts that run with `--no-approve`. Reviews are
 kept per agent, so a pi review never lets hax start unreviewed.
 Essential tree-sitter grammars install on first use; the `*pilish-grammars*`
 buffer opens in Emacs state so its `i`/`q` keys work under evil.
-Reviewed commits are kept in `doom-cache-dir`.
+Reviewed commits are kept in `doom-cache-dir`. In a task worktree both agents
+share the review of the repo it belongs to.
+
+## Agent jail
+
+On macOS, pi, hax and the tests `SPC 5 t`/`SPC 5 d` run through `sandbox-exec`
+with `modules/my/ai/agent.sb` (`modules/my/ai/jail.el` builds the command). The
+profile is read from the live config, so an agent editing its project's copy
+changes nothing until you merge and reload. In the jail:
+
+- writes reach only the project, temp dirs, `~/.pi/agent/sessions`, hax's
+  state and cache, and the uv, Maven and gitlibs caches the project's tests
+  need;
+- `.git` (hooks, config, refs), `.pi/`, `.worktrees/`, any `AGENTS.md` and
+  `.dir-locals.el` stay read-only: they run or load later with your rights.
+  Agents read git but cannot stage or commit; that stays yours, in magit;
+- ssh, gpg, AWS and gh credentials, `~/.authinfo*`, `~/.netrc` and any
+  `secrets.el` are unreadable;
+- the Emacs server socket (`emacsclient --eval` would reach your Emacs),
+  ssh-agent, gpg-agent, the Docker socket, LaunchServices and AppleEvents
+  (`open`, `osascript`) are off limits;
+- a `:MODEL: local` task session gets loopback only, enough for llama-server
+  (`+ai-pi-model-networks`); every other session has the network open.
+
+The pi opened to record a trust decision runs outside, since it writes
+`~/.pi/agent/trust.json`. Without `sandbox-exec` (Linux) or for remote
+projects agents start as before, and Emacs says so once;
+`(setq +ai-jail-enabled nil)` turns the jail off. When something an agent needs
+is denied, `log stream --style compact --predicate 'sender == "Sandbox"'` names
+the path; widen `agent.sb` (a guarded file, see `d` below) and rerun
+`bin/jail-check`.
+
+The jail covers what runs inside it. Merging, `C-M-x` on the agent's elisp
+and anything else you run on its output afterwards run with your rights; the
+guard on `r`/`R`/`d` and reading the diff are what stand there. Reads outside
+the denied paths, including other repos, stay open.
 
 ## Tasks
 
 Each repo in the agent flow keeps a `tasks.org` at its root; `M-x +tasks/init`
 writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
 `.git/info/exclude`, so they stay out of git without touching `.gitignore`.
+Each started task works in its own git worktree, `.worktrees/<branch>` (slashes
+become `-`, also excluded), so the main checkout stays on main. For `$DOOMDIR`
+that is the config Emacs loads: a restart mid-task never loads the agent's code.
 `SPC 5` (and `SPC m w` inside `tasks.org`) opens the tasks menu:
 
 | key | does |
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
 | `I` | add a sub-IDEA under the open task at point (or a picked one) |
-| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create and switch to `feat/<slug>`, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile its whole tree under `* Active`, then open a pi session named after the branch, on the task's `:MODEL:`, with `/feature <heading>`, a `PART OF:` line for nested tasks and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
-| `c` | continue a started task: switch to its `:BRANCH:` and focus its pi session |
+| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create `feat/<slug>` in a new worktree, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA → TODO, refile its whole tree under `* Active`, then open a pi session in that worktree, named after the branch, on the task's `:MODEL:`, with `/feature <heading>`, a `PART OF:` line for nested tasks and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled; a task already linked keeps its `:BRANCH:` |
+| `c` | continue a started task: open its worktree (adding one for a branch without) and focus its pi session |
 | `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
-| `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed |
-| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*` |
-| `t` | `just test` when the justfile has a `test` recipe and `just` is installed, else projectile's test command (says so when `just` is missing) |
-| `d` | done: refuse if dirty, run tests on the branch (stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, delete the branch (asks about `origin`), mark DONE. Nothing is pushed |
+| `r` | magit diff `main...feat/x` for the task; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) |
+| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review*`, the guard note first |
+| `t` | in the jail: `just test` when the justfile has a `test` recipe and `just` is installed, else projectile's test command (says so when `just` is missing); on a task in `tasks.org`, in its worktree |
+| `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run tests in the worktree in the jail (stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Nothing is pushed; quit the task's pi session afterwards |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |
 | `o` / `f` | Board agenda / visit `tasks.org` |
@@ -115,6 +157,15 @@ Board's Ready/Ideas sections skip parents until their children close. In
 opts out. Starting a leaf moves its whole tree, ancestors still IDEA, under
 `* Active`; each leaf gets its own branch, and a parent becomes startable once
 its parts are closed.
+
+Agent guards are the files whose change widens what agents may do:
+`modules/my/ai/` and `modules/my/tasks/` (the jail, the review and this flow),
+`.pi/`, any `AGENTS.md`, `.dir-locals.el` and the justfile
+(`+tasks-guarded-files`). The jail keeps agents off `.pi/`, `AGENTS.md` and
+dir-locals; the guard catches their edits to the rest, and whatever you or
+others commit. A branch the old flow left checked
+out in the main checkout keeps working there; `d` then tests it there, as
+before.
 
 The block's State column reads `ahead N` (commits not on main), `merged`, or
 `DONE! …` once the task is done; `DONE! delete branch` marks leftovers. Main
