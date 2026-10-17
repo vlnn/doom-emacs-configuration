@@ -15,11 +15,12 @@ real one in `+tasks/start`, found by using the flow.
 |---|---|---|
 | `IDEA` | you | `SPC 5 i` (capture into `* Ideas`), `SPC 5 I` (sub-idea under the task at point) |
 | `TODO` | you | a leaf you mean to start next; `SPC m t` |
-| `PLAN` | `+tasks/start` | `SPC 5 s` on a leaf: repo review if due, branch in its own worktree, `:BRANCH:`, `:ACCEPT:`, `:MODEL:`, refile its tree to `* Active`, jailed pi session there named after the branch |
+| `PLAN` | `+tasks/start` | `SPC 5 s` on a leaf: repo review if due, branch in its own worktree, `:BRANCH:`, `:ACCEPT:`, `:MODEL:`, refile its tree to `* Active`, jailed pi session there named after the branch, the grilling interview in its input. The Board says `plan?` until pi writes `PLAN.md`, then `approve!` |
+| `RED` | `+tasks/approve-plan` | `SPC 5 n` on the PLAN task: `y` dates `PLAN.md` with `Approved:`, moves to RED and tells pi to start on the first test (`n` prefills a refusal, `e` opens the plan to edit) |
 | `RED` / `GREEN` | `+tasks/test` | `SPC 5 t`: the worktree's tests in the jail; the verdict lands when the compilation finishes. `SPC 5 d` also leaves RED when its test run fails |
 | `REVIEW` | `+tasks/review`, `+tasks/ai-review` | `SPC 5 r` / `SPC 5 R`; listed in `SPC o A r` ("Needs my review") |
-| `WAIT` | `+tasks/wait`, `+tasks/done`, you | `SPC 5 w` asks why; `SPC 5 d` parks a task whose merge it cannot finish, the obstacle as the reason; `SPC m t` by hand asks why. `SPC 5 n` on it goes back to PLAN and resumes pi |
-| `DONE` | `+tasks/done` | `SPC 5 d`: guard check, jailed tests in the worktree, merge `--no-ff`, remove worktree and branch, DONE |
+| `WAIT` | `+tasks/wait`, `+tasks/done`, you | `SPC 5 w` asks why; `SPC 5 d` parks a task whose merge it cannot finish, the obstacle as the reason; `SPC m t` by hand asks why. `SPC 5 n` on it goes back to RED (PLAN while the plan is not approved) and resumes pi |
+| `DONE` | `+tasks/done` | `SPC 5 d`: refuses while `PLAN.md` has open items (`C-u` overrides), guard check, jailed tests in the worktree, merge `--no-ff`, remove worktree and branch, DONE |
 | `DROPPED` | you, on abandon | `SPC m t`; asks for a note (`@`) |
 | back to `TODO`/`IDEA` | `+tasks/abort` | `SPC 5 x`: end the pi session and its processes, remove the worktree, delete the branch (tip kept at `refs/aborted/…`), heading back to where `s` found it |
 
@@ -33,36 +34,16 @@ at point (or the board row at point) one stage on. Each change is timestamped
 1. `M-x +tasks/init` in `$DOOMDIR` writes `tasks.org` and adds it,
    `tasks.org_archive` and `.worktrees/` to `.git/info/exclude`. Task worktrees
    live in `.worktrees/`, so the checkout Emacs loads stays on `main`.
-2. `/feature` is a pi prompt template and does not live in this repo. Put it in
-   `~/.pi/agent/prompts/feature.md`, for example:
-
-   ```markdown
-   ---
-   description: Work one tasks.org task, TDD
-   argument-hint: <heading>
-   ---
-   Work on this task from tasks.org (in the main checkout; from a task
-   worktree that is ../../tasks.org):
-
-   $@
-
-   PART OF names its parent tasks: they say why it exists; implement only this
-   task, not its parents or siblings. ACCEPT is the definition of done; if it is
-   missing above, read :ACCEPT: from the heading in tasks.org.
-
-   1. PLAN: list the failing ERT tests to write, in order, and the small named
-      functions they need. Stop and wait for my go.
-   2. RED: add the first test under test/, run bin/test, show the failure.
-   3. GREEN: smallest change that passes; run bin/test and bin/compile-check.
-   4. Repeat 2–3 per test. Do not stage or commit (the jail refuses it anyway).
-      Finish with a summary of the diff and how ACCEPT is met.
-
-   Follow README.md: +scope/command, +scope--helper, no comments unless the
-   why is non-obvious, every should wrapped in ert-info "X should Y".
-   ```
-
-   Run `/reload` in an open pi session after editing it; the reloaded pi keeps
-   the session's jail, model and trust flags.
+2. The interview `SPC 5 s` starts is the `grilling` skill, committed under
+   `.agents/skills/grilling/` (its README names the upstream commit and the
+   install line). pi loads it from the worktree once the repo review has
+   trusted `$DOOMDIR`; nothing else to install. The house rules the retired
+   `/feature` template used to carry live in `AGENTS.md` at the root, with
+   the plan gate: while `PLAN.md` exists without an `Approved:` line, pi edits
+   nothing but `PLAN.md`. Both files are agent guards, so the first `SPC 3` /
+   `SPC 5 s` after adding them shows the review in `*agent-review:…*`;
+   `C-c C-c` trusts it. Task worktrees share that review. If you still have
+   `~/.pi/agent/prompts/feature.md`, delete it.
 3. Tell `SPC 5 t` and `SPC 5 d` how to test this repo. Without a `justfile` they
    ask projectile, which has no test command for a Doom config. Add
    `.dir-locals.el` at the root (Emacs may ask once whether to accept it):
@@ -76,16 +57,14 @@ at point (or the board row at point) one stage on. Each change is timestamped
    `SPC 5 d` asks whether to merge with no tests run. Agents cannot rewrite
    it: the jail keeps dir-locals read-only, since Emacs evaluates them with
    your rights, and a change to it on the branch shows up in the guard note.
-4. Optional `AGENTS.md` at the root with the same house rules, committed for
-   the same reason. Adding one makes the first `SPC 3` / `SPC 5 s` show the
-   review in `*agent-review:…*` (pi has no decision for `$DOOMDIR` yet);
-   `C-c C-c` trusts it. Task worktrees share that review.
-5. On the Mac, `bin/jail-check` once: it runs probes under
+4. On the Mac, `bin/jail-check` once: it runs probes under
    `modules/my/ai/agent.sb` and should end with `jail behaves as agent.sb says`.
 
 `:MODEL: local` runs pi with `--model qwopus-coder` and loopback-only network,
 `claude` with Anthropic's Sonnet and the network open (`+ai-pi-model-args`,
 `+ai-pi-model-networks`); both apply when a task's session starts.
+`:PLAN_MODEL:` (`C-u SPC 5 s` asks for it) runs the interview on another model;
+absent, the interview runs on `:MODEL:`.
 
 ## 1. The trigger
 
@@ -126,9 +105,10 @@ In `$DOOMDIR`:
      itself stays on `main`.
    - A pi session named `feat/start-drops-…` opens in that worktree, jailed:
      it can write only there (plus temp and its session files), on the local
-     model with loopback-only network, with `/feature Start drops the task if Active is tagged` and
-     its `ACCEPT:` line in the input (on the kill ring instead if the input
-     already had text).
+     model with loopback-only network, with
+     `/skill:grilling Start drops the task if Active is tagged`, its `ACCEPT:`
+     line and the `PLAN.md` shape to write in the input (on the kill ring
+     instead if the input already had text).
 
 If the task looks too big for one branch, split it instead of step 3: with
 point on the IDEA, `SPC 5 I` once per part (say `Tagged Active in
@@ -145,18 +125,63 @@ loads `$DOOMDIR`, which never left `main`. `SPC 3` inside pi hides it.
 
 ## 3. PLAN
 
-Send the prefilled input. A good plan for this bug:
+Send the prefilled input. The skill makes pi interview you a round at a time:
+it reads `+tasks/start` and the test file itself, and asks only what it cannot
+look up. One real round for this bug:
 
-1. `+tasks--top-heading-end` finds a tagged `* Active`.
-2. With no `* Active`, it signals a `user-error` naming the heading.
-3. `+tasks--move-under` leaves the buffer untouched when the target is missing
-   (look the target up before deleting).
-4. `+tasks--start-at` checks the target heading before `+tasks--add-worktree`.
+```
+❓ Q1 - Where to accept tags: in +tasks--top-heading-end, or in a new
+   predicate that +tasks--top-heading uses too?
+➡️ A new +tasks--heading-title, stripping keyword, tags and cookies, used by
+   both; one place to be right about what a heading is called.
 
-The task has been `PLAN` since `SPC 5 s`. Push back now if a step is missing;
-it is the cheapest point to redirect. If the plan is off in a way no reply will
-fix, `SPC 5 x` aborts: the session, worktree and branch go, the heading is an
-IDEA again with its `ACCEPT` kept, and nothing else has changed.
+❓ Q2 - Should a missing * Active be a user-error or a message?
+➡️ user-error: nothing has been changed yet, and the caller stops.
+
+❓ Q3 - Guard before the worktree, or roll the worktree back after?
+➡️ Check the heading first in +tasks--start-at; adding nothing beats undoing.
+```
+
+`y y y`. The frontier is empty, so pi writes `PLAN.md` at the worktree root
+and says `PLAN.md written; waiting for approval.`:
+
+```markdown
+# Plan: Start drops the task if Active is tagged
+
+ACCEPT: start refiles under a tagged * Active; with none it errors before adding the worktree and loses nothing
+
+## Decisions
+- Q: Where to accept tags? → A: a shared +tasks--heading-title
+- Q: Missing * Active: user-error or message? → A: user-error
+- Q: Guard before the worktree or roll back after? → A: check first in +tasks--start-at
+
+## Tests, in order
+- [ ] `+tasks--top-heading-end/accepts-tagged-heading`: top-heading-end should find a top heading that carries tags
+- [ ] `+tasks--move-under/keeps-subtree-when-target-missing`: move-under should not delete the subtree when the target heading is missing
+- [ ] `+tasks--start-at/adds-no-worktree-without-an-active-heading`: start should add nothing when tasks.org has no * Active
+
+## Functions
+- `+tasks--heading-title` in `modules/my/tasks/config.el`: heading sans keyword, tags, cookies
+- `+tasks--top-heading` in `modules/my/tasks/config.el`: find by title or user-error
+
+## Touches guarded files
+- modules/my/tasks/config.el
+
+## Open
+```
+
+The Board now reads `approve!` beside the task. `SPC 5 n` on it checks the
+headings, opens the plan read-only beside the chat and asks
+`Approve this plan? (y, n, e to edit)`. Push back here if a step is missing; it
+is the cheapest point to redirect: `n` leaves `Plan not approved: ` in pi's
+input for you to finish, `e` lets you fix the plan yourself and tells pi to
+read it again. `y` writes `Approved: 2026-10-17` under `ACCEPT:`, moves the
+task to `RED` and sends `Plan approved: PLAN.md carries the Approved line.
+Start with its first test…`; with a `:PLAN_MODEL:` that differs from
+`:MODEL:`, the session is restarted on `:MODEL:` first, and the line goes out
+once it is up. If the plan is off in a way no answer will fix, `SPC 5 x`
+aborts: the session, worktree, branch and plan go, the heading is an IDEA
+again with its `ACCEPT` kept, and nothing else has changed.
 
 ## 4. RED
 
@@ -186,7 +211,19 @@ The agent adds tests to `test/tasks-test.el` and runs `bin/test`:
 ```
 
 Both fail (`search-failed`, not `user-error`); `SPC 5 t` on the task runs them
-and leaves it `RED`.
+and leaves it `RED`. As each goes green the agent ticks its box in `PLAN.md`.
+
+Mid-task, pi hits a decision the plan did not settle: whether
+`+tasks--move-under` should look the target up itself or take a position.
+`AGENTS.md` sends it back to the interview rather than a guess: one round,
+`❓ Q4 - move-under: look up the target, or be given its position?`, your
+answer, and a new line under `## Decisions`:
+
+```markdown
+- Q: move-under: look up the target or take a position? → A: look it up; callers stay simple
+```
+
+Approval is not reopened for it: the round you answered is the approval.
 
 ## 5. GREEN
 
@@ -258,8 +295,13 @@ Before restarting after a merge:
 
 ## Sharp edges seen on the way
 
-- `/feature` and its behaviour live in `~/.pi/agent/prompts/`, not here; a
-  fresh machine has the key binding but not the prompt.
+- The interview is only as good as the model running it. Whether
+  `qwopus-coder` holds a usable round is open until a few real tasks have
+  gone through; `C-u SPC 5 s` puts the interview on `claude` for one task,
+  and a `local-think` entry in `+ai-pi-model-args` would be the local
+  alternative.
+- pi ticks the plan's boxes only when it remembers to; `SPC 5 r` shows the
+  count but `SPC 5 d` does not enforce it. `## Open` it does enforce.
 - `trust.el` treats commits from your `user.email` and `+ai-trust-own-emails` as
   yours. A jailed agent cannot commit or touch the context files (`AGENTS.md`,
   `AGENTS.override.md`, `CLAUDE.md`), `.pi/` or `.agents/`; one you run

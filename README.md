@@ -69,7 +69,8 @@ step.
 files load outside Doom; tests cover the pure functions
 (`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
 `+tasks--*`, `+ai-trust--*`, `+ai--jail*`); the tasks tests drive real git in
-temp repos for worktrees and `done`. ERT checks the arguments the jail is
+temp repos for worktrees and `done`, and `test/tasks-plan-test.el` the plan
+gate with `PLAN.md` fixtures in temp worktrees. ERT checks the arguments the jail is
 started with and, as Emacs regexps, which paths the profile's name rules
 match; `bin/jail-check` checks what Seatbelt enforces, so run it after
 editing `agent.sb`. `test/run.el` turns native-comp trampolines off, so tests
@@ -158,8 +159,11 @@ the denied paths, including other repos, stay open.
 ## Tasks
 
 Each repo in the agent flow keeps a `tasks.org` at its root; `M-x +tasks/init`
-writes the skeleton and adds `tasks.org` and `tasks.org_archive` to
+writes the skeleton and adds `tasks.org`, `tasks.org_archive` and `PLAN.md` to
 `.git/info/exclude`, so they stay out of git without touching `.gitignore`.
+It also offers, asking first, the `grilling` skill (`.agents/skills/`) and an
+`AGENTS.md` holding the plan gate, so the interview below works in that repo
+too; it never overwrites what the repo already has.
 Each started task works in its own git worktree, `.worktrees/<branch>` (slashes
 become `-`, also excluded, and left out of lsp's file watching in the main
 checkout), so the main checkout stays on main. For `$DOOMDIR`
@@ -170,15 +174,15 @@ that is the config Emacs loads: a restart mid-task never loads the agent's code.
 |---|---|
 | `i` | capture an IDEA into this project's `tasks.org` |
 | `I` | add a sub-IDEA under the open task at point (or a picked one) |
-| `n` | next: do whatever moves the task at point (or the board row at point) one stage on — see the stage table below; a heading without a keyword is refused |
-| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create `feat/<slug>` in a new worktree, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA/TODO → PLAN, refile its whole tree under `* Active`, then open a pi session in that worktree, named after the branch, on the task's `:MODEL:`, with `/feature <heading>`, a `PART OF:` line for nested tasks and its `ACCEPT:` line in the input (on the kill ring instead when the input has text). Nothing changes if the repo review is cancelled or `tasks.org` has no top-level `Active` heading (tags, cookies and a priority on it are fine); a task already linked keeps its `:BRANCH:` |
-| `c` | continue a started task: open its worktree (adding one for a branch without) and focus its pi session |
+| `n` | next: do whatever moves the task at point (or the board row at point) one stage on — see the stage table below; a heading without a keyword is refused. On a PLAN task: approve its plan (below) |
+| `s` | start the leaf IDEA/TODO at point (on a parent: pick one of its leaves; elsewhere: pick any leaf): create `feat/<slug>` in a new worktree, set `:BRANCH:`, ask `:ACCEPT:` if missing, default `:MODEL:` to `local`, IDEA/TODO → PLAN, refile its whole tree under `* Active`, then open a pi session in that worktree, named after the branch, on the task's `:PLAN_MODEL:` (else `:MODEL:`), with `/skill:grilling <heading>`, a `PART OF:` line for nested tasks, its `ACCEPT:` line and the `PLAN.md` to write in the input (on the kill ring instead when the input has text). `C-u s` asks which model runs the interview and stores it as `:PLAN_MODEL:`. Nothing changes if the repo review is cancelled or `tasks.org` has no top-level `Active` heading (tags, cookies and a priority on it are fine); a task already linked keeps its `:BRANCH:` |
+| `c` | continue a started task: open its worktree (adding one for a branch without) and focus its pi session, on the plan model until `PLAN.md` is approved, on `:MODEL:` after |
 | `a` | set `:ACCEPT:` (ideas and in-flight tasks) |
 | `w` | wait: park the task on something outside the repo, asking why; the reason is kept in `:REASON:` and shown on the Board until the task moves again |
-| `r` | magit diff `main...feat/x` for the task, task → REVIEW; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) |
-| `R` | AI review of that diff against `:ACCEPT:` (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first; task → REVIEW |
+| `r` | magit diff `main...feat/x` for the task, task → REVIEW; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) and `plan: 4/5 tests ticked` when the worktree has a `PLAN.md` |
+| `R` | AI review of that diff against `:ACCEPT:` and the task's `PLAN.md` when there is one (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first; task → REVIEW |
 | `t` | run the tests of the tree at hand in the jail: the task's worktree on a task in `tasks.org`, else the current project. The command is that tree's: `just test` when its justfile has a `test` recipe and `just` is installed, else projectile's test command with that tree's dir-locals applied (so a committed `.dir-locals.el` setting `projectile-project-test-cmd` works from any buffer); says so when `just` is missing. A task's run leaves it GREEN or RED when the compilation finishes |
-| `d` | done: refuse if the main checkout is dirty or the worktree holds uncommitted or untracked work, ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Failing tests leave the task RED; a merge that cannot finish (main cannot fast-forward to origin, conflicts) leaves it WAIT with the obstacle as `:REASON:`. Nothing is pushed; quit the task's pi session afterwards |
+| `d` | done: refuse if the main checkout is dirty, the worktree holds uncommitted or untracked work, or its `PLAN.md` lists anything under `## Open` (`C-u d` merges anyway), ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Failing tests leave the task RED; a merge that cannot finish (main cannot fast-forward to origin, conflicts) leaves it WAIT with the obstacle as `:REASON:`. Nothing is pushed; quit the task's pi session afterwards |
 | `x` | abort: throw the agent's work away. Asks, naming how many commits go; ends the task's pi session and every process it started; removes the worktree, uncommitted files included; deletes the branch, keeping its tip at `refs/aborted/<branch>` for reading; returns the heading to the state it was started from (its own state log, else TODO), dropping `:BRANCH:` and `:REASON:`, keeping `:ACCEPT:` and `:MODEL:`. Refuses a branch main already contains: that is `d`'s job |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |
@@ -193,11 +197,11 @@ keyword by hand works too (`SPC m t`), but then nothing else happens.
 |---|---|---|---|
 | `IDEA` | captured, not committed to | `i`, `I`, `l` | `s` |
 | `TODO` | ready: a leaf you intend to start | you | `s` |
-| `PLAN` | started: worktree, branch, pi session exist | `s`, `n` on WAIT | `t` |
-| `RED` | last test run failed | `t`, `d` | `t` |
+| `PLAN` | started: pi is interviewing you, or `PLAN.md` waits for your approval | `s`, `n` on WAIT while the plan is not approved | approve the plan: `y` dates it and goes to RED, `n` prefills a refusal, `e` edits it |
+| `RED` | plan approved, pi is working; or the last test run failed | `n` → `y`, `t`, `d`, `n` on WAIT once the plan is approved | `t` |
 | `GREEN` | last test run passed | `t` | `r` |
 | `REVIEW` | you are reading the diff | `r`, `R` | `d` |
-| `WAIT` | parked on something outside the repo; `:REASON:` says what | `w`, `d`, a keyword change by hand (asks why) | back to PLAN, reason dropped, pi resumed |
+| `WAIT` | parked on something outside the repo; `:REASON:` says what | `w`, `d`, a keyword change by hand (asks why) | back to RED (PLAN while the plan is not approved), reason dropped, pi resumed |
 | `DONE` / `DROPPED` | merged / abandoned | `d` / you | archive the subtree |
 
 Every transition is timestamped (`!`), so the "Last week" agenda view is a log
@@ -205,8 +209,35 @@ of the flow. `x` is the way back: it undoes `s`.
 
 The Board (`SPC 5 o`) is one block per stage in that order, ideas at the top,
 DONE and DROPPED gathered at the bottom as the pile to archive. Each row shows
-the task's branch, or its reason while it waits. Ready and Ideas list leaves
-only. `SPC 5 O` narrows the Board to the project it was opened from and back.
+the task's branch, its reason while it waits, or what its plan needs while it
+is PLAN: `plan?` until the interview writes `PLAN.md`, `approve!` once the file
+exists without an `Approved:` line. Ready and Ideas list leaves only.
+`SPC 5 O` narrows the Board to the project it was opened from and back.
+
+### The plan
+
+`s` does not hand pi the task; it hands pi an interview. `/skill:grilling`
+(upstream in `.agents/skills/grilling/`, see its README) makes the agent map
+the decisions the task forces, look facts up itself, and ask you only what you
+alone can settle, a round at a time. When nothing is left open it writes
+`PLAN.md` at the worktree root, in a fixed shape (`+tasks--plan-format`):
+title, `ACCEPT:`, then `## Decisions` (`Q → A` lines), `## Tests, in order`
+(check boxes), `## Functions`, `## Touches guarded files`, `## Open`. The
+Board says `approve!`; `n` on the task validates the headings, shows the plan
+beside the chat and asks `y`, `n` or `e`. `y` appends `Approved: <date>` under
+`ACCEPT:`, moves the task to RED and tells pi to start on the first test;
+until then `AGENTS.md` keeps it from editing anything but `PLAN.md`. `n`
+prefills `Plan not approved: ` for you to finish. `e` opens the plan writable;
+each save asks pi to read it again and wait. `PLAN.md` is excluded from git
+and goes away with the worktree.
+
+The plan is what the rest of the flow reads: `R` reviews the diff against it,
+`r` and `d` show how many of its tests are ticked (shown, not enforced), and
+`d` refuses while `## Open` has a bullet. Decisions the plan did not settle go
+through the same interview later and land under `## Decisions`; approval is
+not reopened for them. `:PLAN_MODEL:` can run the interview on a better model
+than the work: the plan is the handoff, and `y` restarts the session on
+`:MODEL:` when the two differ.
 
 The `branches` block only matches headings with a TODO keyword, so a stray
 `:BRANCH:` on `* Branches` shows as `NONE`. `org-agenda-files` is extended, not
@@ -218,10 +249,10 @@ my review (`r`) views join `org-agenda-custom-commands`, replacing only
 commands of yours under those keys.
 `+tasks-branch-prefixes` (default `("feat/")`, safe as a dir-local) picks the
 branches the block lists; with more than one prefix, `start` asks which.
-`:MODEL:` maps to pi flags through `+ai-pi-model-args` (`local`, `claude`);
-they apply when a task's session starts. A value missing from that list stops
-`s` and `c` before the review, rather than starting pi on its default model
-with the network open.
+`:MODEL:` and `:PLAN_MODEL:` map to pi flags through `+ai-pi-model-args`
+(`local`, `claude`); they apply when a task's session starts. A value missing
+from that list stops `s` and `c` before the review, rather than starting pi on
+its default model with the network open.
 
 Ideas nest: a sub-heading with a TODO keyword is a part of its parent, and
 the deepest open ones go first. Only leaves (no open sub-task) start; pickers
@@ -235,8 +266,10 @@ its parts are closed.
 
 Agent guards are the files whose change widens what agents may do:
 `modules/my/ai/` and `modules/my/tasks/` (the jail, the review and this flow),
-`.pi/`, `.agents/`, any `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`,
-`.dir-locals.el` and the justfile, in any case (`+tasks-guarded-files`). The
+`.pi/`, `.agents/` (the `grilling` skill lives there), any `AGENTS.md` (this
+repo's holds the house rules and the plan gate), `AGENTS.override.md`,
+`CLAUDE.md`, `.dir-locals.el` and the justfile, in any case
+(`+tasks-guarded-files`). The
 jail keeps agents off `.pi/`, `.agents/`, the context files and dir-locals;
 the guard catches their edits to the rest, and whatever you or others commit. A branch the old flow left checked
 out in the main checkout keeps working there; `d` then tests it there, as
@@ -250,7 +283,8 @@ else the task on the current branch (so any buffer of a worktree), else ask;
 so does `c`.
 
 `docs/flow-walkthrough.md` follows one task from capture to merge, using this
-repo to fix a bug in `+tasks/start`.
+repo to fix a bug in `+tasks/start`; `docs/planning-flow.md` is the design
+behind the plan gate.
 
 ## Local models
 
