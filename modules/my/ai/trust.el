@@ -505,6 +505,12 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 (defun +ai--pi-model-args (model)
   (cdr (assoc model +ai-pi-model-args)))
 
+(defun +ai--check-pi-model (model)
+  "Refuse a tasks.org MODEL that `+ai-pi-model-args' has no flags for, rather than run pi's default."
+  (when (and model (not (assoc model +ai-pi-model-args)))
+    (user-error "Unknown :MODEL: %s; set one of %s, or add it to `+ai-pi-model-args'"
+                model (string-join (mapcar #'car +ai-pi-model-args) ", "))))
+
 (defvar +ai-pi-model-networks '(("local" . "local"))
   "Jail network for each tasks.org :MODEL: value; other models get \"open\".")
 
@@ -588,7 +594,8 @@ SESSION names a separate session; MODEL picks flags from
 repo to review, by default the one ROOT belongs to, so task worktrees share
 their repo's review; pass it when PREPARE creates ROOT. A running session
 skips the review: its inputs are already loaded."
-  (ignore draft prepare model)
+  (ignore draft prepare)
+  (+ai--check-pi-model model)
   (if (+ai--live-pilish-session-p root session)
       (apply #'+ai--start-pi root 'live args)
     (+ai-trust--gate 'pi (or review-root (+ai--main-checkout root))

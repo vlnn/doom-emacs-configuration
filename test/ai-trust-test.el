@@ -307,6 +307,19 @@
                    (+ai-trust-test--with-launch-spies 'unchanged
                      (+ai--launch-pi "/r/" :draft "/feature X" :session "feat/x" :model "local"))))))
 
+(ert-deftest +ai--launch-pi/refuses-an-unknown-model-before-the-review ()
+  (ert-info ("an unknown :MODEL: should stop the start before the review, any worktree or pi")
+    (should (equal '(refused)
+                   (+ai-trust-test--with-launch-spies 'unchanged
+                     (condition-case nil
+                         (+ai--launch-pi "/r/" :model "gpt-9" :prepare (lambda () (push 'prepare calls)))
+                       (user-error (push 'refused calls))))))))
+
+(ert-deftest +ai--check-pi-model/knows-the-models-it-has-flags-for ()
+  (pcase-dolist (`(,model . ,known) '((nil . t) ("local" . t) ("claude" . t) ("gpt-9" . nil) ("Local" . nil)))
+    (ert-info ((format ":MODEL: %S should%s be accepted" model (if known "" " not")))
+      (should (eq known (condition-case nil (progn (+ai--check-pi-model model) t) (user-error nil)))))))
+
 (ert-deftest +ai--launch-pi/live-session-skips-the-review ()
   (ert-info ("focusing a running session should not scan or ask, its inputs are already loaded")
     (should (equal '(prepare (pilish default ("-e" "ext.ts") "feat/x") (prefill nil "feat/x"))

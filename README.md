@@ -172,7 +172,9 @@ commands of yours under those keys.
 `+tasks-branch-prefixes` (default `("feat/")`, safe as a dir-local) picks the
 branches the block lists; with more than one prefix, `start` asks which.
 `:MODEL:` maps to pi flags through `+ai-pi-model-args` (`local`, `claude`);
-they apply when a task's session starts.
+they apply when a task's session starts. A value missing from that list stops
+`s` and `c` before the review, rather than starting pi on its default model
+with the network open.
 
 Ideas nest: a sub-heading with a TODO keyword is a part of its parent, and
 the deepest open ones go first. Only leaves (no open sub-task) start; pickers
