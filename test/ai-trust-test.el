@@ -559,3 +559,12 @@
           (with-temp-buffer (+ai--send-pilish-input "Plan approved")))
         (ert-info ((format "send-pilish-input should %s" why))
           (should (equal (list expected-sent expected-kill) (list sent (car kill-ring)))))))))
+
+(ert-deftest +ai--launch-pi/sends-the-draft-when-asked ()
+  (ert-info ("a start with :send should send the draft instead of leaving it in the input")
+    (should (equal '(gate (pilish default ("-e" "ext.ts" "--model" "qwopus-coder") "feat/x")
+                          (send "Plan approved" "feat/x"))
+                   (+ai-trust-test--with-launch-spies 'unchanged
+                     (cl-letf (((symbol-function '+ai--send-pilish-input)
+                                (lambda (line &optional session) (push (list 'send line session) calls))))
+                       (+ai--launch-pi "/r/" :draft "Plan approved" :send t :session "feat/x" :model "local")))))))

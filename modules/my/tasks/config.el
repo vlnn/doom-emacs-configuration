@@ -22,6 +22,7 @@
   "#+TODO: IDEA(i) TODO(t) PLAN(p!) RED(r!) GREEN(g!) REVIEW(v!) WAIT(w!) | DONE(d!) DROPPED(x@)
 #+COLUMNS: %45ITEM %8TODO %18BRANCH %7MODEL %12CLOSED
 #+PROPERTY: MODEL_ALL local claude
+#+PROPERTY: PLAN_MODEL_ALL local claude
 #+ARCHIVE: %s_archive::* Archived
 
 * Ideas
@@ -478,12 +479,13 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (when (and value (not (org-entry-get nil property)))
     (org-entry-put nil property value)))
 
-(defun +tasks--start-entry (branch accept)
-  "Link the task at point to BRANCH, make it a TODO and move its tree under * Active."
+(defun +tasks--start-entry (branch accept &optional plan-model)
+  "Link the task at point to BRANCH, make it a PLAN and move its tree under * Active."
   (org-back-to-heading t)
   (org-entry-put nil "BRANCH" branch)
   (+tasks--put-missing "ACCEPT" accept)
   (+tasks--put-missing "MODEL" "local")
+  (+tasks--put-missing "PLAN_MODEL" plan-model)
   (org-todo "PLAN")
   (+tasks--goto-tree-root)
   (+tasks--move-under "Active"))
@@ -593,10 +595,10 @@ With WITHIN-TREE, only leaves in the subtree at point."
             (magit-refresh-all))
           tree))))
 
-(cl-defun +tasks--hand-off (root &key draft prepare session model review-root)
+(cl-defun +tasks--hand-off (root &key draft send prepare session model review-root)
   "Give a task to pi in ROOT; PREPARE runs only once REVIEW-ROOT's review allows it."
   (if (fboundp '+ai--launch-pi)
-      (+ai--launch-pi root :draft draft :prepare prepare :session session :model model
+      (+ai--launch-pi root :draft draft :send send :prepare prepare :session session :model model
                       :review-root review-root)
     (when prepare
       (funcall prepare))
@@ -608,22 +610,23 @@ With WITHIN-TREE, only leaves in the subtree at point."
   (or (org-entry-get nil "BRANCH")
       (+tasks--branch-name (+tasks--read-prefix) heading)))
 
-(defun +tasks--start-at (marker root branch accept)
+(defun +tasks--start-at (marker root branch accept &optional plan-model)
   (with-current-buffer (marker-buffer marker)
     (save-excursion
       (+tasks--top-heading "Active")
       (goto-char marker)
       (+tasks--add-worktree root branch)
-      (+tasks--start-entry branch accept)
+      (+tasks--start-entry branch accept plan-model)
       (+tasks/refresh-branches)
       (save-buffer))))
 
-(defun +tasks/start ()
-  "Branch into a worktree, link, promote and refile a task, then open pi there.
+(defun +tasks/start (&optional pick-plan-model)
+  "Branch into a worktree, link, promote and refile a task, then open pi's interview there.
 Only leaves start: on a parent with open sub-tasks, asks for one of its
 leaves; elsewhere, asks for any leaf, deepest first within each tree.
+With PICK-PLAN-MODEL (\\[universal-argument]) asks which model runs the interview.
 Nothing changes until the repo review lets pi start."
-  (interactive)
+  (interactive "P")
   (pcase-let ((`(,buffer . ,pos) (+tasks--task-to-start)))
     (with-current-buffer buffer
       (+tasks--top-heading "Active")
@@ -632,14 +635,17 @@ Nothing changes until the repo review lets pi start."
              (root (file-name-as-directory (file-truename default-directory)))
              (heading (org-get-heading t t t t))
              (branch (read-string "Branch: " (+tasks--proposed-branch heading)))
-             (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading))))
+             (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading)))
+             (plan-model (and pick-plan-model (+tasks--read-plan-model)))
+             (task (+tasks--task-plist)))
+        (+tasks--check-models (+tasks--work-model task) (or plan-model (+tasks--interview-model task)))
         (+tasks--hand-off (+tasks--task-worktree root branch)
                           :review-root root
                           :draft (+tasks--interview-prompt heading (or accept (org-entry-get nil "ACCEPT"))
                                                            (+tasks--task-parents))
-                          :prepare (lambda () (+tasks--start-at marker root branch accept))
+                          :prepare (lambda () (+tasks--start-at marker root branch accept plan-model))
                           :session branch
-                          :model (or (org-entry-get nil "MODEL") "local"))))))
+                          :model (or plan-model (+tasks--interview-model task)))))))
 
 (defun +tasks/accept ()
   "Set the one-line acceptance criterion of a task."
@@ -819,7 +825,8 @@ Nothing changes until the repo review lets pi start."
         :heading (org-get-heading t t t t)
         :branch (org-entry-get nil "BRANCH")
         :accept (org-entry-get nil "ACCEPT")
-        :model (org-entry-get nil "MODEL")))
+        :model (org-entry-get nil "MODEL")
+        :plan-model (org-entry-get nil "PLAN_MODEL")))
 
 (defun +tasks--linked-task-at-point ()
   (when (and (+tasks--tasks-file-p buffer-file-name)
@@ -913,7 +920,7 @@ run act on with your rights, in the second.")
                       :review-root root
                       :prepare (lambda () (+tasks--add-worktree root branch))
                       :session branch
-                      :model (plist-get task :model))))
+                      :model (+tasks--session-model task (+tasks--plan-text (+tasks--task-worktree-of task))))))
 
 (defun +tasks/review ()
   "Show the task branch's whole diff against the default branch, with its ACCEPT."
