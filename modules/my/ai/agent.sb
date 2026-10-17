@@ -1,0 +1,94 @@
+;; Seatbelt profile for pi, hax and task tests; see modules/my/ai/jail.el.
+;; Params: PROJECT, HOME, TMPDIR, SSH_AUTH_SOCK, all real paths; NETWORK.
+;; The last matching rule wins.
+
+(version 1)
+(allow default)
+
+(define (home path) (string-append (param "HOME") path))
+(define (project path) (string-append (param "PROJECT") path))
+
+(deny file-write*)
+
+;; shared dependency caches stay read-only: unjailed REPLs and tools run what they hold
+(allow file-write*
+  (subpath (param "PROJECT"))
+  (subpath (param "TMPDIR"))
+  (subpath "/private/tmp")
+  (subpath (home "/.pi/agent/sessions"))
+  (subpath (home "/.local/state/hax"))
+  (subpath (home "/.cache/hax"))
+  (subpath (home "/.cache/agent-jail"))
+  (literal "/dev/null")
+  (literal "/dev/zero")
+  (literal "/dev/tty")
+  (literal "/dev/ptmx")
+  (literal "/dev/stdout")
+  (literal "/dev/stderr")
+  (literal "/dev/dtracehelper")
+  (regex #"^/dev/ttys[0-9]+$")
+  (regex #"^/dev/fd/[0-9]+$"))
+
+;; outside the temp dirs, in any case: any repo's git dir (git runs its config and hooks for you),
+;; the context files pi loads (AGENTS.md, AGENTS.override.md, CLAUDE.md) and dir-locals Emacs evaluates
+(deny file-write*
+  (regex #"/\.[Gg][Ii][Tt](/|$)")
+  (regex #"/[Aa][Gg][Ee][Nn][Tt][Ss](\.[Oo][Vv][Ee][Rr][Rr][Ii][Dd][Ee])?\.[Mm][Dd]$")
+  (regex #"/[Cc][Ll][Aa][Uu][Dd][Ee]\.[Mm][Dd]$")
+  (regex #"/\.[Dd][Ii][Rr]-[Ll][Oo][Cc][Aa][Ll][Ss](-2)?\.[Ee][Ll]$"))
+
+;; scratch repos and fixtures tests create in temp, and gitlibs checkouts, are never opened as yours
+(allow file-write*
+  (subpath (param "TMPDIR"))
+  (subpath "/private/tmp")
+  (subpath (home "/.cache/agent-jail")))
+
+;; the project's git state and agent inputs (.pi, .agents/skills);
+;; other tasks' worktrees, when the agent runs in the main checkout
+(deny file-write*
+  (subpath (project "/.git"))
+  (subpath (project "/.pi"))
+  (subpath (project "/.agents"))
+  (subpath (project "/.worktrees")))
+
+(deny file-read*
+  (subpath (home "/.ssh"))
+  (subpath (home "/.aws"))
+  (subpath (home "/.gnupg"))
+  (subpath (home "/.password-store"))
+  (subpath (home "/.config/gh"))
+  (subpath (home "/.config/gcloud"))
+  (subpath (home "/.kube"))
+  (literal (home "/.docker/config.json"))
+  (literal (home "/.git-credentials"))
+  (literal (home "/.config/git/credentials"))
+  (literal (home "/.npmrc"))
+  (literal (home "/.pypirc"))
+  (literal (home "/.cargo/credentials"))
+  (literal (home "/.cargo/credentials.toml"))
+  (literal (home "/.netrc"))
+  (literal (home "/.authinfo"))
+  (literal (home "/.authinfo.gpg"))
+  (regex #"/secrets\.el$"))
+
+;; sockets and services that act as you, whatever the network mode
+(deny network-outbound
+  (regex #"/emacs[0-9]+/[^/]+$")
+  (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
+  (literal (param "SSH_AUTH_SOCK"))
+  (subpath (home "/.gnupg"))
+  (literal "/private/var/run/docker.sock")
+  (subpath (home "/.docker/run"))
+  (subpath (home "/.colima")))
+
+(deny mach-lookup
+  (global-name "com.apple.coreservices.launchservicesd")
+  (global-name "com.apple.coreservices.appleevents"))
+
+;; local models: llama-server's port on loopback, nothing else; no name lookups, which would leak
+;; data as DNS queries, so local providers must use 127.0.0.1 rather than localhost
+(if (string=? (param "NETWORK") "local")
+  (deny network-outbound))
+(if (string=? (param "NETWORK") "local")
+  (allow network-outbound
+    (remote ip "localhost:8080")))

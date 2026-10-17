@@ -139,3 +139,27 @@
   :config
   (setq opencode-default-model "anthropic/claude-sonnet-4-6")
   (set-popup-rule! "^\\*opencode" :side 'right :size 0.4 :select t :quit nil :ttl nil))
+
+(defun +ai--pilish-grammars-in-emacs-state (&rest _)
+  (when-let* ((buffer (get-buffer "*pilish-grammars*")))
+    (with-current-buffer buffer
+      (when (fboundp 'evil-emacs-state)
+        (evil-emacs-state)))))
+
+(use-package! pilish
+  :commands (pilish)
+  :init
+  (setq pilish-project-trust-policy 'default
+        pilish-essential-grammar-action 'auto
+        pilish-extra-args nil)
+  :config
+  (advice-add 'pilish-install-grammars :after #'+ai--pilish-grammars-in-emacs-state))
+
+(set-popup-rule! "^\\*pilish-" :ignore t)
+
+(load! "jail")
+(load! "trust")
+
+(map! :leader
+      :desc "pi"  "3" #'+ai/pi
+      :desc "hax" "4" #'+ai/hax)

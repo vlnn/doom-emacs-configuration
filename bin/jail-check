@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Run commands under modules/my/ai/agent.sb and check what the jail allows.
+# macOS only: Seatbelt (sandbox-exec) is the jail jail.el wraps agents in.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+[[ "$(uname)" == Darwin ]] || { echo "jail-check needs macOS sandbox-exec" >&2; exit 2; }
+
+profile="$PWD/modules/my/ai/agent.sb"
+real_home="$(cd ~ && pwd -P)"
+real_tmp="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+project="$(mktemp -d "$real_home/.jail-check-project.XXXXXX")"
+outside="$(mktemp -d "$real_home/.jail-check.XXXXXX")"
+jail_cache="$real_home/.cache/agent-jail"
+label="org.jail-check.$$"
+server=""
+
+cleanup() {
+  [[ -z "$server" ]] || kill "$server" 2>/dev/null || true
+  tmux -L jail-check kill-server 2>/dev/null || true
+  launchctl remove "$label" 2>/dev/null || true
+  rm -rf "$project" "$outside"
+}
+trap cleanup EXIT
+git -C "$project" init -q
+failures=0
+network=open
+
+real_path() {
+  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+ssh_sock="$(if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then real_path "$SSH_AUTH_SOCK"; else echo /nonexistent; fi)"
+
+jailed() {
+  sandbox-exec -f "$profile" \
+    -D PROJECT="$project" -D HOME="$real_home" -D TMPDIR="$real_tmp" -D NETWORK="$network" \
+    -D SSH_AUTH_SOCK="$ssh_sock" \
+    "$@"
+}
+
+github_credential="printf 'protocol=https\nhost=github.com\n\n' | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null | grep -q '^password='"
+
+expect() {
+  local wanted="$1" message="$2" actual
+  shift 2
+  if jailed "$@" >/dev/null 2>&1; then actual=allowed; else actual=denied; fi
+  if [[ "$actual" == "$wanted" ]]; then
+    echo "ok   - $message"
+  else
+    echo "FAIL - $message (was $actual)"
+    failures=$((failures + 1))
+  fi
+}
+
+expect allowed "a file in the project should be writable" touch "$project/file"
+expect allowed "a project file should be readable" cat "$project/file"
+expect allowed "the temp dir should be writable" sh -c "rm \"\$(mktemp)\""
+expect allowed "git should read the project's repo" git -C "$project" status --short
+expect denied "a file outside the project should not be writable" touch "$outside/file"
+expect denied "git hooks should not be writable" touch "$project/.git/hooks/pre-commit"
+expect denied "git config should not be writable" sh -c "echo >> '$project/.git/config'"
+expect denied "the project's .pi should not be writable" mkdir "$project/.pi"
+expect denied "AGENTS.md should not be writable" touch "$project/AGENTS.md"
+expect denied "dir-locals should not be writable" touch "$project/.dir-locals.el"
+
+if [[ -d "$real_home/.ssh" ]]; then
+  expect denied "ssh keys should not be readable" ls "$real_home/.ssh"
+fi
+if [[ -d "$real_home/.pi/agent/sessions" ]]; then
+  expect allowed "pi sessions should be writable" \
+    sh -c "f='$real_home/.pi/agent/sessions/.jail-check' && touch \"\$f\" && rm \"\$f\""
+fi
+
+if command -v pi >/dev/null; then
+  expect allowed "pi should start in the jail" pi --version
+fi
+if command -v hax >/dev/null; then
+  expect allowed "hax should start in the jail" hax --help
+fi
+
+expect denied "a nested repo's git config should not be writable" \
+  sh -c "mkdir -p '$project/sub/.git' && echo '[core]' >'$project/sub/.git/config'"
+expect allowed "a scratch repo in the temp dir should stay writable, tests git init there" \
+  sh -c 'git init -q "$(mktemp -d)"'
+expect denied "a hard link should not open git config for writing" \
+  sh -c "ln '$project/.git/config' '$project/cfg' && echo >>'$project/cfg'"
+expect denied "AGENTS.md in another case should not be writable" touch "$project/agents.md"
+expect denied ".pi in another case should not be writable" mkdir "$project/.PI"
+expect denied "dir-locals in another case should not be writable" touch "$project/.Dir-Locals.el"
+expect denied ".git in another case should not be writable" touch "$project/.GIT/hooks/pre-commit"
+expect denied "CLAUDE.md should not be writable" touch "$project/CLAUDE.md"
+expect denied "CLAUDE.md in another case should not be writable" touch "$project/claude.MD"
+expect denied "AGENTS.override.md should not be writable" touch "$project/AGENTS.override.md"
+expect denied "a nested AGENTS.md should not be writable" \
+  sh -c "mkdir -p '$project/sub' && touch '$project/sub/AGENTS.md'"
+expect denied "the project's .agents skills should not be writable" mkdir -p "$project/.agents/skills"
+expect allowed "agent files in the temp dir should stay writable, tests write them as fixtures" \
+  sh -c 'd="$(mktemp -d)" && touch "$d/AGENTS.md" "$d/CLAUDE.md" "$d/.dir-locals.el" && rm -r "$d"'
+
+for secret in .config/gcloud .kube .docker/config.json .git-credentials .config/git/credentials \
+              .npmrc .pypirc .cargo/credentials .cargo/credentials.toml; do
+  if [[ -e "$real_home/$secret" ]]; then
+    expect denied "~/$secret should not be readable" ls "$real_home/$secret"
+  fi
+done
+
+for cache in .cache/uv .m2/repository .gitlibs; do
+  if [[ -d "$real_home/$cache" ]]; then
+    expect denied "~/$cache should not be writable: unjailed tools run what it holds" \
+      sh -c "f='$real_home/$cache/.jail-check' && touch \"\$f\" && rm \"\$f\""
+  fi
+done
+expect allowed "the jail's own caches should be writable, gitlibs checkouts included" \
+  sh -c "d='$jail_cache/gitlibs/.jail-check/.git' && mkdir -p \"\$d\" && touch \"\$d/config\" && rm -r '$jail_cache/gitlibs/.jail-check'"
+
+if sh -c "$github_credential"; then
+  expect denied "git's credential helper should not hand the jail your GitHub token" sh -c "$github_credential"
+fi
+
+if command -v emacsclient >/dev/null && emacsclient --eval t >/dev/null 2>&1; then
+  expect denied "the Emacs server should not take commands from the jail" emacsclient --eval t
+fi
+if ssh-add -l >/dev/null 2>&1 || [[ $? == 1 ]]; then
+  expect denied "ssh-agent should not be reachable from the jail" \
+    sh -c 'ssh-add -l >/dev/null 2>&1; test $? -ne 2'
+fi
+if command -v tmux >/dev/null && tmux -L jail-check new-session -d 2>/dev/null; then
+  expect denied "a tmux server outside should not run commands for the jail" \
+    sh -c "tmux -L jail-check run-shell 'touch $outside/tmux' && test -e '$outside/tmux'"
+fi
+expect denied "launchd should not start jobs for the jail" \
+  sh -c "launchctl submit -l $label -- /usr/bin/touch '$outside/launchd'; sleep 2; test -e '$outside/launchd'"
+
+python3 -m http.server 8765 --bind 127.0.0.1 --directory "$outside" >/dev/null 2>&1 &
+server=$!
+disown "$server"
+sleep 1
+network=local
+expect denied "a local-model session should reach only llama-server's port" \
+  curl -fsS -m 2 -o /dev/null http://127.0.0.1:8765/
+if curl -fsS -m 2 -o /dev/null http://127.0.0.1:8080/health 2>/dev/null; then
+  expect allowed "a local-model session should reach llama-server" \
+    curl -fsS -m 2 -o /dev/null http://127.0.0.1:8080/health
+fi
+network=open
+
+if curl -fsS -m 5 -o /dev/null https://example.com 2>/dev/null; then
+  expect allowed "an open session should reach the internet" curl -fsS -m 5 -o /dev/null https://example.com
+  network=local
+  expect denied "a local-model session should not reach the internet" curl -fsS -m 5 -o /dev/null https://example.com
+  expect denied "a local-model session should not resolve names" \
+    python3 -c 'import socket; socket.getaddrinfo("example.com", 443)'
+  network=open
+else
+  echo "skip - network probes need internet access"
+fi
+
+if ((failures > 0)); then
+  echo "$failures failure(s)"
+  exit 1
+fi
+echo "jail behaves as agent.sb says"

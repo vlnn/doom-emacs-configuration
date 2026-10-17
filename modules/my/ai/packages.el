@@ -1,6 +1,7 @@
 ;; -*- no-byte-compile: t; -*-
 (package! aider :recipe (:host github :repo "tninja/aider.el"))
 (package! ai-code)
+(package! pilish)
 (package! markdown-ts-mode)
 (package! opencode :recipe (:host codeberg :repo "sczi/opencode.el"))
 (package! vterm)
