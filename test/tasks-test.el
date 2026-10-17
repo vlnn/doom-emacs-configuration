@@ -329,13 +329,6 @@
                      (list (org-get-todo-state) (org-entry-get nil "BRANCH")
                            (save-excursion (org-up-heading-safe) (org-get-heading t t t t))))))))
 
-(ert-deftest +tasks--feature-prompt/names-the-heading-and-acceptance ()
-  (pcase-dolist (`(,accept ,expected ,why)
-                 '((nil "/feature Unify menus" "be the bare /feature command without ACCEPT")
-                   ("one entry point" "/feature Unify menus\n\nACCEPT: one entry point" "carry the ACCEPT line")))
-    (ert-info ((format "feature-prompt should %s" why))
-      (should (equal expected (+tasks--feature-prompt "Unify menus" accept))))))
-
 (ert-deftest +tasks--task-plist/carries-the-model ()
   (+tasks-test--in-tasks-buffer "** TODO Modelled\n:PROPERTIES:\n:BRANCH: feat/m\n:MODEL: claude\n:END:\n"
     (+tasks-test--goto-heading "Modelled")
@@ -640,13 +633,6 @@
                                                       'display-sort-function))))
     (ert-info ("in-order should still complete like a plain list")
       (should (equal '("b" "a") (all-completions "" table))))))
-
-(ert-deftest +tasks--feature-prompt/names-parents-of-nested-tasks ()
-  (pcase-dolist (`(,parents ,expected ,why)
-                 '(("Parent / Middle" "/feature Deep\n\nPART OF: Parent / Middle\n\nACCEPT: works" "name the parents before ACCEPT")
-                   (nil "/feature Deep\n\nACCEPT: works" "say nothing about parents of a top-level task")))
-    (ert-info ((format "feature-prompt should %s" why))
-      (should (equal expected (+tasks--feature-prompt "Deep" "works" parents))))))
 
 (ert-deftest +tasks--task-parents/joins-task-ancestors-only ()
   (+tasks-test--in-tasks-buffer +tasks-test--tree

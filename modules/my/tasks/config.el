@@ -265,13 +265,16 @@ Empty, it is `org-directory', as Doom's default would have it."
     file))
 
 (defun +tasks/init ()
-  "Write the tasks.org skeleton at the project root and open it."
+  "Write the tasks.org skeleton at the project root and open it.
+Offers the grilling skill and an AGENTS.md too, asking before each."
   (interactive)
-  (let ((file (+tasks--project-file (+tasks--main-root (+tasks--project-root)))))
+  (let* ((root (+tasks--main-root (+tasks--project-root)))
+         (file (+tasks--project-file root)))
     (when (file-exists-p file)
       (user-error "%s already exists" file))
     (with-temp-file file (insert (+tasks--skeleton)))
     (+tasks--exclude-from-git)
+    (+tasks--offer-agent-inputs root)
     (find-file file)))
 
 (defun +tasks--excluded-files ()
@@ -348,11 +351,6 @@ Empty, it is `org-directory', as Doom's default would have it."
 
 (defun +tasks--branch-title (branch prefixes)
   (string-replace "-" " " (+tasks--strip-prefix branch prefixes)))
-
-(defun +tasks--feature-prompt (heading &optional accept parents)
-  (concat (format "/feature %s" heading)
-          (if parents (format "\n\nPART OF: %s" parents) "")
-          (if accept (format "\n\nACCEPT: %s" accept) "")))
 
 (defun +tasks--has-open-descendant-p ()
   (save-excursion
@@ -637,8 +635,8 @@ Nothing changes until the repo review lets pi start."
              (accept (unless (org-entry-get nil "ACCEPT") (+tasks--read-accept heading))))
         (+tasks--hand-off (+tasks--task-worktree root branch)
                           :review-root root
-                          :draft (+tasks--feature-prompt heading (or accept (org-entry-get nil "ACCEPT"))
-                                                         (+tasks--task-parents))
+                          :draft (+tasks--interview-prompt heading (or accept (org-entry-get nil "ACCEPT"))
+                                                           (+tasks--task-parents))
                           :prepare (lambda () (+tasks--start-at marker root branch accept))
                           :session branch
                           :model (or (org-entry-get nil "MODEL") "local"))))))
