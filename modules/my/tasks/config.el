@@ -766,13 +766,21 @@ Review this diff against it: what does not serve the criterion, missing or weak 
     (+tasks--warn-missing-just recipe-p just-p)
     (+tasks--choose-test-command recipe-p just-p (+tasks--projectile-test-command root))))
 
+(defun +tasks--test-argv (root command)
+  "COMMAND as a shell call, in the agent jail when it applies: the tests are agent code."
+  (let ((argv (list shell-file-name shell-command-switch command)))
+    (if (fboundp '+ai--jailed) (+ai--jailed root argv) argv)))
+
+(defun +tasks--shell-line (argv)
+  (mapconcat #'shell-quote-argument argv " "))
+
 (defun +tasks/test ()
   "Run the project's tests: `just test' when available, else projectile's command."
   (interactive)
   (let* ((default-directory (+tasks--project-root))
          (command (+tasks--project-test-command default-directory)))
     (if command
-        (compile command)
+        (compile (+tasks--shell-line (+tasks--test-argv default-directory command)))
       (call-interactively #'projectile-test-project))))
 
 (defun +tasks--merge-message (branch heading)
@@ -787,10 +795,11 @@ Review this diff against it: what does not serve the criterion, missing or weak 
 
 (defun +tasks--run-tests-or-confirm (root)
   (if-let* ((command (+tasks--project-test-command root)))
-      (let ((buffer (get-buffer-create "*tasks-done-tests*")))
+      (let ((buffer (get-buffer-create "*tasks-done-tests*"))
+            (argv (+tasks--test-argv root command)))
         (with-current-buffer buffer (erase-buffer))
         (message "Running %s..." command)
-        (unless (zerop (call-process-shell-command command nil buffer))
+        (unless (zerop (apply #'call-process (car argv) nil buffer nil (cdr argv)))
           (display-buffer buffer)
           (user-error "%s failed; nothing merged" command)))
     (unless (y-or-n-p "No test command found; merge without running tests? ")

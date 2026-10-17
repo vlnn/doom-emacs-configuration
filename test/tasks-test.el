@@ -593,3 +593,48 @@
                              (+tasks--review-header "feat/x" "m" "Touches agent guards: x"))))
   (ert-info ("review-header should start with the review line when no guard changed")
     (should (string-prefix-p "Reviewing feat/x" (+tasks--review-header "feat/x" "m" nil)))))
+
+;;; tests run in the agent jail
+
+(defmacro +tasks-test--jail-on (&rest body)
+  `(let ((+ai-jail-enabled t)
+         (+ai-jail-profile "/p/agent.sb"))
+     (cl-letf (((symbol-function '+ai--jail-available-p) (lambda () t)))
+       ,@body)))
+
+(ert-deftest +tasks--test-argv/runs-the-command-through-the-shell-in-the-jail ()
+  (+tasks-test--jail-on
+   (let ((argv (+tasks--test-argv temporary-file-directory "bin/test")))
+     (ert-info ("test-argv should start the jail first")
+       (should (equal "sandbox-exec" (car argv))))
+     (ert-info ("test-argv should run the test command through the shell, last")
+       (should (equal (list shell-file-name shell-command-switch "bin/test") (last argv 3)))))))
+
+(ert-deftest +tasks--test-argv/plain-shell-without-the-jail ()
+  (cl-letf (((symbol-function '+ai--jailed) (lambda (_root command &rest _) command)))
+    (ert-info ("test-argv should be a plain shell call when the jail does not apply")
+      (should (equal (list shell-file-name shell-command-switch "just test")
+                     (+tasks--test-argv temporary-file-directory "just test"))))))
+
+(ert-deftest +tasks--run-tests-or-confirm/runs-tests-jailed ()
+  (let (ran)
+    (+tasks-test--jail-on
+     (cl-letf (((symbol-function '+tasks--project-test-command) (lambda (_) "bin/test"))
+               ((symbol-function 'message) #'ignore)
+               ((symbol-function 'call-process)
+                (lambda (program _infile _buffer _display &rest args) (setq ran (cons program args)) 0)))
+       (+tasks--run-tests-or-confirm temporary-file-directory)))
+    (ert-info ("done should run the branch's tests inside the jail, since they are the agent's code")
+      (should (equal "sandbox-exec" (car ran)))
+      (should (equal "bin/test" (car (last ran)))))))
+
+(ert-deftest +tasks/test/compiles-the-jailed-command ()
+  (let (compiled)
+    (+tasks-test--jail-on
+     (cl-letf (((symbol-function '+tasks--project-root) (lambda () temporary-file-directory))
+               ((symbol-function '+tasks--project-test-command) (lambda (_) "bin/test"))
+               ((symbol-function 'compile) (lambda (command &rest _) (setq compiled command))))
+       (+tasks/test)))
+    (ert-info ("SPC 5 t should run the jailed command as one shell-quoted line")
+      (should (string-prefix-p "sandbox-exec -f /p/agent.sb " compiled))
+      (should (string-suffix-p (shell-quote-argument "bin/test") compiled)))))
