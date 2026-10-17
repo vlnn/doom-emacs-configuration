@@ -67,8 +67,9 @@ project root; `SPC 4` starts [hax](https://github.com/OleksandrChekhovskyi/hax)
 in eat, if it is on `PATH`. Both first go through `modules/my/ai/trust.el`:
 before the first start in a repo, when pi has no trust decision for it, and
 after someone else commits to what an agent reads (`.pi/`, `.agents/skills`,
-any `AGENTS.md`, `AGENTS.override.md` or `CLAUDE.md` in any case, the
-`justfile`), a report lists those files and flags risky lines. The report is a normal grep buffer, so its lines jump to the files; decide
+any `AGENTS.md`, `AGENTS.override.md` or `CLAUDE.md`, the `justfile`; names
+in any case, as pi and just read them), a report lists those files and flags
+risky lines. The report is a normal grep buffer, so its lines jump to the files; decide
 there with `C-c C-c` (trust / proceed), `C-c C-u` (untrusted once), `C-c C-d`
 (do not trust) or `C-c C-k` / `q` (cancel). A session that is already running
 skips the review, since its inputs are loaded; `SPC 3` inside pi hides it.

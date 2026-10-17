@@ -420,6 +420,14 @@
         (ert-info ((format "test-command for justfile %S in %s should be %S" justfile mode expected))
           (should (equal expected (+tasks--test-command justfile))))))))
 
+(ert-deftest +tasks--justfile-text/reads-a-justfile-in-any-case ()
+  (dolist (name '("justfile" "JUSTFILE" ".justfile"))
+    (+tasks-test--with-projects '("p")
+      (let ((dir (expand-file-name "p/" root)))
+        (with-temp-file (expand-file-name name dir) (insert "test:\n\tbin/test\n"))
+        (ert-info ((format "justfile-text should read %s, which just would run" name))
+          (should (equal "test:\n\tbin/test\n" (+tasks--justfile-text dir))))))))
+
 (ert-deftest +tasks--choose-test-command/needs-just-on-path-for-the-recipe ()
   (pcase-dolist (`(,recipe ,just ,projectile ,expected)
                  '((t   t   "pytest" "just test")

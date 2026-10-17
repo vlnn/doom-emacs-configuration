@@ -18,7 +18,8 @@
   '("settings.json" "mcp.json" "SYSTEM.md" "APPEND_SYSTEM.md"
     "extensions" "skills" "prompts" "themes"))
 
-(defconst +ai-trust-justfiles '("justfile" "Justfile" ".justfile"))
+(defconst +ai-trust-justfile-regexp "\\`\\.?justfile\\'"
+  "Names just reads as the justfile, matched in any case, as just does.")
 
 (defconst +ai-trust-skipped-dirs '("node_modules" "venv" "target" "dist" "build"))
 
@@ -29,7 +30,7 @@
   (mapcar (lambda (name) (concat ":(glob,icase)**/" name)) +ai-trust-context-files))
 
 (defconst +ai-trust-pathspecs
-  (append '(".pi" ".agents/skills" "justfile" "Justfile" ".justfile") +ai-trust-context-pathspecs))
+  (append '(".pi" ".agents/skills" ":(icase)justfile" ":(icase).justfile") +ai-trust-context-pathspecs))
 
 (defconst +ai-trust-patterns
   `((spawn . ,(rx (or "child_process" "Bun.spawn" "Deno.Command" "execa"
@@ -110,7 +111,11 @@
       (directory-files-recursively root (+ai-trust--context-file-regexp) nil #'+ai-trust--descend-p))))
 
 (defun +ai-trust--justfiles (root)
-  (mapcan (lambda (name) (+ai-trust--files-under root name)) +ai-trust-justfiles))
+  "ROOT's justfiles, each once under its name on disk, whatever its case."
+  (let ((case-fold-search t))
+    (and (file-directory-p root)
+         (seq-filter (lambda (file) (string-match-p +ai-trust-justfile-regexp (file-name-nondirectory file)))
+                     (directory-files root t directory-files-no-dot-files-regexp)))))
 
 (defun +ai-trust--scan-files (root)
   "Files under ROOT that reach pi or hax, relative and sorted."

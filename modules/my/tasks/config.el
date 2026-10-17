@@ -830,10 +830,15 @@ Review this diff against it: what does not serve the criterion, missing or weak 
              (string-match-p "^@?test\\(?:[ \t][^:\n]*\\)?:\\(?:[^=]\\|$\\)" justfile-text))
     "just test"))
 
+(defun +tasks--justfile (root)
+  "ROOT's justfile, named in any case, as just finds it."
+  (let ((case-fold-search t))
+    (and (file-directory-p root)
+         (seq-find (lambda (file) (string-match-p "\\`\\.?justfile\\'" (file-name-nondirectory file)))
+                   (directory-files root t directory-files-no-dot-files-regexp)))))
+
 (defun +tasks--justfile-text (root)
-  (when-let* ((file (seq-find #'file-exists-p
-                              (mapcar (lambda (name) (expand-file-name name root))
-                                      '("justfile" "Justfile" ".justfile")))))
+  (when-let* ((file (+tasks--justfile root)))
     (+tasks--read-file file)))
 
 (defun +tasks--choose-test-command (recipe-p just-p projectile-command)
