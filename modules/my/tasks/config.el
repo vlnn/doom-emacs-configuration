@@ -927,18 +927,25 @@ run act on with your rights, in the second.")
     (magit-diff-range (+tasks--range main branch))
     (+tasks--set-state task "REVIEW")
     (message "%s" (+tasks--review-message (plist-get task :accept)
-                                          (+tasks--guard-note (+tasks--changed-files main branch))))))
+                                          (+tasks--guard-note (+tasks--changed-files main branch))
+                                          (+tasks--plan-text (+tasks--task-worktree-of task))))))
 
-(defun +tasks--review-message (accept guard-note)
-  (concat (format "ACCEPT: %s" (or accept "(none set)"))
-          (if guard-note (concat "\n" guard-note) "")))
+(defun +tasks--review-message (accept guard-note &optional plan)
+  (string-join (delq nil (list (format "ACCEPT: %s" (or accept "(none set)"))
+                               guard-note
+                               (+tasks--plan-tick-line plan)))
+               "\n"))
 
-(defun +tasks--review-prompt (accept diff)
-  (format "Acceptance criterion: %s
+(defun +tasks--review-question (plan)
+  (if plan
+      "Review this diff against them: what does not serve the criterion, what departs from the plan without saying so, missing or weak tests, risky changes."
+    "Review this diff against it: what does not serve the criterion, missing or weak tests, risky changes."))
 
-Review this diff against it: what does not serve the criterion, missing or weak tests, risky changes.
-
-%s" (or accept "(none set)") diff))
+(defun +tasks--review-prompt (accept diff &optional plan)
+  (concat (format "Acceptance criterion: %s\n\n" (or accept "(none set)"))
+          (if plan (format "Plan the agent committed to:\n\n%s\n\n" (string-trim-right plan)) "")
+          (+tasks--review-question plan)
+          "\n\n" diff))
 
 (defun +tasks--review-header (branch model guard-note)
   (concat (if guard-note (format "%s\n\n" guard-note) "")
@@ -970,10 +977,11 @@ Review this diff against it: what does not serve the criterion, missing or weak 
          (main (+tasks--default-branch))
          (diff (string-join (+tasks--git-lines "diff" (+tasks--range main branch)) "\n"))
          (buffer (+tasks--review-buffer branch (+tasks--guard-note (+tasks--changed-files main branch))))
+         (plan (+tasks--plan-text (+tasks--task-worktree-of task)))
          (gptel-model (or (bound-and-true-p +ai-fast-model) gptel-model)))
     (+tasks--set-state task "REVIEW")
     (pop-to-buffer buffer)
-    (gptel-request (+tasks--review-prompt (plist-get task :accept) diff)
+    (gptel-request (+tasks--review-prompt (plist-get task :accept) diff plan)
       :system (alist-get 'review gptel-directives)
       :callback (+tasks--review-callback buffer))))
 
@@ -1138,9 +1146,10 @@ A task's run leaves it GREEN or RED when it finishes."
      (user-error (+tasks--set-state ,task ,state :reason (error-message-string err))
                  (signal (car err) (cdr err)))))
 
-(defun +tasks/done ()
-  "Test the task's branch in its worktree, merge it --no-ff, remove both and mark the task DONE."
-  (interactive)
+(defun +tasks/done (&optional despite-open-items)
+  "Test the task's branch in its worktree, merge it --no-ff, remove both and mark the task DONE.
+Refuses while the task's PLAN.md lists open items, unless DESPITE-OPEN-ITEMS (\\[universal-argument])."
+  (interactive "P")
   (let* ((task (+tasks--work-task))
          (branch (plist-get task :branch))
          (default-directory (+tasks--task-root task))
@@ -1150,6 +1159,8 @@ A task's run leaves it GREEN or RED when it finishes."
       (user-error "Commit or stash your changes first"))
     (when (and tree (+tasks--worktree-dirty-p tree))
       (user-error "Commit or remove the uncommitted work in %s first" tree))
+    (unless despite-open-items
+      (+tasks--refuse-open-items (+tasks--plan-text tree)))
     (+tasks--confirm-guarded branch (+tasks--changed-files main branch))
     (+tasks--or-set-state task "RED"
       (+tasks--test-branch default-directory branch tree))

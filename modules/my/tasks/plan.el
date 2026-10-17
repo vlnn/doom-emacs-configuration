@@ -129,6 +129,42 @@ Without one, the interview is still running: go back to it."
       (+tasks--show-plan worktree)
       (+tasks--decide-plan task worktree (+tasks--read-approval)))))
 
+;;; what review and done read from the plan
+
+(defun +tasks--plan-section (heading text)
+  "The lines of TEXT under HEADING, up to the next heading."
+  (when text
+    (let ((lines (split-string text "\n"))
+          in-section result)
+      (dolist (line lines (nreverse result))
+        (cond ((equal line heading) (setq in-section t))
+              ((string-prefix-p "## " line) (setq in-section nil))
+              (in-section (push line result)))))))
+
+(defun +tasks--plan-test-lines (text)
+  (seq-filter (apply-partially #'string-match-p "\\`- \\[[ xX]\\]")
+              (+tasks--plan-section "## Tests, in order" text)))
+
+(defun +tasks--plan-tick-count (text)
+  "(TICKED . TOTAL) over the test boxes of the plan."
+  (let ((tests (+tasks--plan-test-lines text)))
+    (cons (seq-count (apply-partially #'string-match-p "\\`- \\[[xX]\\]") tests)
+          (length tests))))
+
+(defun +tasks--plan-open-items (text)
+  (seq-filter (apply-partially #'string-prefix-p "- ") (+tasks--plan-section "## Open" text)))
+
+(defun +tasks--plan-tick-line (text)
+  (when text
+    (pcase-let ((`(,ticked . ,total) (+tasks--plan-tick-count text)))
+      (format "plan: %d/%d tests ticked" ticked total))))
+
+(defun +tasks--refuse-open-items (text)
+  "Stop done while the plan's Open section still has a bullet."
+  (when-let* ((items (+tasks--plan-open-items text)))
+    (user-error "%s still has open items; settle them, or C-u to merge anyway:\n%s"
+                +tasks-plan-file-name (string-join items "\n"))))
+
 (defun +tasks--unparked-state (task)
   "RED when TASK's plan is approved, else PLAN: the interview, or its approval, is still due."
   (if (+tasks--plan-approved-p (+tasks--plan-text (+tasks--task-worktree-of task))) "RED" "PLAN"))
