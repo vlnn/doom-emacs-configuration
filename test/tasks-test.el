@@ -504,3 +504,92 @@
       (+tasks-test--goto-heading title)
       (ert-info ((format "task-parents of %s should be %S" title expected))
         (should (equal expected (+tasks--task-parents)))))))
+
+;;; guard on diffs that widen what agents may do
+
+(defmacro +tasks-test--in-git-repo (&rest body)
+  "Run BODY with `default-directory' in a fresh repo holding one commit on main."
+  `(let ((default-directory (file-name-as-directory (make-temp-file "tasks-git-test" t))))
+     (unwind-protect
+         (progn
+           (+tasks-test--git "init" "-q" "-b" "main")
+           (+tasks-test--commit-file "README.md" "readme")
+           ,@body)
+       (delete-directory default-directory t))))
+
+(defun +tasks-test--git (&rest args)
+  (apply #'call-process "git" nil nil nil
+         "-c" "user.email=test@example.com" "-c" "user.name=test" args))
+
+(defun +tasks-test--commit-file (relative content)
+  (make-directory (file-name-directory (expand-file-name relative)) t)
+  (with-temp-file relative (insert content))
+  (+tasks-test--git "add" relative)
+  (+tasks-test--git "commit" "-q" "-m" (concat "change " relative)))
+
+(ert-deftest +tasks--guarded-p/flags-files-that-shape-agents ()
+  (pcase-dolist (`(,file . ,expected)
+                 '(("modules/my/ai/trust.el" . t)
+                   ("modules/my/ai/agent.sb" . t)
+                   ("modules/my/tasks/config.el" . t)
+                   (".pi/extensions/x.ts" . t)
+                   ("AGENTS.md" . t)
+                   ("lib/AGENTS.md" . t)
+                   (".dir-locals.el" . t)
+                   ("sub/.dir-locals-2.el" . t)
+                   ("justfile" . t)
+                   (".justfile" . t)
+                   ("README.md" . nil)
+                   ("modules/my/vc/config.el" . nil)
+                   ("test/tasks-test.el" . nil)
+                   ("docs/AGENTS.md.bak" . nil)))
+    (ert-info ((format "%s should%s count as an agent guard" file (if expected "" " not")))
+      (should (eq expected (+tasks--guarded-p file))))))
+
+(ert-deftest +tasks--guard-note/lists-guarded-files-only ()
+  (ert-info ("guard-note should name the guarded files among the changed ones")
+    (should (equal "Touches agent guards: AGENTS.md, modules/my/ai/agent.sb"
+                   (+tasks--guard-note '("README.md" "AGENTS.md" "modules/my/ai/agent.sb")))))
+  (ert-info ("guard-note should be nil when no guarded file changed")
+    (should-not (+tasks--guard-note '("README.md")))))
+
+(ert-deftest +tasks--changed-files/lists-branch-changes-since-main ()
+  (+tasks-test--in-git-repo
+   (+tasks-test--git "switch" "-q" "-c" "feat/x")
+   (+tasks-test--commit-file "modules/my/ai/agent.sb" "(version 1)")
+   (+tasks-test--git "switch" "-q" "main")
+   (+tasks-test--commit-file "later-on-main.txt" "x")
+   (ert-info ("changed-files should list what the branch changed, not what main gained since")
+     (should (equal '("modules/my/ai/agent.sb") (+tasks--changed-files "main" "feat/x"))))))
+
+(ert-deftest +tasks--confirm-guarded/asks-only-when-guards-change ()
+  (let (asked)
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (prompt) (setq asked prompt) nil)))
+      (+tasks--confirm-guarded "feat/x" '("README.md"))
+      (ert-info ("confirm-guarded should not ask when no guarded file changed")
+        (should-not asked))
+      (ert-info ("confirm-guarded should stop the merge when the answer is no")
+        (should-error (+tasks--confirm-guarded "feat/x" '("modules/my/ai/trust.el")) :type 'user-error))
+      (ert-info ("confirm-guarded should name the branch and the guarded files in its question")
+        (should (string-match-p "feat/x.*modules/my/ai/trust\\.el" asked))))))
+
+(ert-deftest +tasks--confirm-guarded/passes-on-yes ()
+  (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+    (ert-info ("confirm-guarded should let the merge go on after a yes")
+      (should-not (condition-case nil
+                      (progn (+tasks--confirm-guarded "feat/x" '("AGENTS.md")) nil)
+                    (user-error t))))))
+
+(ert-deftest +tasks--review-message/adds-the-guard-note-under-accept ()
+  (ert-info ("review-message should show ACCEPT, then the guard note on its own line")
+    (should (equal "ACCEPT: it works\nTouches agent guards: AGENTS.md"
+                   (+tasks--review-message "it works" "Touches agent guards: AGENTS.md"))))
+  (ert-info ("review-message should show only ACCEPT when no guard changed")
+    (should (equal "ACCEPT: (none set)" (+tasks--review-message nil nil)))))
+
+(ert-deftest +tasks--review-header/puts-the-guard-note-first ()
+  (ert-info ("review-header should lead with the guard note so it is read before the model's review")
+    (should (string-prefix-p "Touches agent guards: x\n\nReviewing feat/x on m"
+                             (+tasks--review-header "feat/x" "m" "Touches agent guards: x"))))
+  (ert-info ("review-header should start with the review line when no guard changed")
+    (should (string-prefix-p "Reviewing feat/x" (+tasks--review-header "feat/x" "m" nil)))))

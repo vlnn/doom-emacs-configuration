@@ -641,6 +641,33 @@ Nothing changes until the repo review lets pi start."
 (defun +tasks--range (main branch)
   (format "%s...%s" main branch))
 
+;;; guard on diffs that widen what agents may do
+
+(defvar +tasks-guarded-files
+  (list (rx bos (or "modules/my/ai/" "modules/my/tasks/" ".pi/"))
+        (rx (or bos "/") (or "AGENTS.md" ".justfile" "justfile" "Justfile"
+                             (seq ".dir-locals" (? "-2") ".el"))
+            eos))
+  "Regexps over repo-relative paths whose change can widen what agents may do.
+The jail, the trust review and this flow live in the first group; agent
+inputs and files Emacs or the test run act on with your rights, in the second.")
+
+(defun +tasks--guarded-p (file)
+  (and (seq-some (lambda (regexp) (string-match-p regexp file)) +tasks-guarded-files) t))
+
+(defun +tasks--guard-note (files)
+  (when-let* ((guarded (seq-filter #'+tasks--guarded-p files)))
+    (concat "Touches agent guards: " (string-join guarded ", "))))
+
+(defun +tasks--changed-files (main branch)
+  (+tasks--git-lines "diff" "--name-only" (+tasks--range main branch)))
+
+(defun +tasks--confirm-guarded (branch files)
+  (when-let* ((guarded (seq-filter #'+tasks--guarded-p files)))
+    (unless (yes-or-no-p (format "%s changes agent guards (%s); merge anyway? "
+                                 branch (string-join guarded ", ")))
+      (user-error "Stopped before merging %s" branch))))
+
 (defun +tasks/resume ()
   "Switch to a started task's branch and focus its pi session."
   (interactive)
@@ -656,9 +683,16 @@ Nothing changes until the repo review lets pi start."
   "Show the task branch's whole diff against the default branch, with its ACCEPT."
   (interactive)
   (let* ((task (+tasks--work-task))
-         (default-directory (+tasks--task-root task)))
-    (magit-diff-range (+tasks--range (+tasks--default-branch) (plist-get task :branch)))
-    (message "ACCEPT: %s" (or (plist-get task :accept) "(none set)"))))
+         (default-directory (+tasks--task-root task))
+         (main (+tasks--default-branch))
+         (branch (plist-get task :branch)))
+    (magit-diff-range (+tasks--range main branch))
+    (message "%s" (+tasks--review-message (plist-get task :accept)
+                                          (+tasks--guard-note (+tasks--changed-files main branch))))))
+
+(defun +tasks--review-message (accept guard-note)
+  (concat (format "ACCEPT: %s" (or accept "(none set)"))
+          (if guard-note (concat "\n" guard-note) "")))
 
 (defun +tasks--review-prompt (accept diff)
   (format "Acceptance criterion: %s
@@ -667,11 +701,15 @@ Review this diff against it: what does not serve the criterion, missing or weak 
 
 %s" (or accept "(none set)") diff))
 
-(defun +tasks--review-buffer (branch)
+(defun +tasks--review-header (branch model guard-note)
+  (concat (if guard-note (format "%s\n\n" guard-note) "")
+          (format "Reviewing %s on %s...\n\n" branch model)))
+
+(defun +tasks--review-buffer (branch guard-note)
   (with-current-buffer (get-buffer-create (format "*tasks-review:%s*" branch))
     (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert (format "Reviewing %s on %s...\n\n" branch (or (bound-and-true-p +ai-fast-model) "gptel"))))
+      (insert (+tasks--review-header branch (or (bound-and-true-p +ai-fast-model) "gptel") guard-note)))
     (current-buffer)))
 
 (defun +tasks--review-callback (buffer)
@@ -690,8 +728,9 @@ Review this diff against it: what does not serve the criterion, missing or weak 
   (let* ((task (+tasks--work-task))
          (default-directory (+tasks--task-root task))
          (branch (plist-get task :branch))
-         (diff (string-join (+tasks--git-lines "diff" (+tasks--range (+tasks--default-branch) branch)) "\n"))
-         (buffer (+tasks--review-buffer branch))
+         (main (+tasks--default-branch))
+         (diff (string-join (+tasks--git-lines "diff" (+tasks--range main branch)) "\n"))
+         (buffer (+tasks--review-buffer branch (+tasks--guard-note (+tasks--changed-files main branch))))
          (gptel-model (or (bound-and-true-p +ai-fast-model) gptel-model)))
     (pop-to-buffer buffer)
     (gptel-request (+tasks--review-prompt (plist-get task :accept) diff)
@@ -798,6 +837,7 @@ Review this diff against it: what does not serve the criterion, missing or weak 
          (main (+tasks--default-branch)))
     (when (+tasks--dirty-p)
       (user-error "Commit or stash your changes first"))
+    (+tasks--confirm-guarded branch (+tasks--changed-files main branch))
     (+tasks--switch branch)
     (+tasks--run-tests-or-confirm default-directory)
     (+tasks--merge branch main (plist-get task :heading))
