@@ -812,10 +812,23 @@ Nothing changes until the repo review lets pi start."
       (funcall step)
     (user-error "Nothing to advance at %s" (org-get-heading t t t t))))
 
+(defun +tasks--advance-task (task)
+  (with-current-buffer (plist-get task :buffer)
+    (save-excursion
+      (goto-char (plist-get task :marker))
+      (+tasks--advance-here))))
+
+(defun +tasks--here-is-a-task-p ()
+  (or (+tasks--row-marker)
+      (and (derived-mode-p 'org-mode) (+tasks--tasks-file-p buffer-file-name))))
+
 (defun +tasks/next ()
-  "Do what moves the task at point along: start, test, review, finish, unpark or archive."
+  "Do what moves the task along: start, approve, test, review, finish, unpark or archive.
+The task at point in tasks.org or on the Board; elsewhere, the one on the current branch, or picked."
   (interactive)
-  (+tasks--at-heading-of-row #'+tasks--advance-here))
+  (if (+tasks--here-is-a-task-p)
+      (+tasks--at-heading-of-row #'+tasks--advance-here)
+    (+tasks--advance-task (+tasks--work-task))))
 
 ;;; review, test, done
 

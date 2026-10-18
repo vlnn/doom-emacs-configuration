@@ -798,3 +798,31 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
         (+tasks/interview))
       (ert-info ("p should clear whatever the input holds before drafting, since it was asked for the interview")
         (should cleared)))))
+
+;;; next from anywhere in the worktree
+
+(ert-deftest +tasks/next/finds-the-task-from-a-non-org-buffer ()
+  (+tasks-test--in-tasks-buffer "** PLAN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (setq buffer-file-name (expand-file-name "tasks.org" temporary-file-directory))
+    (+tasks-test--goto-heading "Thing")
+    (let ((task (+tasks--task-plist)) ran)
+      (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                ((symbol-function '+tasks/approve-plan) (lambda () (setq ran (list major-mode (org-get-heading t t t t))))))
+        (with-temp-buffer
+          (fundamental-mode)
+          (+tasks/next)))
+      (ert-info ("next from a pi chat or source buffer should act on the task on the current branch, at its heading")
+        (should (equal (list 'org-mode "Thing") ran))))
+    (setq buffer-file-name nil)))
+
+(ert-deftest +tasks/next/still-prefers-the-heading-at-point-in-tasks-org ()
+  (+tasks-test--in-tasks-buffer "** GREEN Here\n:PROPERTIES:\n:BRANCH: feat/here\n:END:\n"
+    (setq buffer-file-name (expand-file-name "tasks.org" temporary-file-directory))
+    (+tasks-test--goto-heading "Here")
+    (let (ran)
+      (cl-letf (((symbol-function '+tasks--work-task) (lambda () (error "Should not look elsewhere")))
+                ((symbol-function '+tasks/review) (lambda () (setq ran (org-get-heading t t t t)))))
+        (+tasks/next))
+      (ert-info ("next in tasks.org should keep acting on the heading at point")
+        (should (equal "Here" ran))))
+    (setq buffer-file-name nil)))
