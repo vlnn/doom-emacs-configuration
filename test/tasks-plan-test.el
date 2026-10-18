@@ -710,3 +710,91 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
              (should (equal (list repo (+tasks--worktree-path repo "feat/fix-it")) ensured))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
+
+;;; c on a PLAN task without a plan drafts the interview
+
+(ert-deftest +tasks--task-plist/carries-the-parents ()
+  (+tasks-test--in-tasks-buffer "** IDEA Parent\n*** PLAN Child\n:PROPERTIES:\n:BRANCH: feat/c\n:END:\n"
+    (+tasks-test--goto-heading "Child")
+    (ert-info ("task-plist should carry the parents so a resumed interview can name them")
+      (should (equal "Parent" (plist-get (+tasks--task-plist) :parents))))))
+
+(ert-deftest +tasks--resume-draft/interviews-a-plan-task-that-has-no-plan-yet ()
+  (pcase-dolist (`(,state ,plan-text ,live ,expected ,why)
+                 `(("PLAN" nil nil t "draft the interview for a fresh session on a PLAN task without a plan")
+                   ("PLAN" nil t nil "leave a running session alone, its chat already holds the interview")
+                   ("PLAN" ,+tasks-plan-test--written nil nil "draft nothing once the plan is written")
+                   ("RED" nil nil nil "draft nothing for a task past planning")))
+    (let ((task (list :state state :heading "Fix it" :accept "it works" :parents nil)))
+      (cl-letf (((symbol-function '+ai--live-pilish-session-p) (lambda (&rest _) live)))
+        (ert-info ((format "resume-draft should %s" why))
+          (should (eq expected (and (+tasks--resume-draft task plan-text "/r/.worktrees/feat-x/" "feat/x") t)))))
+      (when expected
+        (ert-info ("the resume draft should be the same interview s starts")
+          (should (equal (+tasks--interview-prompt "Fix it" "it works" nil)
+                         (+tasks--resume-draft task nil "/r/.worktrees/feat-x/" "feat/x"))))))))
+
+(ert-deftest +tasks/resume/hands-pi-the-interview-when-the-plan-is-still-due ()
+  (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:ACCEPT: it works\n:END:\n"
+    (+tasks-test--goto-heading "Fix it")
+    (let ((task (+tasks--task-plist)) launched)
+      (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) nil))
+                ((symbol-function '+ai--live-pilish-session-p) #'ignore)
+                ((symbol-function '+tasks--hand-off) (lambda (_root &rest args) (setq launched args))))
+        (+tasks/resume))
+      (ert-info ("c on a PLAN task with no PLAN.md and no session should open pi with the interview in its input")
+        (should (string-prefix-p "/skill:grilling Fix it\n\nACCEPT: it works" (plist-get launched :draft)))))))
+
+(ert-deftest +tasks/interview/puts-the-interview-into-the-tasks-session ()
+  (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:ACCEPT: it works\n:END:\n"
+    (+tasks-test--goto-heading "Fix it")
+    (let ((task (+tasks--task-plist)) launched)
+      (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) "/r/.worktrees/feat-fix-it/"))
+                ((symbol-function '+ai--live-pilish-session-p) (lambda (&rest _) t))
+                ((symbol-function '+tasks--hand-off) (lambda (root &rest args) (setq launched (cons root args)))))
+        (+tasks/interview))
+      (ert-info ("interview should go through the same hand-off as c, in the worktree, on the branch's session, even when it is running")
+        (should (equal '("/r/.worktrees/feat-fix-it/" "feat/fix-it")
+                       (list (car launched) (plist-get (cdr launched) :session))))
+        (should (string-prefix-p "/skill:grilling Fix it\n\nACCEPT: it works" (plist-get (cdr launched) :draft)))))))
+
+(ert-deftest +tasks/interview/refuses-a-task-past-planning ()
+  (+tasks-test--in-tasks-buffer "** RED Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:END:\n"
+    (+tasks-test--goto-heading "Fix it")
+    (let ((task (+tasks--task-plist)))
+      (cl-letf (((symbol-function '+tasks--work-task) (lambda () task)))
+        (ert-info ("interview on a task whose plan is approved should stop; its decisions go through the agent's own rounds")
+          (should-error (+tasks/interview) :type 'user-error))))))
+
+(ert-deftest +tasks/menu-file/binds-interview ()
+  (require 'transient)
+  (load (expand-file-name "modules/my/tasks/menu.el" default-directory) nil t)
+  (ert-info ("menu key p should put the interview into the task's session")
+    (should (eq '+tasks/interview (plist-get (nth 2 (transient-get-suffix '+tasks-transient "p")) :command)))))
+
+(ert-deftest +tasks--clear-session-input/moves-stale-text-to-the-kill-ring ()
+  (with-temp-buffer
+    (insert "/feature old draft")
+    (let ((input (current-buffer))
+          (kill-ring nil))
+      (cl-letf (((symbol-function '+tasks--task-worktree-of) (lambda (_) "/r/.worktrees/feat-x/"))
+                ((symbol-function '+ai--pilish-input-buffer) (lambda (&optional _) input)))
+        (+tasks--clear-session-input '(:branch "feat/x")))
+      (ert-info ("clearing should empty the input so the interview can take its place")
+        (should (string-empty-p (buffer-string))))
+      (ert-info ("clearing should keep what was there on the kill ring")
+        (should (equal "/feature old draft" (car kill-ring)))))))
+
+(ert-deftest +tasks/interview/replaces-a-stale-draft-in-the-input ()
+  (+tasks-test--in-tasks-buffer "** PLAN Fix it\n:PROPERTIES:\n:BRANCH: feat/fix-it\n:ACCEPT: it works\n:END:\n"
+    (+tasks-test--goto-heading "Fix it")
+    (let ((task (+tasks--task-plist)) cleared)
+      (cl-letf (((symbol-function '+tasks--work-task) (lambda () task))
+                ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) "/r/.worktrees/feat-fix-it/"))
+                ((symbol-function '+tasks--clear-session-input) (lambda (_) (setq cleared t)))
+                ((symbol-function '+tasks--hand-off) #'ignore))
+        (+tasks/interview))
+      (ert-info ("p should clear whatever the input holds before drafting, since it was asked for the interview")
+        (should cleared)))))

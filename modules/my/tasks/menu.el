@@ -10,6 +10,7 @@
     ("n" "next: advance task at point" +tasks/next)
     ("s" "start leaf: worktree, Active, interview (C-u: pick its model)" +tasks/start)
     ("c" "continue: worktree, pi session" +tasks/resume)
+    ("p" "plan: put the interview in pi's input" +tasks/interview)
     ("a" "set ACCEPT" +tasks/accept)
     ("w" "wait: park with a reason" +tasks/wait)]
    ["Work"

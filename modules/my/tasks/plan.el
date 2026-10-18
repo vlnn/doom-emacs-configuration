@@ -51,6 +51,38 @@
           (format "Leave \"%s\" bare when nothing is unresolved. Then say \"%s written; waiting for approval.\" and stop."
                   (car (last +tasks--plan-headings)) +tasks-plan-file-name)))
 
+(defun +tasks--interview-of (task)
+  (+tasks--interview-prompt (plist-get task :heading) (plist-get task :accept) (plist-get task :parents)))
+
+(defun +tasks--resume-draft (task plan-text worktree session &optional force)
+  "The interview again, for a fresh session on a PLAN task whose plan is still unwritten; else nil.
+FORCE drafts it for a running session too."
+  (when (and (equal (plist-get task :state) "PLAN")
+             (null plan-text)
+             (or force
+                 (not (and (fboundp '+ai--live-pilish-session-p) (+ai--live-pilish-session-p worktree session)))))
+    (+tasks--interview-of task)))
+
+(defun +tasks--clear-session-input (task)
+  "Empty TASK's pi input, keeping what it held on the kill ring."
+  (when (fboundp '+ai--pilish-input-buffer)
+    (let ((default-directory (+tasks--task-worktree-of task)))
+      (when-let* ((input (+ai--pilish-input-buffer (plist-get task :branch)))
+                  ((buffer-live-p input)))
+        (with-current-buffer input
+          (unless (string-blank-p (buffer-string))
+            (kill-region (point-min) (point-max))))))))
+
+(defun +tasks/interview ()
+  "Open the task's pi session with the grilling interview in its input, for a PLAN task whose session lost it.
+Whatever the input held goes to the kill ring."
+  (interactive)
+  (let ((task (+tasks--work-task)))
+    (unless (equal (plist-get task :state) "PLAN")
+      (user-error "%s is %s; the interview is for a task still in PLAN" (plist-get task :heading) (plist-get task :state)))
+    (+tasks--clear-session-input task)
+    (+tasks--resume-task task t)))
+
 ;;; what init offers a new project
 
 (defconst +tasks--agents-md-text

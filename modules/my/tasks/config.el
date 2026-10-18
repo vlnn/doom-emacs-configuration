@@ -825,6 +825,8 @@ Nothing changes until the repo review lets pi start."
         :heading (org-get-heading t t t t)
         :branch (org-entry-get nil "BRANCH")
         :accept (org-entry-get nil "ACCEPT")
+        :state (org-get-todo-state)
+        :parents (+tasks--task-parents)
         :model (org-entry-get nil "MODEL")
         :plan-model (org-entry-get nil "PLAN_MODEL")))
 
@@ -915,11 +917,15 @@ run act on with your rights, in the second.")
   (interactive)
   (+tasks--resume-task (+tasks--work-task)))
 
-(defun +tasks--resume-task (task)
+(defun +tasks--resume-task (task &optional interview)
+  "Open TASK's worktree and session; INTERVIEW drafts the grilling prompt even into a running session."
   (let* ((branch (plist-get task :branch))
-         (root (file-name-as-directory (file-truename (+tasks--task-root task)))))
-    (+tasks--hand-off (+tasks--task-worktree root branch)
+         (root (file-name-as-directory (file-truename (+tasks--task-root task))))
+         (worktree (+tasks--task-worktree root branch)))
+    (+tasks--hand-off worktree
                       :review-root root
+                      :draft (+tasks--resume-draft task (+tasks--plan-text (+tasks--task-worktree-of task))
+                                                   worktree branch interview)
                       :prepare (lambda () (+tasks--ensure-skill root (+tasks--add-worktree root branch)))
                       :session branch
                       :model (+tasks--session-model task (+tasks--plan-text (+tasks--task-worktree-of task))))))
