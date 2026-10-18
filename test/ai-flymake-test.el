@@ -318,3 +318,57 @@
 (ert-deftest +ai-flymake-display/defaults-to-column ()
   (ert-info ("findings should default to a column just past the code")
     (should (eq 'column (default-value '+ai-flymake-display)))))
+
+;;; every code buffer, and re-review on provider change
+
+(defmacro +ai-flymake-test--with-mode-buffers (count &rest body)
+  "Run BODY with COUNT live buffers that have the mode on, bound as `buffers'."
+  (declare (indent 1))
+  `(let ((buffers (cl-loop repeat ,count collect (generate-new-buffer "aireview"))))
+     (unwind-protect
+         (progn (dolist (b buffers) (with-current-buffer b (setq-local +ai-flymake-mode t)))
+                ,@body)
+       (mapc #'kill-buffer buffers))))
+
+(ert-deftest +ai--flymake-reviewable-p/file-backed-code-buffers-only ()
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (setq buffer-file-name "/tmp/x.el")
+    (ert-info ("a file-visiting prog-mode buffer should be reviewed")
+      (should (+ai--flymake-reviewable-p))))
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (ert-info ("a scratch buffer with no file should not be reviewed")
+      (should-not (+ai--flymake-reviewable-p))))
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/notes.txt")
+    (ert-info ("a file that is not code should not be reviewed")
+      (should-not (+ai--flymake-reviewable-p)))))
+
+(ert-deftest +ai--flymake-buffers/finds-every-buffer-with-the-mode-on ()
+  (+ai-flymake-test--with-mode-buffers 2
+    (ert-info ("buffers with the mode on should all be found")
+      (should (= 2 (length (seq-intersection buffers (+ai--flymake-buffers))))))))
+
+(ert-deftest +ai/flymake-toggle-provider/re-reviews-every-buffer-with-the-mode-on ()
+  (+ai-flymake-test--with-mode-buffers 2
+    (let ((restarted nil)
+          (+ai-flymake-provider 'llama))
+      (cl-letf (((symbol-function 'flymake-start) (lambda (&rest _) (push (current-buffer) restarted)))
+                ((symbol-function 'message) #'ignore))
+        (with-temp-buffer
+          (+ai/flymake-toggle-provider)))
+      (ert-info ("the toggle should switch the provider")
+        (should (eq 'claude +ai-flymake-provider)))
+      (ert-info ("the toggle should restart the review in each buffer that has the mode, wherever it was called")
+        (should (= 2 (length (seq-intersection buffers restarted))))))))
+
+(ert-deftest +ai--flymake-callback/settles-an-aborted-request ()
+  (+ai-flymake-test--in-buffer "x\n"
+    (pcase-let ((`(,report ,calls) (+ai-flymake-test--reports)))
+      (setq +ai--flymake-run 1 +ai--flymake-pending 'llama)
+      (funcall (+ai--flymake-callback (current-buffer) 1 report 'llama) 'abort nil)
+      (ert-info ("an aborted request should clear the pending marker")
+        (should (null +ai--flymake-pending)))
+      (ert-info ("an aborted request should end flymake's run with no findings")
+        (should (equal '((nil)) (funcall calls)))))))

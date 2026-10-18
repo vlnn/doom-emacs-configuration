@@ -1,5 +1,6 @@
 ;;; my/ai/flymake.el -*- lexical-binding: t; -*-
-;; SPC o l r: have an LLM review the buffer through Flymake, on save and when the mode starts.
+;; SPC o l r: have an LLM review every code buffer through Flymake, on open and on save.
+;; SPC o l b: the same for this buffer only.
 ;; SPC o l R: switch the reviewer between llama-server (default) and Claude.
 ;; SPC o l m: show findings in a column past the code (default), the right margin, or after each line.
 
@@ -87,13 +88,20 @@ right margin; or `eol', right after each line.")
   (let ((names (mapcar #'car +ai-flymake-providers)))
     (or (cadr (memq current names)) (car names))))
 
+(defun +ai--flymake-buffers ()
+  (seq-filter (lambda (buffer) (buffer-local-value '+ai-flymake-mode buffer)) (buffer-list)))
+
+(defun +ai--flymake-restart-all ()
+  (dolist (buffer (+ai--flymake-buffers))
+    (with-current-buffer buffer (flymake-start)))
+  (length (+ai--flymake-buffers)))
+
 (defun +ai/flymake-toggle-provider ()
-  "Switch the reviewer between llama-server and Claude, re-reviewing this buffer if it is on."
+  "Switch the reviewer between llama-server and Claude; every reviewed buffer is reviewed again."
   (interactive)
   (setq +ai-flymake-provider (+ai--flymake-next-provider +ai-flymake-provider))
-  (message "AI review by %s" +ai-flymake-provider)
-  (when (bound-and-true-p +ai-flymake-mode)
-    (flymake-start)))
+  (message "AI review by %s; re-reviewing %d buffer(s)"
+           +ai-flymake-provider (+ai--flymake-restart-all)))
 
 ;;; replies
 
@@ -263,7 +271,10 @@ right margin; or `eol', right after each line.")
         ('nil
          (+ai--flymake-settle buffer)
          (funcall report-fn :panic
-                  :explanation (format "%s review failed: %s" provider (plist-get info :status))))))))
+                  :explanation (format "%s review failed: %s" provider (plist-get info :status))))
+        ('abort
+         (+ai--flymake-settle buffer)
+         (funcall report-fn nil))))))
 
 ;;; the margin column and flymake's own eol display, per buffer
 
@@ -339,7 +350,8 @@ right margin; or `eol', right after each line.")
 
 (define-minor-mode +ai-flymake-mode
   "Review this buffer with an LLM through Flymake, on save and when the mode starts.
-Edits alone do not trigger a review; a model call per keystroke would be noise."
+Edits alone do not trigger a review; a model call per keystroke would be noise.
+`+ai-flymake-global-mode' turns this on in every file-backed code buffer."
   :lighter (:eval (+ai--flymake-lighter))
   (cond (+ai-flymake-mode
          (add-hook 'flymake-diagnostic-functions #'+ai-flymake-backend nil t)
@@ -355,8 +367,19 @@ Edits alone do not trigger a review; a model call per keystroke would be noise."
          (kill-local-variable 'flymake-fringe-indicator-position)
          (flymake-mode -1))))
 
+(defun +ai--flymake-reviewable-p ()
+  (and buffer-file-name (derived-mode-p 'prog-mode) t))
+
+(defun +ai--flymake-turn-on ()
+  (when (+ai--flymake-reviewable-p)
+    (+ai-flymake-mode 1)))
+
+(define-globalized-minor-mode +ai-flymake-global-mode +ai-flymake-mode +ai--flymake-turn-on
+  :group 'flymake)
+
 (map! :leader
-      :desc "AI review buffer"   "o l r" #'+ai-flymake-mode
+      :desc "AI review code buffers" "o l r" #'+ai-flymake-global-mode
+      :desc "AI review this buffer"  "o l b" #'+ai-flymake-mode
       :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
       :desc "AI review display"  "o l m" #'+ai/flymake-toggle-display
       :desc "AI review status"   "o l ?" #'+ai/flymake-status

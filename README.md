@@ -259,18 +259,20 @@ served model list into gptel.
 
 ## AI review through Flymake
 
-`SPC o l r` (`+ai-flymake-mode`) sends the buffer, lines numbered, to a model
-and shows what comes back as Flymake diagnostics: `error`, `warning` or `note`
-on the line named, each prefixed with the reviewer's name. It runs when the
-mode starts and on every save, never on edits alone; `flymake-mode` is turned
-on with it and off with it. Buffers over `+ai-flymake-max-lines` (400) are
-skipped with a note in `*Flymake log*`.
+`SPC o l r` (`+ai-flymake-global-mode`) sends every file-backed code buffer,
+lines numbered, to a model and shows what comes back as Flymake diagnostics
+on the line named: buffers already open are reviewed at once, each buffer
+opened afterwards when it opens, every buffer again when it is saved, never
+on edits alone. `SPC o l b` (`+ai-flymake-mode`) does the same for one buffer.
+`flymake-mode` is turned on with the mode and off with it. Buffers over
+`+ai-flymake-max-lines` (400) are skipped with a note in `*Flymake log*`.
 
 `SPC o l R` (`+ai/flymake-toggle-provider`) switches `+ai-flymake-provider`
 between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
 (`+ai-flymake-claude-model` through gptel's Anthropic backend, which needs
-`ANTHROPIC_API_KEY` from `secrets.el`), re-reviewing the buffer if the mode is
-on. A reply that arrives after a newer review started is dropped.
+`ANTHROPIC_API_KEY` from `secrets.el`), and reviews every buffer the mode is
+on in again, from wherever it was pressed. A reply that arrives after a newer
+review started is dropped.
 
 While a review is out the echo area says `AI review by llama…`, the mode's
 lighter reads `AIrev[llama…]`, and doom-modeline's checker shows Flymake
