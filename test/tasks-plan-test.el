@@ -405,6 +405,7 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
                 ((symbol-function 'completing-read) (lambda (&rest _) "claude"))
                 ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) nil))
                 ((symbol-function '+tasks--add-worktree) #'ignore)
+                ((symbol-function '+tasks--ensure-skill) #'ignore)
                 ((symbol-function '+tasks/refresh-branches) #'ignore)
                 ((symbol-function 'save-buffer) #'ignore)
                 ((symbol-function '+tasks--hand-off)
@@ -615,9 +616,10 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
      (with-temp-file (expand-file-name ".agents/skills/grilling/SKILL.md" repo) (insert "skill"))
      (ert-info ("a worktree without the skill the main checkout has should count as missing it")
        (should (+tasks--skill-missing-p repo tree)))
-     (ert-info ("a repo without the skill anywhere has nothing to copy, so nothing is missing")
+     (ert-info ("with no copy anywhere there is nothing to offer, so nothing is missing")
        (delete-directory (expand-file-name ".agents" repo) t)
-       (should-not (+tasks--skill-missing-p repo tree))))))
+       (cl-letf (((symbol-function '+tasks--own-skill-dir) (lambda () "/nowhere/")))
+         (should-not (+tasks--skill-missing-p repo tree)))))))
 
 (ert-deftest +tasks--ensure-skill/copies-the-skill-into-an-older-worktree-when-told-to ()
   (+tasks-test--in-git-repo
@@ -650,3 +652,61 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
         (+tasks/resume)))
     (ert-info ("resume should check the worktree for the skill once the review allows it")
       (should (equal '("/r/" "/r/.worktrees/feat-x/") ensured)))))
+
+;;; projects that never had the skill
+
+(ert-deftest +tasks--skill-source/prefers-the-projects-copy-and-falls-back-to-doom ()
+  (+tasks-test--in-git-repo
+   (let ((repo default-directory))
+     (cl-letf (((symbol-function '+tasks--own-skill-dir) (lambda () "/doom/.agents/skills/grilling/"))
+               ((symbol-function 'file-directory-p)
+                (lambda (dir) (or (equal dir "/doom/.agents/skills/grilling/")
+                                  (equal dir (expand-file-name ".agents/skills/grilling/" repo))))))
+       (ert-info ("skill-source should be the project's own copy when it has one")
+         (should (equal (expand-file-name ".agents/skills/grilling/" repo) (+tasks--skill-source repo)))))
+     (cl-letf (((symbol-function '+tasks--own-skill-dir) (lambda () "/doom/.agents/skills/grilling/"))
+               ((symbol-function 'file-directory-p) (lambda (dir) (equal dir "/doom/.agents/skills/grilling/"))))
+       (ert-info ("skill-source should fall back to the copy this config ships, for a project that never had one")
+         (should (equal "/doom/.agents/skills/grilling/" (+tasks--skill-source repo)))))
+     (cl-letf (((symbol-function '+tasks--own-skill-dir) (lambda () "/doom/.agents/skills/grilling/"))
+               ((symbol-function 'file-directory-p) #'ignore))
+       (ert-info ("skill-source should be nil when there is no copy anywhere")
+         (should-not (+tasks--skill-source repo)))))))
+
+(ert-deftest +tasks--ensure-skill/offers-dooms-copy-to-a-project-without-one ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (tree (+tasks--add-worktree repo "feat/x"))
+          (doom (file-name-as-directory (make-temp-file "doom-skill" t)))
+          asked)
+     (unwind-protect
+         (progn
+           (make-directory (expand-file-name ".agents/skills/grilling" doom) t)
+           (with-temp-file (expand-file-name ".agents/skills/grilling/SKILL.md" doom) (insert "dooms"))
+           (cl-letf (((symbol-function '+tasks--own-skill-dir)
+                      (lambda () (expand-file-name ".agents/skills/grilling/" doom)))
+                     ((symbol-function 'y-or-n-p) (lambda (p) (setq asked p) t)))
+             (+tasks--ensure-skill repo tree))
+           (ert-info ("a project that never had the skill should be offered this config's copy, into the worktree")
+             (should asked)
+             (should (equal "dooms" (+tasks--read-file (expand-file-name ".agents/skills/grilling/SKILL.md" tree))))))
+       (delete-directory doom t)))))
+
+(ert-deftest +tasks--start-at/offers-the-skill-to-the-new-worktree ()
+  (+tasks-test--in-git-repo
+   (let ((repo default-directory)
+         (buffer (find-file-noselect (expand-file-name "tasks.org" default-directory)))
+         ensured)
+     (unwind-protect
+         (progn
+           (with-current-buffer buffer
+             (insert "#+TODO: IDEA TODO PLAN | DONE\n* Ideas\n** IDEA Fix it\n* Active\n")
+             (save-buffer)
+             (org-mode)
+             (+tasks-test--goto-heading "Fix it")
+             (cl-letf (((symbol-function '+tasks--ensure-skill) (lambda (root tree) (setq ensured (list root tree)))))
+               (+tasks--start-at (point-marker) repo "feat/fix-it" "it works")))
+           (ert-info ("start should offer the skill to the worktree it just added, so the interview can run there")
+             (should (equal (list repo (+tasks--worktree-path repo "feat/fix-it")) ensured))))
+       (with-current-buffer buffer (set-buffer-modified-p nil))
+       (kill-buffer buffer)))))

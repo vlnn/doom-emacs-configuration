@@ -615,7 +615,7 @@ With WITHIN-TREE, only leaves in the subtree at point."
     (save-excursion
       (+tasks--top-heading "Active")
       (goto-char marker)
-      (+tasks--add-worktree root branch)
+      (+tasks--ensure-skill root (+tasks--add-worktree root branch))
       (+tasks--start-entry branch accept plan-model)
       (+tasks/refresh-branches)
       (save-buffer))))

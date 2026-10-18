@@ -231,11 +231,13 @@ prefills `Plan not approved: ` for you to finish. `e` opens the plan writable;
 each save asks pi to read it again and wait. `PLAN.md` is excluded from git
 and goes away with the worktree.
 
-A task started before the skill reached the repo has a worktree without it,
-so `/skill:grilling` cannot resolve there; `c` on such a task offers to copy
-the skill in from the main checkout (it shows up as untracked work on the
-branch: commit it, or drop it before `d`). Paste the interview draft into the
-session by hand, or `x` and `s` for a fresh start.
+A worktree without the skill cannot resolve `/skill:grilling`: one cut before
+the skill reached the repo, or any worktree of a project that never had it.
+`s` and `c` offer to copy it in, from the project's own copy when it has one,
+else from this config's (`$DOOMDIR/.agents/skills/grilling/`). The copy is
+untracked work on the branch: commit it, and `d` asks about it as an agent
+guard. For a task already open, `c`, say yes, then paste the interview draft
+into the session by hand, or `x` and `s` for a fresh start.
 
 The plan is what the rest of the flow reads: `R` reviews the diff against it,
 `r` and `d` show how many of its tests are ticked (shown, not enforced), and

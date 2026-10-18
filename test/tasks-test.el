@@ -341,6 +341,7 @@
                (lambda () (list :buffer (current-buffer) :heading "X" :branch "feat/x" :model "local")))
               ((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) nil))
               ((symbol-function '+tasks--add-worktree) (lambda (root branch) (setq added (list root branch))))
+              ((symbol-function '+tasks--ensure-skill) #'ignore)
               ((symbol-function '+tasks--hand-off)
                (lambda (root &rest args) (setq launched (cons root args)) (funcall (plist-get args :prepare)))))
       (with-temp-buffer
@@ -1005,7 +1006,8 @@
              (save-buffer)
              (org-mode)
              (+tasks-test--goto-heading "Fix it")
-             (+tasks--start-at (point-marker) repo "feat/fix-it" "it works"))
+             (cl-letf (((symbol-function 'y-or-n-p) #'ignore))
+               (+tasks--start-at (point-marker) repo "feat/fix-it" "it works")))
            (ert-info ("start should put the branch in its own worktree")
              (should (equal "feat/fix-it" (+tasks-test--current-branch (+tasks--worktree-path repo "feat/fix-it")))))
            (ert-info ("start should leave the main checkout, the config Emacs loads, on main")
