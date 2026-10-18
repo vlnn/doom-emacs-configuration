@@ -65,15 +65,19 @@ right margin; or `eol', right after each line.")
   (or (getenv "ANTHROPIC_API_KEY")
       (user-error "ANTHROPIC_API_KEY is not set; see secrets.el.example")))
 
+(defun +ai--flymake-known-backend (name)
+  "gptel's backend NAME, or nil; gptel's own lookup signals for an unknown name."
+  (ignore-errors (gptel-get-backend name)))
+
 (defun +ai--flymake-llama ()
-  (cons (or (gptel-get-backend "llama-server") (+ai--llama-backend))
+  (cons (or (+ai--flymake-known-backend "llama-server") (+ai--llama-backend))
         +ai-fast-model))
 
 (defconst +ai--flymake-claude-backend-name "Claude-review"
   "Our own gptel backend, keyed from the environment; Doom's llm module may register a \"Claude\" too.")
 
 (defun +ai--flymake-claude ()
-  (cons (or (gptel-get-backend +ai--flymake-claude-backend-name)
+  (cons (or (+ai--flymake-known-backend +ai--flymake-claude-backend-name)
             (gptel-make-anthropic +ai--flymake-claude-backend-name :key #'+ai--anthropic-key))
         +ai-flymake-claude-model))
 

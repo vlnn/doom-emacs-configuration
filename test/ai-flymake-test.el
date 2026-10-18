@@ -415,9 +415,35 @@
       (ert-info ("restarting should force flymake to run even a backend it had disabled")
         (should (equal '(nil t) args))))))
 
+(defun +ai-flymake-test--gptel-get-backend (name)
+  "gptel's lookup as it is today: an error for an unknown NAME, never nil."
+  (if (equal name "Claude") 'dooms (user-error "Backend %s is not known to be defined" name)))
+
+(ert-deftest +ai--flymake-known-backend/nil-for-a-name-gptel-rejects ()
+  (cl-letf (((symbol-function 'gptel-get-backend) #'+ai-flymake-test--gptel-get-backend))
+    (ert-info ("an unknown backend should come back as nil, not as an error")
+      (should (null (+ai--flymake-known-backend "Claude-review"))))
+    (ert-info ("a known backend should be returned")
+      (should (eq 'dooms (+ai--flymake-known-backend "Claude"))))))
+
+(ert-deftest +ai--flymake-claude/creates-the-backend-when-gptel-has-none ()
+  (let (made)
+    (cl-letf (((symbol-function 'gptel-get-backend) #'+ai-flymake-test--gptel-get-backend)
+              ((symbol-function 'gptel-make-anthropic) (lambda (name &rest _) (setq made name) 'ours)))
+      (ert-info ("a missing Claude-review backend should be created, gptel's lookup error notwithstanding")
+        (should (eq 'ours (car (+ai--flymake-claude)))))
+      (ert-info ("the backend should be registered under our own name")
+        (should (equal "Claude-review" made))))))
+
+(ert-deftest +ai--flymake-claude/reuses-its-backend-once-made ()
+  (cl-letf (((symbol-function 'gptel-get-backend) (lambda (_) 'ours))
+            ((symbol-function 'gptel-make-anthropic) (lambda (&rest _) (error "should not be remade"))))
+    (ert-info ("an existing Claude-review backend should be reused")
+      (should (eq 'ours (car (+ai--flymake-claude)))))))
+
 (ert-deftest +ai--flymake-claude/uses-its-own-backend-not-doom-s ()
   (let (made)
-    (cl-letf (((symbol-function 'gptel-get-backend) (lambda (name) (and (equal name "Claude") 'dooms)))
+    (cl-letf (((symbol-function 'gptel-get-backend) #'+ai-flymake-test--gptel-get-backend)
               ((symbol-function 'gptel-make-anthropic) (lambda (name &rest _) (setq made name) 'ours)))
       (ert-info ("the review should not pick up a differently keyed backend that happens to be called Claude")
         (should (eq 'ours (car (+ai--flymake-claude)))))
@@ -460,3 +486,12 @@
     (ert-info ("an idle buffer should be told apart from a waiting one")
       (should (equal "AI review by claude: on in 1 buffer(s); this one idle"
                      (+ai--flymake-status-text t 1 nil))))))
+
+(ert-deftest +ai--flymake-callback/lets-a-reasoning-block-pass-and-waits-for-the-answer ()
+  (+ai-flymake-test--in-buffer "x\n"
+    (pcase-let ((`(,report ,calls) (+ai-flymake-test--reports)))
+      (setq +ai--flymake-run 1 +ai--flymake-pending 'llama)
+      (funcall (+ai--flymake-callback (current-buffer) 1 report 'llama) '(reasoning . "<think>hm</think>") nil)
+      (ert-info ("a reasoning block should neither reach flymake nor end the wait")
+        (should (null (funcall calls)))
+        (should (eq 'llama +ai--flymake-pending))))))

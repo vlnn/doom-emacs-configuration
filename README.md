@@ -270,8 +270,8 @@ on edits alone. `SPC o l b` (`+ai-flymake-mode`) does the same for one buffer.
 `SPC o l R` (`+ai/flymake-toggle-provider`) switches `+ai-flymake-provider`
 between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
 (`+ai-flymake-claude-model` through a gptel Anthropic backend of its own,
-`Claude-review`, keyed from `ANTHROPIC_API_KEY` in `secrets.el`; a `Claude`
-backend Doom's llm module may register is left alone), and reviews every
+`Claude-review`, made on first use and keyed from `ANTHROPIC_API_KEY` in
+`secrets.el`; a `Claude` backend Doom's llm module may register is left alone), and reviews every
 buffer the mode is on in again, from wherever it was pressed; pressed before any review is on,
 as in a fresh Emacs, it turns `+ai-flymake-global-mode` on with that
 reviewer. Nothing is reviewed at startup unless `config.el` says
