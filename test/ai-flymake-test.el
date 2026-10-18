@@ -214,10 +214,14 @@
       (ert-info ("a note should outrank an idea for the line's face")
         (should (eq 'flymake-note-echo (get-text-property 0 'face text)))))))
 
-(ert-deftest +ai--flymake-render/eol-puts-one-overlay-at-each-line-end ()
-  (+ai-flymake-test--in-buffer "a\nb\nc\n"
+(defun +ai-flymake-test--render-eol (native-eol)
+  (cl-letf (((symbol-function '+ai--flymake-native-eol-p) (lambda () native-eol)))
     (let ((+ai-flymake-display 'eol))
-      (+ai--flymake-render (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x\n3: error: y\n3: note: z")))
+      (+ai--flymake-render (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x\n3: error: y\n3: note: z")))))
+
+(ert-deftest +ai--flymake-render/eol-draws-its-own-overlays-when-flymake-cannot ()
+  (+ai-flymake-test--in-buffer "a\nb\nc\n"
+    (+ai-flymake-test--render-eol nil)
     (let ((overlays (+ai-flymake-test--overlays)))
       (ert-info ("two annotated lines should give two overlays")
         (should (= 2 (length overlays))))
@@ -225,6 +229,12 @@
         (should (equal '(2 6) (sort (mapcar #'overlay-start overlays) #'<))))
       (ert-info ("the eol text should point back at the line")
         (should (string-prefix-p "  ⟵ " (overlay-get (car overlays) 'after-string)))))))
+
+(ert-deftest +ai--flymake-render/eol-leaves-the-lines-to-flymake-when-it-can ()
+  (+ai-flymake-test--in-buffer "a\nb\nc\n"
+    (+ai-flymake-test--render-eol t)
+    (ert-info ("with flymake showing diagnostics at end of line itself, render should add no overlay")
+      (should (null (+ai-flymake-test--overlays))))))
 
 (ert-deftest +ai--flymake-diagnostic/keeps-line-and-message-as-data ()
   (+ai-flymake-test--in-buffer "a\nb\n"
