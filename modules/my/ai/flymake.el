@@ -36,6 +36,9 @@ right margin; or `eol', right after each line.")
 
 (defvar +ai-flymake-margin-width 48)
 
+(defvar +ai-flymake-wrap-width nil
+  "Width the `column' display wraps findings to; nil means what is left of the window.")
+
 (defvar-local +ai--flymake-run 0
   "Reviews started in this buffer; a reply to an earlier one is dropped.")
 
@@ -248,11 +251,53 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 (defun +ai--flymake-stretch-to (column)
   (propertize " " 'display `(space :align-to ,column)))
 
-(defun +ai--flymake-column-overlay (line diagnostics)
-  (let ((eol (cdr (+ai--flymake-line-bounds line))))
-    (overlay-put (+ai--flymake-overlay eol eol)
-                 'after-string (concat (+ai--flymake-stretch-to (+ai--flymake-column))
-                                       " " (+ai--flymake-summary diagnostics)))))
+(defun +ai--flymake-wrap-width (column)
+  (or +ai-flymake-wrap-width
+      (max 16 (- (window-body-width (or (get-buffer-window) (selected-window))) column 2))))
+
+(defun +ai--flymake-wrap (text width)
+  (with-temp-buffer
+    (insert text)
+    (let ((fill-column width))
+      (fill-region (point-min) (point-max)))
+    (split-string (buffer-string) "\n" t)))
+
+(defun +ai--flymake-free-rows (line annotated total)
+  "How many lines below LINE, up to TOTAL, have no finding of their own."
+  (let ((next (seq-min (cons (1+ total) (seq-filter (lambda (l) (> l line)) annotated)))))
+    (- next line 1)))
+
+(defun +ai--flymake-cut (line width)
+  (concat (truncate-string-to-width line (1- width)) "…"))
+
+(defun +ai--flymake-chunks (summary width rows)
+  "SUMMARY wrapped to WIDTH over its own row and ROWS below, cut with an ellipsis past that."
+  (let* ((face (get-text-property 0 'face summary))
+         (lines (+ai--flymake-wrap (substring-no-properties summary) width))
+         (kept (seq-take lines (1+ rows)))
+         (cut (< (length kept) (length lines))))
+    (mapcar (lambda (line) (propertize line 'face face))
+            (if cut
+                (append (butlast kept) (list (+ai--flymake-cut (car (last kept)) width)))
+              kept))))
+
+(defun +ai--flymake-column-overlays (line chunks column)
+  (seq-map-indexed (lambda (chunk i)
+                     (let ((eol (cdr (+ai--flymake-line-bounds (+ line i)))))
+                       (overlay-put (+ai--flymake-overlay eol eol)
+                                    'after-string (concat (+ai--flymake-stretch-to column) " " chunk))))
+                   chunks))
+
+(defun +ai--flymake-render-column (groups)
+  (let* ((column (+ai--flymake-column))
+         (width (+ai--flymake-wrap-width column))
+         (annotated (mapcar #'car groups))
+         (total (count-lines (point-min) (point-max))))
+    (pcase-dolist (`(,line . ,diagnostics) groups)
+      (+ai--flymake-column-overlays
+       line (+ai--flymake-chunks (+ai--flymake-summary diagnostics) width
+                                 (+ai--flymake-free-rows line annotated total))
+       column))))
 
 (defun +ai--flymake-margin-string (diagnostics)
   (propertize " " 'display `((margin right-margin) ,(+ai--flymake-fit (+ai--flymake-summary diagnostics)))))
@@ -265,17 +310,18 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 (defun +ai--flymake-clear ()
   (remove-overlays (point-min) (point-max) '+ai-flymake t))
 
-(defun +ai--flymake-renderer ()
-  (pcase +ai-flymake-display
-    ('column #'+ai--flymake-column-overlay)
-    ('margin #'+ai--flymake-margin-overlay)
-    ('eol (unless (+ai--flymake-native-eol-p) #'+ai--flymake-eol-overlay))
-    (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays))))
+(defun +ai--flymake-render-each (render groups)
+  (pcase-dolist (`(,line . ,group) groups)
+    (funcall render line group)))
 
 (defun +ai--flymake-render (diagnostics)
-  (when-let* ((render (+ai--flymake-renderer)))
-    (pcase-dolist (`(,line . ,group) (+ai--flymake-by-line diagnostics))
-      (funcall render line group))))
+  (let ((groups (+ai--flymake-by-line diagnostics)))
+    (pcase +ai-flymake-display
+      ('column (+ai--flymake-render-column groups))
+      ('margin (+ai--flymake-render-each #'+ai--flymake-margin-overlay groups))
+      ('eol (unless (+ai--flymake-native-eol-p)
+              (+ai--flymake-render-each #'+ai--flymake-eol-overlay groups)))
+      (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays)))))
 
 (defun +ai--flymake-annotate (buffer diagnostics)
   (with-current-buffer buffer

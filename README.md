@@ -300,7 +300,10 @@ By default each line's findings appear in a **column just past the code**
 (`+ai-flymake-display` `column`): two columns right of the longest line or
 `fill-column`, whichever is wider, or `+ai-flymake-column` when set, so they
 sit beside the code at one fixed column with the rest of the window to run
-into. `SPC o l m` (`+ai/flymake-toggle-display`) cycles to `margin` (the
+into. A finding wider than that room wraps at words onto the rows below, as
+long as those lines carry no finding of their own; where the next finding
+begins it stops with `…` instead (`+ai-flymake-wrap-width` fixes the width,
+else what is left of the window). `SPC o l m` (`+ai/flymake-toggle-display`) cycles to `margin` (the
 window's right margin, `+ai-flymake-margin-width` 48, cut with `…`) and
 `eol` (`⟵ …` straight after each line: Flymake's own end-of-line display on
 Emacs 30, an overlay of ours on 29), then back. Findings are placed by the
