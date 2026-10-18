@@ -93,6 +93,10 @@
 
 (load! "annotate")
 
+;;; AI review through Flymake — SPC o l r / SPC o l R
+
+(load! "flymake")
+
 ;;; gptel-magit — commit messages and diff explanations
 
 (defun +ai--gptel-magit-require-staged (fn &rest args)

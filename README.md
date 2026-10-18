@@ -18,7 +18,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
+| `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote, ob-duckdb |
 | `tasks` | per-repo `tasks.org`: agenda views, `branches` block, a worktree per task, `p i` idea capture, `+tasks/init` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
@@ -67,7 +67,7 @@ step.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; tests cover the pure functions
-(`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
+(`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--flymake-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
 `+tasks--*`, `+ai-trust--*`, `+ai--jail*`); the tasks tests drive real git in
 temp repos for worktrees and `done`. ERT checks the arguments the jail is
 started with and, as Emacs regexps, which paths the profile's name rules
@@ -256,3 +256,18 @@ repo to fix a bug in `+tasks/start`.
 
 See `llama-server/README.md`. `M-x +ai/refresh-llama-models` re-reads the
 served model list into gptel.
+
+## AI review through Flymake
+
+`SPC o l r` (`+ai-flymake-mode`) sends the buffer, lines numbered, to a model
+and shows what comes back as Flymake diagnostics: `error`, `warning` or `note`
+on the line named, each prefixed with the reviewer's name. It runs when the
+mode starts and on every save, never on edits alone; `flymake-mode` is turned
+on with it and off with it. Buffers over `+ai-flymake-max-lines` (400) are
+skipped with a note in `*Flymake log*`.
+
+`SPC o l R` (`+ai/flymake-toggle-provider`) switches `+ai-flymake-provider`
+between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
+(`+ai-flymake-claude-model` through gptel's Anthropic backend, which needs
+`ANTHROPIC_API_KEY` from `secrets.el`), re-reviewing the buffer if the mode is
+on. A reply that arrives after a newer review started is dropped.

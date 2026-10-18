@@ -15,6 +15,7 @@
                   "modules/my/python/dape.el"
                   "modules/my/ai/config.el"
                   "modules/my/ai/annotate.el"
+                  "modules/my/ai/flymake.el"
                   "modules/my/lua/repl.el"
                   "modules/my/lua/busted.el"
                   "modules/my/lua/love.el"
