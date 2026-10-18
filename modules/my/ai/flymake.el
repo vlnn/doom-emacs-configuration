@@ -1,6 +1,7 @@
 ;;; my/ai/flymake.el -*- lexical-binding: t; -*-
 ;; SPC o l r: have an LLM review the buffer through Flymake, on save and when the mode starts.
 ;; SPC o l R: switch the reviewer between llama-server (default) and Claude.
+;; SPC o l m: show findings in the right margin (default) or at the end of each line.
 
 (require 'cl-lib)
 (require 'flymake)
@@ -15,7 +16,7 @@
 (defvar flymake-show-diagnostics-at-end-of-line)
 
 (defconst +ai-flymake-directive
-  "You review source code, each line prefixed by its number and a colon. Report only what a careful reviewer would act on: bugs, unhandled cases, non-idiomatic constructs, oversized functions, misleading names, missing or weak tests, asserts lacking explanation strings. Output one line per finding of the form `N: SEVERITY: message`, N being the line number, SEVERITY one of error, warning or note, the message under 100 characters. Output nothing else: no code, no prose, no fences. Output nothing at all when there is nothing worth saying.")
+  "You review source code, each line prefixed by its number and a colon. Report what a careful reviewer would say: bugs and unhandled cases as error, non-idiomatic constructs, oversized functions, misleading names, missing or weak tests and asserts lacking explanation strings as warning, remarks worth knowing as note, and possible improvements, simplifications or more idiomatic alternatives as idea. Output one line per finding of the form `N: SEVERITY: message`, N being the line number, SEVERITY one of error, warning, note or idea, the message under 60 characters. Output nothing else: no code, no prose, no fences. Output nothing at all when there is nothing worth saying.")
 
 (defvar +ai-flymake-provider 'llama
   "Who reviews: `llama' for the local llama-server (the default) or `claude'.")
@@ -25,11 +26,33 @@
 (defvar +ai-flymake-max-lines 400
   "Buffers longer than this are not sent for review.")
 
+(defvar +ai-flymake-display 'margin
+  "Where findings show: `margin', a column right of the text, or `eol', after each line.")
+
+(defvar +ai-flymake-margin-width 48)
+
 (defvar-local +ai--flymake-run 0
   "Reviews started in this buffer; a reply to an earlier one is dropped.")
 
 (defvar-local +ai--flymake-pending nil
   "The reviewer whose reply this buffer is waiting on, or nil.")
+
+;;; ideas: a fourth severity, counted by flymake as a note, shown quietly
+
+(defface +ai-flymake-idea
+  '((t :inherit flymake-note :underline nil))
+  "Code an idea was offered for.")
+
+(defface +ai-flymake-idea-echo
+  '((t :inherit (font-lock-doc-face italic)))
+  "An idea, in the margin or echo area.")
+
+(put '+ai-flymake-idea 'flymake-category 'flymake-note)
+(put '+ai-flymake-idea 'face '+ai-flymake-idea)
+(put '+ai-flymake-idea 'echo-face '+ai-flymake-idea-echo)
+(put '+ai-flymake-idea 'eol-face '+ai-flymake-idea-echo)
+(put '+ai-flymake-idea 'bitmap 'flymake-note-bitmap)
+(put '+ai-flymake-idea 'severity 10)
 
 ;;; providers
 
@@ -71,10 +94,10 @@
 ;;; replies
 
 (defconst +ai--flymake-severities
-  '(("error" . :error) ("warning" . :warning) ("note" . :note)))
+  '(("error" . :error) ("warning" . :warning) ("note" . :note) ("idea" . +ai-flymake-idea)))
 
 (defconst +ai--flymake-finding-regexp
-  "\\`\\s-*\\([0-9]+\\)[.:)]\\s-*\\(?:\\(error\\|warning\\|note\\)\\s-*:\\s-*\\)?\\(.+\\)\\'")
+  "\\`\\s-*\\([0-9]+\\)[.:)]\\s-*\\(?:\\(error\\|warning\\|note\\|idea\\)\\s-*:\\s-*\\)?\\(.+\\)\\'")
 
 (defun +ai--flymake-severity (word)
   (if word (alist-get (downcase word) +ai--flymake-severities :note nil #'equal) :note))
@@ -95,11 +118,12 @@
     (<= 1 line (count-lines (point-min) (point-max)))))
 
 (defun +ai--flymake-diagnostic (buffer provider finding)
+  "A flymake diagnostic for FINDING, the bare message kept in its data slot."
   (pcase-let ((`(,line ,severity ,text) finding))
     (when-let* (((+ai--flymake-in-range-p buffer line))
                 (region (flymake-diag-region buffer line)))
       (flymake-make-diagnostic buffer (car region) (cdr region) severity
-                               (format "%s: %s" provider text)))))
+                               (format "%s: %s" provider text) text))))
 
 (defun +ai--flymake-diagnostics (buffer provider response)
   (delq nil (mapcar (lambda (finding) (+ai--flymake-diagnostic buffer provider finding))
@@ -120,51 +144,75 @@
   (with-current-buffer buffer
     (setq +ai--flymake-pending nil)))
 
-;;; end-of-line annotations: Flymake's own on Emacs 30, ours before that
+;;; where findings show: the right margin, or the end of the line
 
-(defconst +ai--flymake-eol-faces
-  '((:error . flymake-error-echo) (:warning . flymake-warning-echo) (:note . flymake-note-echo)))
+(defconst +ai--flymake-echo-faces
+  '((:error . flymake-error-echo) (:warning . flymake-warning-echo)
+    (:note . flymake-note-echo) (+ai-flymake-idea . +ai-flymake-idea-echo)))
 
-(defconst +ai--flymake-severity-order '(:error :warning :note))
+(defconst +ai--flymake-severity-order '(:error :warning :note +ai-flymake-idea))
+
+(defconst +ai--flymake-displays '(margin eol))
 
 (defun +ai--flymake-native-eol-p ()
   (boundp 'flymake-show-diagnostics-at-end-of-line))
 
 (defun +ai--flymake-worst (diagnostics)
-  (seq-find (lambda (severity) (seq-some (lambda (d) (eq severity (flymake-diagnostic-type d))) diagnostics))
+  (seq-find (lambda (severity)
+              (seq-some (lambda (d) (eq severity (flymake-diagnostic-type d))) diagnostics))
             +ai--flymake-severity-order))
 
-(defun +ai--flymake-eol-string (diagnostics)
-  (propertize (concat "  ⟵ " (mapconcat #'flymake-diagnostic-text diagnostics " │ "))
-              'face (alist-get (+ai--flymake-worst diagnostics) +ai--flymake-eol-faces)))
+(defun +ai--flymake-summary (diagnostics)
+  "One line's findings, bare messages joined, in the face of the worst."
+  (propertize (mapconcat #'flymake-diagnostic-data diagnostics " │ ")
+              'face (alist-get (+ai--flymake-worst diagnostics) +ai--flymake-echo-faces)))
 
-(defun +ai--flymake-line-end (diagnostic)
+(defun +ai--flymake-fit (text)
+  (truncate-string-to-width text +ai-flymake-margin-width nil nil "…"))
+
+(defun +ai--flymake-line-start (diagnostic)
   (save-excursion
     (goto-char (flymake-diagnostic-beg diagnostic))
-    (line-end-position)))
+    (line-beginning-position)))
 
 (defun +ai--flymake-by-line (diagnostics)
-  (seq-group-by #'+ai--flymake-line-end diagnostics))
+  (seq-group-by #'+ai--flymake-line-start diagnostics))
 
-(defun +ai--flymake-eol-overlay (eol diagnostics)
-  (let ((overlay (make-overlay eol eol nil t nil)))
-    (overlay-put overlay '+ai-flymake-eol t)
-    (overlay-put overlay 'after-string (+ai--flymake-eol-string diagnostics))
-    (overlay-put overlay 'evaporate nil)
+(defun +ai--flymake-overlay (beg end)
+  (let ((overlay (make-overlay beg end nil t nil)))
+    (overlay-put overlay '+ai-flymake t)
     overlay))
 
-(defun +ai--flymake-clear-eol ()
-  (remove-overlays (point-min) (point-max) '+ai-flymake-eol t))
+(defun +ai--flymake-eol-overlay (bol diagnostics)
+  (let ((eol (save-excursion (goto-char bol) (line-end-position))))
+    (overlay-put (+ai--flymake-overlay eol eol)
+                 'after-string (concat "  ⟵ " (+ai--flymake-summary diagnostics)))))
 
-(defun +ai--flymake-render-eol (diagnostics)
-  (pcase-dolist (`(,eol . ,group) (+ai--flymake-by-line diagnostics))
-    (+ai--flymake-eol-overlay eol group)))
+(defun +ai--flymake-margin-string (diagnostics)
+  (propertize " " 'display `((margin right-margin) ,(+ai--flymake-fit (+ai--flymake-summary diagnostics)))))
+
+(defun +ai--flymake-margin-overlay (bol diagnostics)
+  (overlay-put (+ai--flymake-overlay bol bol)
+               'before-string (+ai--flymake-margin-string diagnostics)))
+
+(defun +ai--flymake-clear ()
+  (remove-overlays (point-min) (point-max) '+ai-flymake t))
+
+(defun +ai--flymake-renderer ()
+  (pcase +ai-flymake-display
+    ('margin #'+ai--flymake-margin-overlay)
+    ('eol (unless (+ai--flymake-native-eol-p) #'+ai--flymake-eol-overlay))
+    (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays))))
+
+(defun +ai--flymake-render (diagnostics)
+  (when-let* ((render (+ai--flymake-renderer)))
+    (pcase-dolist (`(,bol . ,group) (+ai--flymake-by-line diagnostics))
+      (funcall render bol group))))
 
 (defun +ai--flymake-annotate (buffer diagnostics)
   (with-current-buffer buffer
-    (+ai--flymake-clear-eol)
-    (unless (+ai--flymake-native-eol-p)
-      (+ai--flymake-render-eol diagnostics))))
+    (+ai--flymake-clear)
+    (+ai--flymake-render diagnostics)))
 
 (defun +ai--flymake-report (buffer provider report-fn response)
   (let ((diagnostics (+ai--flymake-diagnostics buffer provider response)))
@@ -183,6 +231,37 @@
          (+ai--flymake-settle buffer)
          (funcall report-fn :panic
                   :explanation (format "%s review failed: %s" provider (plist-get info :status))))))))
+
+;;; the margin column and flymake's own eol display, per buffer
+
+(defun +ai--flymake-apply-margins ()
+  (dolist (window (get-buffer-window-list nil nil t))
+    (set-window-margins window (car (window-margins window)) right-margin-width)))
+
+(defun +ai--flymake-setup-display ()
+  (pcase +ai-flymake-display
+    ('margin (setq right-margin-width +ai-flymake-margin-width)
+             (+ai--flymake-apply-margins))
+    ('eol (when (+ai--flymake-native-eol-p)
+            (setq-local flymake-show-diagnostics-at-end-of-line 'short)))))
+
+(defun +ai--flymake-teardown-display ()
+  (kill-local-variable 'right-margin-width)
+  (+ai--flymake-apply-margins)
+  (kill-local-variable 'flymake-show-diagnostics-at-end-of-line))
+
+(defun +ai--flymake-next-display (current)
+  (or (cadr (memq current +ai--flymake-displays)) (car +ai--flymake-displays)))
+
+(defun +ai/flymake-toggle-display ()
+  "Move findings between the right margin and the end of each line, redrawing them here."
+  (interactive)
+  (setq +ai-flymake-display (+ai--flymake-next-display +ai-flymake-display))
+  (message "AI review findings shown in %s" +ai-flymake-display)
+  (when (bound-and-true-p +ai-flymake-mode)
+    (+ai--flymake-teardown-display)
+    (+ai--flymake-setup-display)
+    (flymake-start)))
 
 ;;; backend
 
@@ -233,19 +312,19 @@ Edits alone do not trigger a review; a model call per keystroke would be noise."
          (add-hook 'flymake-diagnostic-functions #'+ai-flymake-backend nil t)
          (setq-local flymake-no-changes-timeout nil
                      flymake-fringe-indicator-position 'right-fringe)
-         (when (+ai--flymake-native-eol-p)
-           (setq-local flymake-show-diagnostics-at-end-of-line 'short))
+         (+ai--flymake-setup-display)
          (if flymake-mode (flymake-start) (flymake-mode 1)))
         (t
          (remove-hook 'flymake-diagnostic-functions #'+ai-flymake-backend t)
-         (+ai--flymake-clear-eol)
+         (+ai--flymake-clear)
+         (+ai--flymake-teardown-display)
          (kill-local-variable 'flymake-no-changes-timeout)
          (kill-local-variable 'flymake-fringe-indicator-position)
-         (kill-local-variable 'flymake-show-diagnostics-at-end-of-line)
          (flymake-mode -1))))
 
 (map! :leader
       :desc "AI review buffer"   "o l r" #'+ai-flymake-mode
       :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
+      :desc "AI review display"  "o l m" #'+ai/flymake-toggle-display
       :desc "AI review status"   "o l ?" #'+ai/flymake-status
       :desc "AI review list"     "o l l" #'flymake-show-buffer-diagnostics)

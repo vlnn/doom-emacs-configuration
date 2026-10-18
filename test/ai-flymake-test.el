@@ -173,54 +173,104 @@
   (ert-info ("several findings should be plural")
     (should (equal "3 findings" (+ai--flymake-findings-text 3)))))
 
-;;; end-of-line rendering
+;;; rendering
 
-(defun +ai-flymake-test--eol-overlays ()
-  (seq-filter (lambda (o) (overlay-get o '+ai-flymake-eol)) (overlays-in (point-min) (point-max))))
+(defun +ai-flymake-test--overlays ()
+  (seq-filter (lambda (o) (overlay-get o '+ai-flymake)) (overlays-in (point-min) (point-max))))
 
-(ert-deftest +ai--flymake-eol-string/joins-one-line-s-findings ()
+(ert-deftest +ai--flymake-parse/knows-ideas ()
+  (ert-info ("parse should map `idea' to the idea type")
+    (should (equal '((2 +ai-flymake-idea "inline this")) (+ai--flymake-parse "2: idea: inline this")))))
+
+(ert-deftest +ai-flymake-idea/counts-as-a-note-for-flymake ()
+  (ert-info ("ideas should sit in flymake's note category so they never inflate the error count")
+    (should (eq 'flymake-note (get '+ai-flymake-idea 'flymake-category)))))
+
+(ert-deftest +ai--flymake-summary/joins-one-line-s-findings-without-the-provider ()
   (+ai-flymake-test--in-buffer "a\nb\n"
-    (let ((text (+ai--flymake-eol-string
+    (let ((text (+ai--flymake-summary
                  (+ai--flymake-diagnostics (current-buffer) 'llama "1: error: x\n1: note: y"))))
-      (ert-info ("the string should carry every finding of the line, separated")
-        (should (equal "  ⟵ llama: x │ llama: y" (substring-no-properties text))))
-      (ert-info ("the string should wear the face of the worst finding")
-        (should (eq 'flymake-error-echo (get-text-property 4 'face text)))))))
+      (ert-info ("the summary should carry every finding of the line, separated, provider dropped")
+        (should (equal "x │ y" (substring-no-properties text))))
+      (ert-info ("the summary should wear the face of the worst finding")
+        (should (eq 'flymake-error-echo (get-text-property 0 'face text)))))))
 
-(ert-deftest +ai--flymake-render-eol/one-overlay-per-line ()
+(ert-deftest +ai--flymake-summary/ideas-rank-below-notes ()
+  (+ai-flymake-test--in-buffer "a\n"
+    (let ((text (+ai--flymake-summary
+                 (+ai--flymake-diagnostics (current-buffer) 'llama "1: idea: x\n1: note: y"))))
+      (ert-info ("a note should outrank an idea for the line's face")
+        (should (eq 'flymake-note-echo (get-text-property 0 'face text)))))))
+
+(ert-deftest +ai--flymake-render/eol-puts-one-overlay-at-each-line-end ()
   (+ai-flymake-test--in-buffer "a\nb\nc\n"
-    (+ai--flymake-render-eol (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x\n3: error: y\n3: note: z"))
-    (let ((overlays (+ai-flymake-test--eol-overlays)))
+    (let ((+ai-flymake-display 'eol))
+      (+ai--flymake-render (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x\n3: error: y\n3: note: z")))
+    (let ((overlays (+ai-flymake-test--overlays)))
       (ert-info ("two annotated lines should give two overlays")
         (should (= 2 (length overlays))))
       (ert-info ("each overlay should sit at the end of its line")
-        (should (equal '(2 6) (sort (mapcar #'overlay-start overlays) #'<)))))))
+        (should (equal '(2 6) (sort (mapcar #'overlay-start overlays) #'<))))
+      (ert-info ("the eol text should point back at the line")
+        (should (string-prefix-p "  ⟵ " (overlay-get (car overlays) 'after-string)))))))
 
-(ert-deftest +ai--flymake-clear-eol/removes-only-ours ()
+(ert-deftest +ai--flymake-render/margin-shows-the-summary-in-the-right-margin ()
+  (+ai-flymake-test--in-buffer "a\nbb\n"
+    (let ((+ai-flymake-display 'margin))
+      (+ai--flymake-render (+ai--flymake-diagnostics (current-buffer) 'llama "2: warning: w")))
+    (let* ((overlay (car (+ai-flymake-test--overlays)))
+           (spec (get-text-property 0 'display (overlay-get overlay 'before-string))))
+      (ert-info ("the margin overlay should start at the beginning of its line")
+        (should (= 3 (overlay-start overlay))))
+      (ert-info ("the string should be displayed in the right margin")
+        (should (equal '(margin right-margin) (car spec))))
+      (ert-info ("the margin should hold the summary")
+        (should (equal "w" (substring-no-properties (cadr spec))))))))
+
+(ert-deftest +ai--flymake-fit/truncates-to-the-margin ()
+  (let ((+ai-flymake-margin-width 6))
+    (ert-info ("a long summary should be cut with an ellipsis to the margin width")
+      (should (equal "abcde…" (+ai--flymake-fit "abcdefghij"))))
+    (ert-info ("a short summary should pass through")
+      (should (equal "abc" (+ai--flymake-fit "abc"))))))
+
+(ert-deftest +ai--flymake-clear/removes-only-ours ()
   (+ai-flymake-test--in-buffer "a\n"
-    (let ((other (make-overlay 1 2)))
-      (+ai--flymake-render-eol (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x"))
-      (+ai--flymake-clear-eol)
+    (let ((other (make-overlay 1 2))
+          (+ai-flymake-display 'margin))
+      (+ai--flymake-render (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x"))
+      (+ai--flymake-clear)
       (ert-info ("clearing should drop our overlays")
-        (should (null (+ai-flymake-test--eol-overlays))))
+        (should (null (+ai-flymake-test--overlays))))
       (ert-info ("clearing should leave other overlays alone")
         (should (overlay-buffer other))))))
 
 (ert-deftest +ai--flymake-report/replaces-earlier-annotations ()
   (+ai-flymake-test--in-buffer "a\nb\n"
-    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports)))
-      (cl-letf (((symbol-function 'message) #'ignore)
-                ((symbol-function '+ai--flymake-native-eol-p) (lambda () nil)))
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports))
+                (+ai-flymake-display 'margin))
+      (cl-letf (((symbol-function 'message) #'ignore))
         (+ai--flymake-report (current-buffer) 'llama report "1: note: old\n2: note: old")
         (+ai--flymake-report (current-buffer) 'llama report "2: note: new"))
       (ert-info ("a new report should leave exactly its own annotations")
-        (should (= 1 (length (+ai-flymake-test--eol-overlays))))))))
+        (should (= 1 (length (+ai-flymake-test--overlays))))))))
 
 (ert-deftest +ai--flymake-report/leaves-eol-to-flymake-when-it-can ()
   (+ai-flymake-test--in-buffer "a\n"
-    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports)))
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports))
+                (+ai-flymake-display 'eol))
       (cl-letf (((symbol-function 'message) #'ignore)
                 ((symbol-function '+ai--flymake-native-eol-p) (lambda () t)))
         (+ai--flymake-report (current-buffer) 'llama report "1: note: x"))
       (ert-info ("on an Emacs that shows diagnostics at end of line itself, we add no overlay")
-        (should (null (+ai-flymake-test--eol-overlays)))))))
+        (should (null (+ai-flymake-test--overlays)))))))
+
+(ert-deftest +ai--flymake-next-display/toggles-margin-and-eol ()
+  (ert-info ("margin should be followed by eol")
+    (should (eq 'eol (+ai--flymake-next-display 'margin))))
+  (ert-info ("eol should wrap to margin")
+    (should (eq 'margin (+ai--flymake-next-display 'eol)))))
+
+(ert-deftest +ai-flymake-display/defaults-to-margin ()
+  (ert-info ("findings should default to the margin column, clear of the code")
+    (should (eq 'margin (default-value '+ai-flymake-display)))))
