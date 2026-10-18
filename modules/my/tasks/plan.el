@@ -100,6 +100,18 @@ change that passes, tick it. Finish with a summary of the diff and how
                (y-or-n-p "Write an AGENTS.md with the plan gate and the interview rule? "))
       (with-temp-file target (insert +tasks--agents-md-text)))))
 
+(defun +tasks--skill-missing-p (root worktree)
+  "Whether WORKTREE, cut before the skill reached ROOT, lacks the grilling skill ROOT has."
+  (and (file-directory-p (expand-file-name +tasks--skill-dir root))
+       (not (file-directory-p (expand-file-name +tasks--skill-dir worktree)))))
+
+(defun +tasks--ensure-skill (root worktree)
+  "Offer to copy ROOT's grilling skill into WORKTREE when it has none; /skill:grilling resolves there."
+  (when (and (+tasks--skill-missing-p root worktree)
+             (y-or-n-p "This worktree predates the grilling skill; copy it in from the main checkout? "))
+    (copy-directory (expand-file-name +tasks--skill-dir root)
+                    (expand-file-name +tasks--skill-dir worktree) nil t t)))
+
 (defun +tasks--offer-agent-inputs (root)
   "Ask, never silently, before giving a new project the skill and the AGENTS.md the flow expects."
   (+tasks--offer-skill root)

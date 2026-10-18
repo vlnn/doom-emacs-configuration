@@ -920,7 +920,7 @@ run act on with your rights, in the second.")
          (root (file-name-as-directory (file-truename (+tasks--task-root task)))))
     (+tasks--hand-off (+tasks--task-worktree root branch)
                       :review-root root
-                      :prepare (lambda () (+tasks--add-worktree root branch))
+                      :prepare (lambda () (+tasks--ensure-skill root (+tasks--add-worktree root branch)))
                       :session branch
                       :model (+tasks--session-model task (+tasks--plan-text (+tasks--task-worktree-of task))))))
 

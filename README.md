@@ -231,6 +231,12 @@ prefills `Plan not approved: ` for you to finish. `e` opens the plan writable;
 each save asks pi to read it again and wait. `PLAN.md` is excluded from git
 and goes away with the worktree.
 
+A task started before the skill reached the repo has a worktree without it,
+so `/skill:grilling` cannot resolve there; `c` on such a task offers to copy
+the skill in from the main checkout (it shows up as untracked work on the
+branch: commit it, or drop it before `d`). Paste the interview draft into the
+session by hand, or `x` and `s` for a fresh start.
+
 The plan is what the rest of the flow reads: `R` reviews the diff against it,
 `r` and `d` show how many of its tests are ticked (shown, not enforced), and
 `d` refuses while `## Open` has any line. Only the `Approved: <date>` line Emacs writes right under `ACCEPT:` counts as approval; one the agent writes elsewhere does not, and the plan is opened with file-local variables off. Decisions the plan did not settle go
