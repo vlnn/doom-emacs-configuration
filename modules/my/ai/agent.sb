@@ -11,13 +11,15 @@
 (deny file-write*)
 
 ;; shared dependency caches stay read-only: unjailed REPLs and tools run what they hold;
-;; pi 1.3 takes a lock dir next to auth.json before reading it, so that dir and nothing else
+;; pi 1.3 takes a lock dir next to auth.json before reading it, and next to trust.json before
+;; reading which project inputs (.agents, .pi) it may load: those dirs and nothing else
 (allow file-write*
   (subpath (param "PROJECT"))
   (subpath (param "TMPDIR"))
   (subpath "/private/tmp")
   (subpath (home "/.pi/agent/sessions"))
   (subpath (home "/.pi/agent/auth.json.lock"))
+  (subpath (home "/.pi/agent/trust.json.lock"))
   (subpath (home "/.local/state/hax"))
   (subpath (home "/.cache/hax"))
   (subpath (home "/.cache/agent-jail"))

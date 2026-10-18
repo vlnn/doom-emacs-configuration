@@ -144,7 +144,9 @@ In the jail:
   session has the network open.
 
 The pi opened to record a trust decision runs outside, since it writes
-`~/.pi/agent/trust.json`. Without `sandbox-exec` (Linux) or for remote
+`~/.pi/agent/trust.json`; a jailed pi may take the lock dirs next to
+`auth.json` and `trust.json` (it does so before reading either, the latter
+once the project has `.agents/` or `.pi/` to load) but not write the files. Without `sandbox-exec` (Linux) or for remote
 projects agents start as before, and Emacs says so once;
 `(setq +ai-jail-enabled nil)` turns the jail off. When something an agent needs
 is denied, `log stream --style compact --predicate 'sender == "Sandbox"'` names

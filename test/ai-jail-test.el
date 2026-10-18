@@ -155,6 +155,13 @@
     (ert-info ("agent.sb should not open the whole ~/.pi/agent to the jailed pi")
       (should-not (string-match-p "(subpath (home \"/\\.pi/agent\"))" text)))))
 
+(ert-deftest +ai-jail-profile/lets-pi-lock-the-trust-store-without-writing-it ()
+  (let ((text (+ai-jail-test--profile-text)))
+    (ert-info ("agent.sb should allow the trust.json.lock dir pi takes before reading which project inputs it may load")
+      (should (string-match-p (regexp-quote "(subpath (home \"/.pi/agent/trust.json.lock\"))") text)))
+    (ert-info ("agent.sb should still not allow writes to trust.json itself; Emacs writes the decision, outside the jail")
+      (should-not (string-match-p "(home \"/\\.pi/agent/trust\\.json\")" text)))))
+
 (ert-deftest +ai-jail-profile/leaves-shared-caches-read-only ()
   (let ((text (+ai-jail-test--profile-text)))
     (dolist (cache '("/.cache/uv" "/.m2/repository" "/.gitlibs"))

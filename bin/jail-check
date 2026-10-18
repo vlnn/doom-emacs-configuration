@@ -71,6 +71,12 @@ if [[ -d "$real_home/.pi/agent/sessions" ]]; then
   expect allowed "pi sessions should be writable" \
     sh -c "f='$real_home/.pi/agent/sessions/.jail-check' && touch \"\$f\" && rm \"\$f\""
 fi
+if [[ -d "$real_home/.pi/agent" && ! -e "$real_home/.pi/agent/trust.json.lock" ]]; then
+  expect allowed "pi should take its trust.json lock dir, to read which project inputs it may load" \
+    sh -c "d='$real_home/.pi/agent/trust.json.lock' && mkdir \"\$d\" && rmdir \"\$d\""
+  expect denied "trust.json itself should not be writable" \
+    sh -c "echo >> '$real_home/.pi/agent/trust.json'"
+fi
 
 if command -v pi >/dev/null; then
   expect allowed "pi should start in the jail" pi --version
