@@ -826,3 +826,29 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
       (ert-info ("next in tasks.org should keep acting on the heading at point")
         (should (equal "Here" ran))))
     (setq buffer-file-name nil)))
+
+;;; a green run with unticked plan tests is called out
+
+(ert-deftest +tasks--verdict-note/warns-of-a-green-run-the-plan-does-not-vouch-for ()
+  (pcase-dolist (`(,verdict ,plan ,expected ,why)
+                 `(("GREEN" ,+tasks-plan-test--written "GREEN, but plan: 1/2 tests ticked" "flag a pass while plan tests are unticked")
+                   ("GREEN" ,(replace-regexp-in-string "- \\[ \\]" "- [x]" +tasks-plan-test--written) "GREEN; plan: 2/2 tests ticked" "report a pass the plan vouches for")
+                   ("RED" ,+tasks-plan-test--written "RED; plan: 1/2 tests ticked" "report a failure with the count")
+                   ("GREEN" nil "GREEN" "say only the verdict without a plan")))
+    (ert-info ((format "verdict-note should %s" why))
+      (should (equal expected (+tasks--verdict-note verdict plan))))))
+
+(ert-deftest +tasks--mark-compiled-tests/says-when-green-is-not-vouched-for ()
+  (+tasks-plan-test--with-worktree +tasks-plan-test--written
+    (+tasks-test--in-tasks-buffer "** RED Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+      (+tasks-test--goto-heading "Thing")
+      (let ((task (+tasks--task-plist)) said)
+        (cl-letf (((symbol-function '+tasks--branch-worktree-in) (lambda (&rest _) tree))
+                  ((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args)))))
+          (with-temp-buffer
+            (setq-local +tasks--compiled-task task)
+            (+tasks--mark-compiled-tests (current-buffer) "finished\n")))
+        (ert-info ("a passing run should still move the task to GREEN")
+          (should (equal "GREEN" (car (+tasks-test--state-of (current-buffer) "Thing")))))
+        (ert-info ("a passing run with unticked plan tests should say so, since GREEN alone would mislead")
+          (should (string-search "GREEN, but plan: 1/2 tests ticked" said)))))))

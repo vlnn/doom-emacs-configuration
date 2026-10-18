@@ -766,10 +766,21 @@ Nothing changes until the repo review lets pi start."
 (defvar-local +tasks--compiled-task nil
   "The task whose tests this compilation buffer runs.")
 
+(defun +tasks--verdict-note (verdict plan)
+  "VERDICT with the plan's tick count; a GREEN the plan does not vouch for is flagged."
+  (pcase-let ((`(,ticked . ,total) (if plan (+tasks--plan-tick-count plan) '(0 . 0))))
+    (cond ((null plan) verdict)
+          ((and (equal verdict "GREEN") (< ticked total))
+           (format "%s, but plan: %d/%d tests ticked" verdict ticked total))
+          (t (format "%s; plan: %d/%d tests ticked" verdict ticked total)))))
+
 (defun +tasks--mark-compiled-tests (buffer compilation-message)
   (when-let* ((task (buffer-local-value '+tasks--compiled-task buffer))
               ((buffer-live-p (plist-get task :buffer))))
-    (+tasks--set-state task (+tasks--test-verdict compilation-message))))
+    (let ((verdict (+tasks--test-verdict compilation-message)))
+      (+tasks--set-state task verdict)
+      (message "%s: %s" (plist-get task :heading)
+               (+tasks--verdict-note verdict (+tasks--plan-text (+tasks--task-worktree-of task)))))))
 
 (add-hook 'compilation-finish-functions #'+tasks--mark-compiled-tests)
 
