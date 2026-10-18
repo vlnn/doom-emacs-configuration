@@ -27,6 +27,9 @@
 (defvar-local +ai--flymake-run 0
   "Reviews started in this buffer; a reply to an earlier one is dropped.")
 
+(defvar-local +ai--flymake-pending nil
+  "The reviewer whose reply this buffer is waiting on, or nil.")
+
 ;;; providers
 
 (defun +ai--anthropic-key ()
@@ -105,13 +108,31 @@
   (and (buffer-live-p buffer)
        (= run (buffer-local-value '+ai--flymake-run buffer))))
 
+(defun +ai--flymake-findings-text (count)
+  (format "%d finding%s" count (if (= count 1) "" "s")))
+
+(defun +ai--flymake-outcome-text (provider count)
+  (format "AI review by %s: %s" provider
+          (if (zerop count) "nothing to flag" (+ai--flymake-findings-text count))))
+
+(defun +ai--flymake-settle (buffer)
+  (with-current-buffer buffer
+    (setq +ai--flymake-pending nil)))
+
+(defun +ai--flymake-report (buffer provider report-fn response)
+  (let ((diagnostics (+ai--flymake-diagnostics buffer provider response)))
+    (funcall report-fn diagnostics)
+    (message "%s" (+ai--flymake-outcome-text provider (length diagnostics)))))
+
 (defun +ai--flymake-callback (buffer run report-fn provider)
   (lambda (response info)
     (when (+ai--flymake-current-run-p buffer run)
       (pcase response
         ((pred stringp)
-         (funcall report-fn (+ai--flymake-diagnostics buffer provider response)))
+         (+ai--flymake-settle buffer)
+         (+ai--flymake-report buffer provider report-fn response))
         ('nil
+         (+ai--flymake-settle buffer)
          (funcall report-fn :panic
                   :explanation (format "%s review failed: %s" provider (plist-get info :status))))))))
 
@@ -131,6 +152,8 @@
          (gptel-use-context nil)
          (gptel-use-tools nil)
          (run (cl-incf +ai--flymake-run)))
+    (setq +ai--flymake-pending +ai-flymake-provider)
+    (message "AI review by %s…" +ai-flymake-provider)
     (gptel-request (+ai--flymake-numbered-buffer)
       :system +ai-flymake-directive
       :callback (+ai--flymake-callback (current-buffer) run report-fn +ai-flymake-provider))))
@@ -144,10 +167,20 @@
 
 ;;; mode
 
+(defun +ai--flymake-lighter ()
+  (if +ai--flymake-pending (format " AIrev[%s…]" +ai--flymake-pending) " AIrev"))
+
+(defun +ai/flymake-status ()
+  "Say whether this buffer's AI review is still out."
+  (interactive)
+  (message "%s" (if +ai--flymake-pending
+                    (format "AI review by %s still running" +ai--flymake-pending)
+                  "No AI review running here")))
+
 (define-minor-mode +ai-flymake-mode
   "Review this buffer with an LLM through Flymake, on save and when the mode starts.
 Edits alone do not trigger a review; a model call per keystroke would be noise."
-  :lighter " AIrev"
+  :lighter (:eval (+ai--flymake-lighter))
   (cond (+ai-flymake-mode
          (add-hook 'flymake-diagnostic-functions #'+ai-flymake-backend nil t)
          (setq-local flymake-no-changes-timeout nil
@@ -161,4 +194,5 @@ Edits alone do not trigger a review; a model call per keystroke would be noise."
 
 (map! :leader
       :desc "AI review buffer"   "o l r" #'+ai-flymake-mode
-      :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider)
+      :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
+      :desc "AI review status"   "o l ?" #'+ai/flymake-status)

@@ -271,3 +271,8 @@ between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
 (`+ai-flymake-claude-model` through gptel's Anthropic backend, which needs
 `ANTHROPIC_API_KEY` from `secrets.el`), re-reviewing the buffer if the mode is
 on. A reply that arrives after a newer review started is dropped.
+
+While a review is out the echo area says `AI review by llama…`, the mode's
+lighter reads `AIrev[llama…]`, and doom-modeline's checker shows Flymake
+running; `SPC o l ?` (`+ai/flymake-status`) asks in words. When the reply
+lands the echo area says how many findings there were, or `nothing to flag`.

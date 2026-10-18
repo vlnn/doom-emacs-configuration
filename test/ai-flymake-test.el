@@ -124,3 +124,51 @@
     (let ((+ai-flymake-max-lines 3))
       (ert-info ("three lines should fit a limit of three")
         (should-not (+ai--flymake-too-long-p))))))
+
+;;; progress
+
+(ert-deftest +ai--flymake-lighter/marks-a-review-in-flight ()
+  (+ai-flymake-test--in-buffer ""
+    (setq +ai--flymake-pending nil)
+    (ert-info ("the lighter should be plain while nothing is pending")
+      (should (equal " AIrev" (+ai--flymake-lighter))))
+    (setq +ai--flymake-pending 'llama)
+    (ert-info ("the lighter should name the reviewer being waited on")
+      (should (equal " AIrev[llama…]" (+ai--flymake-lighter))))))
+
+(ert-deftest +ai--flymake-callback/clears-pending-and-counts-findings ()
+  (+ai-flymake-test--in-buffer "x\ny\n"
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports))
+                (said nil))
+      (setq +ai--flymake-run 1
+            +ai--flymake-pending 'claude)
+      (cl-letf (((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args)))))
+        (funcall (+ai--flymake-callback (current-buffer) 1 report 'claude) "1: note: a\n2: error: b" nil))
+      (ert-info ("a reply should clear the pending marker")
+        (should (null +ai--flymake-pending)))
+      (ert-info ("a reply should say who reviewed and how many findings landed")
+        (should (equal "AI review by claude: 2 findings" said))))))
+
+(ert-deftest +ai--flymake-callback/says-when-nothing-was-found ()
+  (+ai-flymake-test--in-buffer "x\n"
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports))
+                (said nil))
+      (setq +ai--flymake-run 1 +ai--flymake-pending 'llama)
+      (cl-letf (((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args)))))
+        (funcall (+ai--flymake-callback (current-buffer) 1 report 'llama) "" nil))
+      (ert-info ("an empty reply should be reported as a clean review, not silence")
+        (should (equal "AI review by llama: nothing to flag" said))))))
+
+(ert-deftest +ai--flymake-callback/clears-pending-on-failure ()
+  (+ai-flymake-test--in-buffer "x\n"
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports)))
+      (setq +ai--flymake-run 1 +ai--flymake-pending 'llama)
+      (funcall (+ai--flymake-callback (current-buffer) 1 report 'llama) nil '(:status "500"))
+      (ert-info ("a failed reply should also clear the pending marker")
+        (should (null +ai--flymake-pending))))))
+
+(ert-deftest +ai--flymake-findings-text/pluralizes ()
+  (ert-info ("one finding should be singular")
+    (should (equal "1 finding" (+ai--flymake-findings-text 1))))
+  (ert-info ("several findings should be plural")
+    (should (equal "3 findings" (+ai--flymake-findings-text 3)))))
