@@ -269,10 +269,17 @@ on edits alone. `SPC o l b` (`+ai-flymake-mode`) does the same for one buffer.
 
 `SPC o l R` (`+ai/flymake-toggle-provider`) switches `+ai-flymake-provider`
 between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
-(`+ai-flymake-claude-model` through gptel's Anthropic backend, which needs
-`ANTHROPIC_API_KEY` from `secrets.el`), and reviews every buffer the mode is
-on in again, from wherever it was pressed. A reply that arrives after a newer
-review started is dropped.
+(`+ai-flymake-claude-model` through a gptel Anthropic backend of its own,
+`Claude-review`, keyed from `ANTHROPIC_API_KEY` in `secrets.el`; a `Claude`
+backend Doom's llm module may register is left alone), and reviews every
+buffer the mode is on in again, from wherever it was pressed. A reply that
+arrives after a newer review started is dropped.
+
+A request that fails (no key, a 401, a model the account cannot use) or
+cannot start ends that run empty and says why in the echo area and
+`*Flymake log*`; the next save or `SPC o l R` tries again. It never reports
+`:panic`, which would have Flymake disable the backend for the buffer until
+the mode restarts.
 
 While a review is out the echo area says `AI review by llama…`, the mode's
 lighter reads `AIrev[llama…]`, and doom-modeline's checker shows Flymake

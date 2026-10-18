@@ -69,9 +69,12 @@ right margin; or `eol', right after each line.")
   (cons (or (gptel-get-backend "llama-server") (+ai--llama-backend))
         +ai-fast-model))
 
+(defconst +ai--flymake-claude-backend-name "Claude-review"
+  "Our own gptel backend, keyed from the environment; Doom's llm module may register a \"Claude\" too.")
+
 (defun +ai--flymake-claude ()
-  (cons (or (gptel-get-backend "Claude")
-            (gptel-make-anthropic "Claude" :key #'+ai--anthropic-key))
+  (cons (or (gptel-get-backend +ai--flymake-claude-backend-name)
+            (gptel-make-anthropic +ai--flymake-claude-backend-name :key #'+ai--anthropic-key))
         +ai-flymake-claude-model))
 
 (defconst +ai-flymake-providers
@@ -92,8 +95,9 @@ right margin; or `eol', right after each line.")
   (seq-filter (lambda (buffer) (buffer-local-value '+ai-flymake-mode buffer)) (buffer-list)))
 
 (defun +ai--flymake-restart-all ()
+  "Review every buffer with the mode on again, even where flymake had given up on the backend."
   (dolist (buffer (+ai--flymake-buffers))
-    (with-current-buffer buffer (flymake-start)))
+    (with-current-buffer buffer (flymake-start nil t)))
   (length (+ai--flymake-buffers)))
 
 (defun +ai/flymake-toggle-provider ()
@@ -158,6 +162,21 @@ right margin; or `eol', right after each line.")
 (defun +ai--flymake-settle (buffer)
   (with-current-buffer buffer
     (setq +ai--flymake-pending nil)))
+
+(defun +ai--flymake-failure-reason (info)
+  (let ((details (delq nil (list (plist-get info :status) (plist-get info :error)))))
+    (if details (mapconcat (lambda (d) (format "%s" d)) details " ") "no response")))
+
+(defun +ai--flymake-failure-text (provider info)
+  (format "AI review by %s failed: %s" provider (+ai--flymake-failure-reason info)))
+
+(defun +ai--flymake-fail (buffer provider report-fn info)
+  "End the run empty and say why; a bad reply must not get the backend disabled."
+  (+ai--flymake-settle buffer)
+  (funcall report-fn nil)
+  (let ((text (+ai--flymake-failure-text provider info)))
+    (flymake-log :error "%s" text)
+    (message "%s" text)))
 
 ;;; where findings show: the right margin, or the end of the line
 
@@ -268,10 +287,7 @@ right margin; or `eol', right after each line.")
         ((pred stringp)
          (+ai--flymake-settle buffer)
          (+ai--flymake-report buffer provider report-fn response))
-        ('nil
-         (+ai--flymake-settle buffer)
-         (funcall report-fn :panic
-                  :explanation (format "%s review failed: %s" provider (plist-get info :status))))
+        ('nil (+ai--flymake-fail buffer provider report-fn info))
         ('abort
          (+ai--flymake-settle buffer)
          (funcall report-fn nil))))))
@@ -305,7 +321,7 @@ right margin; or `eol', right after each line.")
   (when (bound-and-true-p +ai-flymake-mode)
     (+ai--flymake-teardown-display)
     (+ai--flymake-setup-display)
-    (flymake-start)))
+    (flymake-start nil t)))
 
 ;;; backend
 
@@ -329,12 +345,23 @@ right margin; or `eol', right after each line.")
       :system +ai-flymake-directive
       :callback (+ai--flymake-callback (current-buffer) run report-fn +ai-flymake-provider))))
 
+(defun +ai--flymake-cannot-start (report-fn err)
+  (setq +ai--flymake-pending nil)
+  (funcall report-fn nil)
+  (let ((text (format "AI review by %s could not start: %s" +ai-flymake-provider (error-message-string err))))
+    (flymake-log :error "%s" text)
+    (message "%s" text)))
+
 (defun +ai-flymake-backend (report-fn &rest _)
-  "Flymake backend: ask `+ai-flymake-provider' to review the buffer."
+  "Flymake backend: ask `+ai-flymake-provider' to review the buffer.
+Whatever goes wrong is reported as an empty run, never thrown: an error here
+would make flymake disable the backend for the buffer until the mode restarts."
   (if (+ai--flymake-too-long-p)
       (progn (flymake-log :warning "Over %d lines; AI review skipped" +ai-flymake-max-lines)
              (funcall report-fn nil))
-    (+ai--flymake-request report-fn)))
+    (condition-case err
+        (+ai--flymake-request report-fn)
+      (error (+ai--flymake-cannot-start report-fn err)))))
 
 ;;; mode
 

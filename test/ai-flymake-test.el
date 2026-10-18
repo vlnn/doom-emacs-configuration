@@ -96,15 +96,25 @@
       (ert-info ("a reply for an earlier run should not reach flymake")
         (should (null (funcall calls)))))))
 
-(ert-deftest +ai--flymake-callback/panics-when-the-request-fails ()
+(ert-deftest +ai--flymake-callback/a-failed-request-ends-the-run-without-disabling-the-backend ()
   (+ai-flymake-test--in-buffer "x\n"
-    (pcase-let ((`(,report ,calls) (+ai-flymake-test--reports)))
+    (pcase-let ((`(,report ,calls) (+ai-flymake-test--reports))
+                (said nil))
       (setq +ai--flymake-run 1)
-      (funcall (+ai--flymake-callback (current-buffer) 1 report 'claude) nil '(:status "401"))
-      (ert-info ("a failed request should panic the backend so flymake shows it")
-        (should (eq :panic (car (car (funcall calls))))))
-      (ert-info ("the panic should name the provider and the status")
-        (should (string-match-p "claude.*401" (plist-get (cdr (car (funcall calls))) :explanation)))))))
+      (cl-letf (((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args))))
+                ((symbol-function 'flymake-log) #'ignore))
+        (funcall (+ai--flymake-callback (current-buffer) 1 report 'claude)
+                 nil '(:status "401" :error "invalid x-api-key")))
+      (ert-info ("a failed request should report no findings, never :panic, so the next save tries again")
+        (should (equal '((nil)) (funcall calls))))
+      (ert-info ("the failure should be said aloud with provider, status and the API's reason")
+        (should (equal "AI review by claude failed: 401 invalid x-api-key" said))))))
+
+(ert-deftest +ai--flymake-failure-text/copes-with-missing-details ()
+  (ert-info ("a failure with no error text should still read")
+    (should (equal "AI review by llama failed: 500" (+ai--flymake-failure-text 'llama '(:status "500")))))
+  (ert-info ("a failure with nothing known should say so")
+    (should (equal "AI review by llama failed: no response" (+ai--flymake-failure-text 'llama nil)))))
 
 (ert-deftest +ai--flymake-callback/ignores-a-killed-buffer ()
   (pcase-let ((`(,report ,calls) (+ai-flymake-test--reports))
@@ -163,7 +173,9 @@
   (+ai-flymake-test--in-buffer "x\n"
     (pcase-let ((`(,report ,_) (+ai-flymake-test--reports)))
       (setq +ai--flymake-run 1 +ai--flymake-pending 'llama)
-      (funcall (+ai--flymake-callback (current-buffer) 1 report 'llama) nil '(:status "500"))
+      (cl-letf (((symbol-function 'message) #'ignore)
+                ((symbol-function 'flymake-log) #'ignore))
+        (funcall (+ai--flymake-callback (current-buffer) 1 report 'llama) nil '(:status "500")))
       (ert-info ("a failed reply should also clear the pending marker")
         (should (null +ai--flymake-pending))))))
 
@@ -372,3 +384,42 @@
         (should (null +ai--flymake-pending)))
       (ert-info ("an aborted request should end flymake's run with no findings")
         (should (equal '((nil)) (funcall calls)))))))
+
+
+;;; a request that cannot even start
+
+(ert-deftest +ai-flymake-backend/a-request-that-cannot-start-is-reported-not-thrown ()
+  (+ai-flymake-test--in-buffer "x\n"
+    (pcase-let ((`(,report ,calls) (+ai-flymake-test--reports))
+                (said nil))
+      (cl-letf (((symbol-function 'gptel-request)
+                 (lambda (&rest _) (user-error "ANTHROPIC_API_KEY is not set; see secrets.el.example")))
+                ((symbol-function '+ai--flymake-provider) (lambda (_) (cons 'backend 'model)))
+                ((symbol-function 'require) #'ignore)
+                ((symbol-function 'flymake-log) #'ignore)
+                ((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args)))))
+        (let ((+ai-flymake-provider 'claude))
+          (+ai-flymake-backend report)))
+      (ert-info ("flymake should see an empty report rather than an error that disables the backend")
+        (should (equal '((nil)) (funcall calls))))
+      (ert-info ("nothing should be left pending")
+        (should (null +ai--flymake-pending)))
+      (ert-info ("the reason should be said aloud")
+        (should (equal "AI review by claude could not start: ANTHROPIC_API_KEY is not set; see secrets.el.example" said))))))
+
+(ert-deftest +ai--flymake-restart-all/forces-flymake-past-a-disabled-backend ()
+  (+ai-flymake-test--with-mode-buffers 1
+    (let (args)
+      (cl-letf (((symbol-function 'flymake-start) (lambda (&rest a) (setq args a))))
+        (+ai--flymake-restart-all))
+      (ert-info ("restarting should force flymake to run even a backend it had disabled")
+        (should (equal '(nil t) args))))))
+
+(ert-deftest +ai--flymake-claude/uses-its-own-backend-not-doom-s ()
+  (let (made)
+    (cl-letf (((symbol-function 'gptel-get-backend) (lambda (name) (and (equal name "Claude") 'dooms)))
+              ((symbol-function 'gptel-make-anthropic) (lambda (name &rest _) (setq made name) 'ours)))
+      (ert-info ("the review should not pick up a differently keyed backend that happens to be called Claude")
+        (should (eq 'ours (car (+ai--flymake-claude)))))
+      (ert-info ("the backend should be registered under a name of its own")
+        (should (equal "Claude-review" made))))))
