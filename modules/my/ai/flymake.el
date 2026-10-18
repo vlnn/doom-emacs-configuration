@@ -101,11 +101,15 @@ right margin; or `eol', right after each line.")
   (length (+ai--flymake-buffers)))
 
 (defun +ai/flymake-toggle-provider ()
-  "Switch the reviewer between llama-server and Claude; every reviewed buffer is reviewed again."
+  "Switch the reviewer between llama-server and Claude.
+Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing starts."
   (interactive)
   (setq +ai-flymake-provider (+ai--flymake-next-provider +ai-flymake-provider))
-  (message "AI review by %s; re-reviewing %d buffer(s)"
-           +ai-flymake-provider (+ai--flymake-restart-all)))
+  (if (+ai--flymake-buffers)
+      (message "AI review by %s; re-reviewing %d buffer(s)"
+               +ai-flymake-provider (+ai--flymake-restart-all))
+    (+ai-flymake-global-mode 1)
+    (message "AI review by %s: starting in every code buffer" +ai-flymake-provider)))
 
 ;;; replies
 
@@ -368,12 +372,17 @@ would make flymake disable the backend for the buffer until the mode restarts."
 (defun +ai--flymake-lighter ()
   (if +ai--flymake-pending (format " AIrev[%s…]" +ai--flymake-pending) " AIrev"))
 
+(defun +ai--flymake-status-text (on count pending)
+  (format "AI review by %s: %s" +ai-flymake-provider
+          (cond ((not on) "off (SPC o l r to review every code buffer)")
+                (pending (format "on in %d buffer(s); this one waiting on %s" count pending))
+                (t (format "on in %d buffer(s); this one idle" count)))))
+
 (defun +ai/flymake-status ()
-  "Say whether this buffer's AI review is still out."
+  "Say who reviews, where the review is on, and whether this buffer's is still out."
   (interactive)
-  (message "%s" (if +ai--flymake-pending
-                    (format "AI review by %s still running" +ai--flymake-pending)
-                  "No AI review running here")))
+  (let ((buffers (+ai--flymake-buffers)))
+    (message "%s" (+ai--flymake-status-text buffers (length buffers) +ai--flymake-pending))))
 
 (define-minor-mode +ai-flymake-mode
   "Review this buffer with an LLM through Flymake, on save and when the mode starts.

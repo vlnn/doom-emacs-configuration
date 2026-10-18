@@ -423,3 +423,40 @@
         (should (eq 'ours (car (+ai--flymake-claude)))))
       (ert-info ("the backend should be registered under a name of its own")
         (should (equal "Claude-review" made))))))
+
+;;; choosing a reviewer starts the review
+
+(ert-deftest +ai/flymake-toggle-provider/starts-the-global-mode-when-nothing-is-reviewed ()
+  (let ((started nil) (said nil)
+        (+ai-flymake-provider 'llama))
+    (cl-letf (((symbol-function '+ai--flymake-buffers) (lambda () nil))
+              ((symbol-function '+ai-flymake-global-mode) (lambda (&optional arg) (setq started arg)))
+              ((symbol-function 'message) (lambda (fmt &rest args) (setq said (apply #'format fmt args)))))
+      (+ai/flymake-toggle-provider))
+    (ert-info ("with no buffer reviewed, the toggle should turn the global mode on")
+      (should (eql 1 started)))
+    (ert-info ("it should say that reviews are starting, not that zero buffers were restarted")
+      (should (equal "AI review by claude: starting in every code buffer" said)))))
+
+(ert-deftest +ai/flymake-toggle-provider/leaves-the-global-mode-alone-when-buffers-are-reviewed ()
+  (+ai-flymake-test--with-mode-buffers 1
+    (let ((started nil)
+          (+ai-flymake-provider 'claude))
+      (cl-letf (((symbol-function '+ai-flymake-global-mode) (lambda (&optional arg) (setq started arg)))
+                ((symbol-function 'flymake-start) #'ignore)
+                ((symbol-function 'message) #'ignore))
+        (+ai/flymake-toggle-provider))
+      (ert-info ("with reviewed buffers present the global mode should not be touched")
+        (should (null started))))))
+
+(ert-deftest +ai--flymake-status-text/says-what-is-on-and-who-reviews ()
+  (let ((+ai-flymake-provider 'claude))
+    (ert-info ("off everywhere should be said as such, with the key to turn it on")
+      (should (equal "AI review by claude: off (SPC o l r to review every code buffer)"
+                     (+ai--flymake-status-text nil nil nil))))
+    (ert-info ("a pending review should be named")
+      (should (equal "AI review by claude: on in 3 buffer(s); this one waiting on claude"
+                     (+ai--flymake-status-text t 3 'claude))))
+    (ert-info ("an idle buffer should be told apart from a waiting one")
+      (should (equal "AI review by claude: on in 1 buffer(s); this one idle"
+                     (+ai--flymake-status-text t 1 nil))))))

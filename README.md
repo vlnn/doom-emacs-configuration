@@ -272,8 +272,12 @@ between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
 (`+ai-flymake-claude-model` through a gptel Anthropic backend of its own,
 `Claude-review`, keyed from `ANTHROPIC_API_KEY` in `secrets.el`; a `Claude`
 backend Doom's llm module may register is left alone), and reviews every
-buffer the mode is on in again, from wherever it was pressed. A reply that
-arrives after a newer review started is dropped.
+buffer the mode is on in again, from wherever it was pressed; pressed before any review is on,
+as in a fresh Emacs, it turns `+ai-flymake-global-mode` on with that
+reviewer. Nothing is reviewed at startup unless `config.el` says
+`(+ai-flymake-global-mode 1)`. `SPC o l ?` says who reviews, how many buffers
+are on, and whether this buffer's review is still out. A reply that arrives
+after a newer review started is dropped.
 
 A request that fails (no key, a 401, a model the account cannot use) or
 cannot start ends that run empty and says why in the echo area and
