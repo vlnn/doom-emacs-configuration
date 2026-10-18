@@ -387,6 +387,14 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
        (+ai-trust--open-pi-for-trust root)
        nil))))
 
+(defun +ai-trust--trust-empty (agent dir decision)
+  "Trust DIR for pi when it holds nothing to review and no DECISION exists yet.
+Reviewing nothing and deciding nothing would leave pi treating the project as
+untrusted, so the inputs a task worktree gains, the grilling skill, would never
+load. Inputs that reach the main checkout later still bring a review."
+  (when (and (eq agent 'pi) (null decision))
+    (+ai-trust--write-decision +ai-trust-store-file dir t)))
+
 (defun +ai-trust--assess (agent root)
   "`unchanged' when AGENT may start in ROOT without a review, else the review due."
   (let* ((dir (+ai-trust--canonical root))
@@ -397,7 +405,9 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
          (reason (+ai-trust--scan-reason agent decision review
                                          (+ai-trust--now root review files))))
     (cond ((null reason) 'unchanged)
-          ((null files) (+ai-trust--record-review key root files) 'unchanged)
+          ((null files) (+ai-trust--record-review key root files)
+           (+ai-trust--trust-empty agent dir decision)
+           'unchanged)
           (t (list :agent agent :root root :dir dir :key key
                    :reason reason :files files :review review)))))
 

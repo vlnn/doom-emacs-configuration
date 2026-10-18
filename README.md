@@ -91,7 +91,11 @@ there with `C-c C-c` (trust / proceed), `C-c C-u` (untrusted once), `C-c C-d`
 (do not trust) or `C-c C-k` / `q` (cancel). A session that is already running
 skips the review, since its inputs are loaded; `SPC 3` inside pi hides it.
 Add other machines' commit emails to `+ai-trust-own-emails` so your own
-commits never count as someone else's. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
+commits never count as someone else's. A repo with nothing to review is
+trusted for pi outright the first time, so the inputs a task worktree gains
+(the `grilling` skill `s`/`c` copy in) load there; inputs that reach the
+main checkout later bring the review as usual, and inputs on a task branch
+show in the guard note at `r`/`d`. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
 with `pilish-project-trust-policy` `'default`, so that file decides what loads,
 except "untrusted once", which starts that session with `--no-approve`, reloads
 included. Reviews are
