@@ -1,7 +1,7 @@
 ;;; my/ai/flymake.el -*- lexical-binding: t; -*-
 ;; SPC o l r: have an LLM review the buffer through Flymake, on save and when the mode starts.
 ;; SPC o l R: switch the reviewer between llama-server (default) and Claude.
-;; SPC o l m: show findings in the right margin (default) or at the end of each line.
+;; SPC o l m: show findings in a column past the code (default), the right margin, or after each line.
 
 (require 'cl-lib)
 (require 'flymake)
@@ -26,8 +26,12 @@
 (defvar +ai-flymake-max-lines 400
   "Buffers longer than this are not sent for review.")
 
-(defvar +ai-flymake-display 'margin
-  "Where findings show: `margin', a column right of the text, or `eol', after each line.")
+(defvar +ai-flymake-display 'column
+  "Where findings show: `column', aligned just past the code; `margin', the window's
+right margin; or `eol', right after each line.")
+
+(defvar +ai-flymake-column nil
+  "Column the `column' display aligns to; nil means two past the longest line or `fill-column'.")
 
 (defvar +ai-flymake-margin-width 48)
 
@@ -118,12 +122,15 @@
     (<= 1 line (count-lines (point-min) (point-max)))))
 
 (defun +ai--flymake-diagnostic (buffer provider finding)
-  "A flymake diagnostic for FINDING, the bare message kept in its data slot."
+  "A flymake diagnostic for FINDING, its line and bare message kept in the data slot."
   (pcase-let ((`(,line ,severity ,text) finding))
     (when-let* (((+ai--flymake-in-range-p buffer line))
                 (region (flymake-diag-region buffer line)))
       (flymake-make-diagnostic buffer (car region) (cdr region) severity
-                               (format "%s: %s" provider text) text))))
+                               (format "%s: %s" provider text) (cons line text)))))
+
+(defun +ai--flymake-line (diagnostic) (car (flymake-diagnostic-data diagnostic)))
+(defun +ai--flymake-message (diagnostic) (cdr (flymake-diagnostic-data diagnostic)))
 
 (defun +ai--flymake-diagnostics (buffer provider response)
   (delq nil (mapcar (lambda (finding) (+ai--flymake-diagnostic buffer provider finding))
@@ -152,7 +159,7 @@
 
 (defconst +ai--flymake-severity-order '(:error :warning :note +ai-flymake-idea))
 
-(defconst +ai--flymake-displays '(margin eol))
+(defconst +ai--flymake-displays '(column margin eol))
 
 (defun +ai--flymake-native-eol-p ()
   (boundp 'flymake-show-diagnostics-at-end-of-line))
@@ -164,50 +171,76 @@
 
 (defun +ai--flymake-summary (diagnostics)
   "One line's findings, bare messages joined, in the face of the worst."
-  (propertize (mapconcat #'flymake-diagnostic-data diagnostics " │ ")
+  (propertize (mapconcat #'+ai--flymake-message diagnostics " │ ")
               'face (alist-get (+ai--flymake-worst diagnostics) +ai--flymake-echo-faces)))
 
 (defun +ai--flymake-fit (text)
   (truncate-string-to-width text +ai-flymake-margin-width nil nil "…"))
 
-(defun +ai--flymake-line-start (diagnostic)
-  (save-excursion
-    (goto-char (flymake-diagnostic-beg diagnostic))
-    (line-beginning-position)))
-
 (defun +ai--flymake-by-line (diagnostics)
-  (seq-group-by #'+ai--flymake-line-start diagnostics))
+  "((LINE DIAGNOSTIC...) ...) from the findings' own line numbers."
+  (seq-group-by #'+ai--flymake-line diagnostics))
+
+(defun +ai--flymake-line-bounds (line)
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line (1- line))
+    (cons (point) (line-end-position))))
+
+(defun +ai--flymake-longest-line ()
+  (let ((longest 0))
+    (save-excursion
+      (goto-char (point-min))
+      (while (not (eobp))
+        (end-of-line)
+        (setq longest (max longest (current-column)))
+        (forward-line 1)))
+    longest))
+
+(defun +ai--flymake-column ()
+  (or +ai-flymake-column (+ 2 (max fill-column (+ai--flymake-longest-line)))))
 
 (defun +ai--flymake-overlay (beg end)
   (let ((overlay (make-overlay beg end nil t nil)))
     (overlay-put overlay '+ai-flymake t)
     overlay))
 
-(defun +ai--flymake-eol-overlay (bol diagnostics)
-  (let ((eol (save-excursion (goto-char bol) (line-end-position))))
+(defun +ai--flymake-eol-overlay (line diagnostics)
+  (let ((eol (cdr (+ai--flymake-line-bounds line))))
     (overlay-put (+ai--flymake-overlay eol eol)
                  'after-string (concat "  ⟵ " (+ai--flymake-summary diagnostics)))))
+
+(defun +ai--flymake-stretch-to (column)
+  (propertize " " 'display `(space :align-to ,column)))
+
+(defun +ai--flymake-column-overlay (line diagnostics)
+  (let ((eol (cdr (+ai--flymake-line-bounds line))))
+    (overlay-put (+ai--flymake-overlay eol eol)
+                 'after-string (concat (+ai--flymake-stretch-to (+ai--flymake-column))
+                                       " " (+ai--flymake-summary diagnostics)))))
 
 (defun +ai--flymake-margin-string (diagnostics)
   (propertize " " 'display `((margin right-margin) ,(+ai--flymake-fit (+ai--flymake-summary diagnostics)))))
 
-(defun +ai--flymake-margin-overlay (bol diagnostics)
-  (overlay-put (+ai--flymake-overlay bol bol)
-               'before-string (+ai--flymake-margin-string diagnostics)))
+(defun +ai--flymake-margin-overlay (line diagnostics)
+  (let ((bol (car (+ai--flymake-line-bounds line))))
+    (overlay-put (+ai--flymake-overlay bol bol)
+                 'before-string (+ai--flymake-margin-string diagnostics))))
 
 (defun +ai--flymake-clear ()
   (remove-overlays (point-min) (point-max) '+ai-flymake t))
 
 (defun +ai--flymake-renderer ()
   (pcase +ai-flymake-display
+    ('column #'+ai--flymake-column-overlay)
     ('margin #'+ai--flymake-margin-overlay)
     ('eol (unless (+ai--flymake-native-eol-p) #'+ai--flymake-eol-overlay))
     (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays))))
 
 (defun +ai--flymake-render (diagnostics)
   (when-let* ((render (+ai--flymake-renderer)))
-    (pcase-dolist (`(,bol . ,group) (+ai--flymake-by-line diagnostics))
-      (funcall render bol group))))
+    (pcase-dolist (`(,line . ,group) (+ai--flymake-by-line diagnostics))
+      (funcall render line group))))
 
 (defun +ai--flymake-annotate (buffer diagnostics)
   (with-current-buffer buffer
@@ -254,7 +287,7 @@
   (or (cadr (memq current +ai--flymake-displays)) (car +ai--flymake-displays)))
 
 (defun +ai/flymake-toggle-display ()
-  "Move findings between the right margin and the end of each line, redrawing them here."
+  "Cycle findings through the column past the code, the right margin and the end of each line."
   (interactive)
   (setq +ai-flymake-display (+ai--flymake-next-display +ai-flymake-display))
   (message "AI review findings shown in %s" +ai-flymake-display)

@@ -214,6 +214,48 @@
       (ert-info ("the eol text should point back at the line")
         (should (string-prefix-p "  ⟵ " (overlay-get (car overlays) 'after-string)))))))
 
+(ert-deftest +ai--flymake-diagnostic/keeps-line-and-message-as-data ()
+  (+ai-flymake-test--in-buffer "a\nb\n"
+    (let ((diag (car (+ai--flymake-diagnostics (current-buffer) 'llama "2: note: hi"))))
+      (ert-info ("the data slot should hold the line and the bare message, for rendering without flymake")
+        (should (equal '(2 . "hi") (flymake-diagnostic-data diag)))))))
+
+(ert-deftest +ai--flymake-by-line/groups-by-the-finding-s-own-line ()
+  (+ai-flymake-test--in-buffer "a\nb\nc\n"
+    (let ((groups (+ai--flymake-by-line
+                   (+ai--flymake-diagnostics (current-buffer) 'llama "3: note: x\n1: note: y\n3: idea: z"))))
+      (ert-info ("findings should be grouped by line number, in order")
+        (should (equal '(1 3) (sort (mapcar #'car groups) #'<))))
+      (ert-info ("a line should collect every finding about it")
+        (should (= 2 (length (alist-get 3 groups))))))))
+
+(ert-deftest +ai--flymake-render/column-aligns-each-finding-past-the-code ()
+  (+ai-flymake-test--in-buffer "a\nbbbb\nc\n"
+    (let ((+ai-flymake-display 'column)
+          (+ai-flymake-column nil)
+          (fill-column 10))
+      (+ai--flymake-render (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x\n3: idea: y")))
+    (let* ((overlays (sort (+ai-flymake-test--overlays) (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+           (text (overlay-get (car overlays) 'after-string)))
+      (ert-info ("each annotated line should get its own overlay at its end")
+        (should (equal '(2 9) (mapcar #'overlay-start overlays))))
+      (ert-info ("the overlay should start with a stretch aligned to the annotation column")
+        (should (equal '(space :align-to 12) (get-text-property 0 'display text))))
+      (ert-info ("the summary should follow the stretch")
+        (should (equal " x" (substring-no-properties text 1)))))))
+
+(ert-deftest +ai--flymake-column/sits-two-past-the-longest-line-or-fill-column ()
+  (+ai-flymake-test--in-buffer "a\nbbbbbbbbbbbbbbb\n"
+    (let ((+ai-flymake-column nil) (fill-column 5))
+      (ert-info ("with short fill-column the longest line should decide")
+        (should (= 17 (+ai--flymake-column)))))
+    (let ((+ai-flymake-column nil) (fill-column 40))
+      (ert-info ("a wider fill-column should win over the longest line")
+        (should (= 42 (+ai--flymake-column)))))
+    (let ((+ai-flymake-column 70))
+      (ert-info ("a set column should be used as is")
+        (should (= 70 (+ai--flymake-column)))))))
+
 (ert-deftest +ai--flymake-render/margin-shows-the-summary-in-the-right-margin ()
   (+ai-flymake-test--in-buffer "a\nbb\n"
     (let ((+ai-flymake-display 'margin))
@@ -265,12 +307,14 @@
       (ert-info ("on an Emacs that shows diagnostics at end of line itself, we add no overlay")
         (should (null (+ai-flymake-test--overlays)))))))
 
-(ert-deftest +ai--flymake-next-display/toggles-margin-and-eol ()
+(ert-deftest +ai--flymake-next-display/cycles-column-margin-eol ()
+  (ert-info ("column should be followed by margin")
+    (should (eq 'margin (+ai--flymake-next-display 'column))))
   (ert-info ("margin should be followed by eol")
     (should (eq 'eol (+ai--flymake-next-display 'margin))))
-  (ert-info ("eol should wrap to margin")
-    (should (eq 'margin (+ai--flymake-next-display 'eol)))))
+  (ert-info ("eol should wrap to column")
+    (should (eq 'column (+ai--flymake-next-display 'eol)))))
 
-(ert-deftest +ai-flymake-display/defaults-to-margin ()
-  (ert-info ("findings should default to the margin column, clear of the code")
-    (should (eq 'margin (default-value '+ai-flymake-display)))))
+(ert-deftest +ai-flymake-display/defaults-to-column ()
+  (ert-info ("findings should default to a column just past the code")
+    (should (eq 'column (default-value '+ai-flymake-display)))))

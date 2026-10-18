@@ -18,7 +18,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review in the margin, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
+| `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote, ob-duckdb |
 | `tasks` | per-repo `tasks.org`: agenda views, `branches` block, a worktree per task, `p i` idea capture, `+tasks/init` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
@@ -283,12 +283,15 @@ and `idea` (improvements and more idiomatic alternatives). Ideas are their own
 Flymake type, `+ai-flymake-idea`, filed under notes so they never inflate the
 error count, and drawn in a quiet italic face.
 
-By default each line's findings appear in the **right margin**
-(`+ai-flymake-display` `margin`, `+ai-flymake-margin-width` 48 columns): a
-column beside the text that the code never flows into, cut with `…` when
-long. `SPC o l m` (`+ai/flymake-toggle-display`) switches to `eol`, writing
-`⟵ …` after each line instead: Flymake's own end-of-line display on Emacs 30
-(`flymake-show-diagnostics-at-end-of-line`, set buffer-locally to `short`),
-an overlay of ours on 29. The underline, fringe mark, tooltip and
-`SPC o l l` (`flymake-show-buffer-diagnostics`) are Flymake's as usual and
-carry the full text whatever the display.
+By default each line's findings appear in a **column just past the code**
+(`+ai-flymake-display` `column`): two columns right of the longest line or
+`fill-column`, whichever is wider, or `+ai-flymake-column` when set, so they
+sit beside the code at one fixed column with the rest of the window to run
+into. `SPC o l m` (`+ai/flymake-toggle-display`) cycles to `margin` (the
+window's right margin, `+ai-flymake-margin-width` 48, cut with `…`) and
+`eol` (`⟵ …` straight after each line: Flymake's own end-of-line display on
+Emacs 30, an overlay of ours on 29), then back. Findings are placed by the
+line number the model named, never by Flymake's overlays, so each stays on
+its own row. The underline, fringe mark, tooltip and `SPC o l l`
+(`flymake-show-buffer-diagnostics`) are Flymake's as usual and carry the full
+text whatever the display.
