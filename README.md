@@ -276,3 +276,9 @@ While a review is out the echo area says `AI review by llama…`, the mode's
 lighter reads `AIrev[llama…]`, and doom-modeline's checker shows Flymake
 running; `SPC o l ?` (`+ai/flymake-status`) asks in words. When the reply
 lands the echo area says how many findings there were, or `nothing to flag`.
+
+Each finding is written at the end of its line, `⟵ llama: …`, in the colour
+of its severity: Flymake's own end-of-line display on Emacs 30
+(`flymake-show-diagnostics-at-end-of-line`, set buffer-locally to `short`),
+an overlay of ours on 29. The underline, fringe mark, tooltip and
+`SPC o l l` (`flymake-show-buffer-diagnostics`) are Flymake's as usual.

@@ -172,3 +172,55 @@
     (should (equal "1 finding" (+ai--flymake-findings-text 1))))
   (ert-info ("several findings should be plural")
     (should (equal "3 findings" (+ai--flymake-findings-text 3)))))
+
+;;; end-of-line rendering
+
+(defun +ai-flymake-test--eol-overlays ()
+  (seq-filter (lambda (o) (overlay-get o '+ai-flymake-eol)) (overlays-in (point-min) (point-max))))
+
+(ert-deftest +ai--flymake-eol-string/joins-one-line-s-findings ()
+  (+ai-flymake-test--in-buffer "a\nb\n"
+    (let ((text (+ai--flymake-eol-string
+                 (+ai--flymake-diagnostics (current-buffer) 'llama "1: error: x\n1: note: y"))))
+      (ert-info ("the string should carry every finding of the line, separated")
+        (should (equal "  ⟵ llama: x │ llama: y" (substring-no-properties text))))
+      (ert-info ("the string should wear the face of the worst finding")
+        (should (eq 'flymake-error-echo (get-text-property 4 'face text)))))))
+
+(ert-deftest +ai--flymake-render-eol/one-overlay-per-line ()
+  (+ai-flymake-test--in-buffer "a\nb\nc\n"
+    (+ai--flymake-render-eol (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x\n3: error: y\n3: note: z"))
+    (let ((overlays (+ai-flymake-test--eol-overlays)))
+      (ert-info ("two annotated lines should give two overlays")
+        (should (= 2 (length overlays))))
+      (ert-info ("each overlay should sit at the end of its line")
+        (should (equal '(2 6) (sort (mapcar #'overlay-start overlays) #'<)))))))
+
+(ert-deftest +ai--flymake-clear-eol/removes-only-ours ()
+  (+ai-flymake-test--in-buffer "a\n"
+    (let ((other (make-overlay 1 2)))
+      (+ai--flymake-render-eol (+ai--flymake-diagnostics (current-buffer) 'llama "1: note: x"))
+      (+ai--flymake-clear-eol)
+      (ert-info ("clearing should drop our overlays")
+        (should (null (+ai-flymake-test--eol-overlays))))
+      (ert-info ("clearing should leave other overlays alone")
+        (should (overlay-buffer other))))))
+
+(ert-deftest +ai--flymake-report/replaces-earlier-annotations ()
+  (+ai-flymake-test--in-buffer "a\nb\n"
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports)))
+      (cl-letf (((symbol-function 'message) #'ignore)
+                ((symbol-function '+ai--flymake-native-eol-p) (lambda () nil)))
+        (+ai--flymake-report (current-buffer) 'llama report "1: note: old\n2: note: old")
+        (+ai--flymake-report (current-buffer) 'llama report "2: note: new"))
+      (ert-info ("a new report should leave exactly its own annotations")
+        (should (= 1 (length (+ai-flymake-test--eol-overlays))))))))
+
+(ert-deftest +ai--flymake-report/leaves-eol-to-flymake-when-it-can ()
+  (+ai-flymake-test--in-buffer "a\n"
+    (pcase-let ((`(,report ,_) (+ai-flymake-test--reports)))
+      (cl-letf (((symbol-function 'message) #'ignore)
+                ((symbol-function '+ai--flymake-native-eol-p) (lambda () t)))
+        (+ai--flymake-report (current-buffer) 'llama report "1: note: x"))
+      (ert-info ("on an Emacs that shows diagnostics at end of line itself, we add no overlay")
+        (should (null (+ai-flymake-test--eol-overlays)))))))

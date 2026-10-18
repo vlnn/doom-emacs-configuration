@@ -12,6 +12,7 @@
 (defvar gptel-model)
 (defvar gptel-use-context)
 (defvar gptel-use-tools)
+(defvar flymake-show-diagnostics-at-end-of-line)
 
 (defconst +ai-flymake-directive
   "You review source code, each line prefixed by its number and a colon. Report only what a careful reviewer would act on: bugs, unhandled cases, non-idiomatic constructs, oversized functions, misleading names, missing or weak tests, asserts lacking explanation strings. Output one line per finding of the form `N: SEVERITY: message`, N being the line number, SEVERITY one of error, warning or note, the message under 100 characters. Output nothing else: no code, no prose, no fences. Output nothing at all when there is nothing worth saying.")
@@ -119,9 +120,56 @@
   (with-current-buffer buffer
     (setq +ai--flymake-pending nil)))
 
+;;; end-of-line annotations: Flymake's own on Emacs 30, ours before that
+
+(defconst +ai--flymake-eol-faces
+  '((:error . flymake-error-echo) (:warning . flymake-warning-echo) (:note . flymake-note-echo)))
+
+(defconst +ai--flymake-severity-order '(:error :warning :note))
+
+(defun +ai--flymake-native-eol-p ()
+  (boundp 'flymake-show-diagnostics-at-end-of-line))
+
+(defun +ai--flymake-worst (diagnostics)
+  (seq-find (lambda (severity) (seq-some (lambda (d) (eq severity (flymake-diagnostic-type d))) diagnostics))
+            +ai--flymake-severity-order))
+
+(defun +ai--flymake-eol-string (diagnostics)
+  (propertize (concat "  ⟵ " (mapconcat #'flymake-diagnostic-text diagnostics " │ "))
+              'face (alist-get (+ai--flymake-worst diagnostics) +ai--flymake-eol-faces)))
+
+(defun +ai--flymake-line-end (diagnostic)
+  (save-excursion
+    (goto-char (flymake-diagnostic-beg diagnostic))
+    (line-end-position)))
+
+(defun +ai--flymake-by-line (diagnostics)
+  (seq-group-by #'+ai--flymake-line-end diagnostics))
+
+(defun +ai--flymake-eol-overlay (eol diagnostics)
+  (let ((overlay (make-overlay eol eol nil t nil)))
+    (overlay-put overlay '+ai-flymake-eol t)
+    (overlay-put overlay 'after-string (+ai--flymake-eol-string diagnostics))
+    (overlay-put overlay 'evaporate nil)
+    overlay))
+
+(defun +ai--flymake-clear-eol ()
+  (remove-overlays (point-min) (point-max) '+ai-flymake-eol t))
+
+(defun +ai--flymake-render-eol (diagnostics)
+  (pcase-dolist (`(,eol . ,group) (+ai--flymake-by-line diagnostics))
+    (+ai--flymake-eol-overlay eol group)))
+
+(defun +ai--flymake-annotate (buffer diagnostics)
+  (with-current-buffer buffer
+    (+ai--flymake-clear-eol)
+    (unless (+ai--flymake-native-eol-p)
+      (+ai--flymake-render-eol diagnostics))))
+
 (defun +ai--flymake-report (buffer provider report-fn response)
   (let ((diagnostics (+ai--flymake-diagnostics buffer provider response)))
     (funcall report-fn diagnostics)
+    (+ai--flymake-annotate buffer diagnostics)
     (message "%s" (+ai--flymake-outcome-text provider (length diagnostics)))))
 
 (defun +ai--flymake-callback (buffer run report-fn provider)
@@ -185,14 +233,19 @@ Edits alone do not trigger a review; a model call per keystroke would be noise."
          (add-hook 'flymake-diagnostic-functions #'+ai-flymake-backend nil t)
          (setq-local flymake-no-changes-timeout nil
                      flymake-fringe-indicator-position 'right-fringe)
+         (when (+ai--flymake-native-eol-p)
+           (setq-local flymake-show-diagnostics-at-end-of-line 'short))
          (if flymake-mode (flymake-start) (flymake-mode 1)))
         (t
          (remove-hook 'flymake-diagnostic-functions #'+ai-flymake-backend t)
+         (+ai--flymake-clear-eol)
          (kill-local-variable 'flymake-no-changes-timeout)
          (kill-local-variable 'flymake-fringe-indicator-position)
+         (kill-local-variable 'flymake-show-diagnostics-at-end-of-line)
          (flymake-mode -1))))
 
 (map! :leader
       :desc "AI review buffer"   "o l r" #'+ai-flymake-mode
       :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
-      :desc "AI review status"   "o l ?" #'+ai/flymake-status)
+      :desc "AI review status"   "o l ?" #'+ai/flymake-status
+      :desc "AI review list"     "o l l" #'flymake-show-buffer-diagnostics)
