@@ -205,14 +205,18 @@ keyword by hand works too (`SPC m t`), but then nothing else happens.
 | `IDEA` | captured, not committed to | `i`, `I`, `l` | `s` |
 | `TODO` | ready: a leaf you intend to start | you | `s` |
 | `PLAN` | started: pi is interviewing you, or `PLAN.md` waits for your approval | `s`, `n` on WAIT while the plan is not approved | approve the plan: `y` dates it and goes to RED, `n` prefills a refusal, `e` edits it |
-| `RED` | plan approved, pi is working; or the last test run failed | `n` → `y`, `t`, `d`, `n` on WAIT once the plan is approved | `t` |
-| `GREEN` | last test run passed | `t` | `r` |
-| `REVIEW` | you are reading the diff | `r`, `R` | `d` |
-| `WAIT` | parked on something outside the repo; `:REASON:` says what | `w`, `d`, a keyword change by hand (asks why) | back to RED (PLAN while the plan is not approved), reason dropped, pi resumed |
+| `RED` | plan approved, pi is working; or the last test run failed | `n` → `y`, `t`, `d`, `n` on WAIT once the plan is approved; a failed run after pi's `## Done` is sent back, `:TRY:` counting up to `TRIES_TOTAL` | `t` |
+| `GREEN` | last test run passed | `t`, run by Emacs when pi settles with `## Done` in `PLAN.md` | `r` (run by Emacs: `R` and REVIEW follow a GREEN) |
+| `REVIEW` | tests pass, the AI verdict is in; the diff is yours to read | `r`, `R`, Emacs after GREEN | open the diff and a commit prefilled from the plan while the worktree is dirty; `d` once it is clean |
+| `WAIT` | parked; `:REASON:` says what: something outside the repo, pi asking a question, no progress, out of tries, a merge that could not finish | `w`, `d`, Emacs, a keyword change by hand (asks why) | back to RED (PLAN while the plan is not approved), reason dropped, pi resumed |
 | `DONE` / `DROPPED` | merged / abandoned | `d` / you | archive the subtree |
 
 Every transition is timestamped (`!`), so the "Last week" agenda view is a log
 of the flow. `x` is the way back: it undoes `s`.
+From `y` to REVIEW no key of yours is needed; `docs/autopilot.md` is that
+stretch: how Emacs learns pi settled, retries, stalls, the one-task rule,
+and what tells you. PLAN, RED, GREEN, REVIEW and DONE are set only by their
+commands; the other keywords you may still type.
 
 The Board (`SPC 5 o`) is one block per stage in that order, ideas at the top,
 DONE and DROPPED gathered at the bottom as the pile to archive. Each row shows
@@ -299,7 +303,7 @@ so does `c`.
 
 `docs/flow-walkthrough.md` follows one task from capture to merge, using this
 repo to fix a bug in `+tasks/start`; `docs/planning-flow.md` is the design
-behind the plan gate.
+behind the plan gate; `docs/autopilot.md` the design of the stretch after it.
 
 ## Local models
 
