@@ -8,7 +8,10 @@ via ride-apl, Forth, and a local llama-server behind gptel.
 Every feature is a private Doom module under `modules/my/<name>/`, enabled by
 the `:my` block at the end of `init.el` (listed in load order). Each module
 owns its `config.el` and, when it needs packages, a `packages.el`; the root
-`packages.el` only keeps `unpin!`/`disable-packages!` overrides.
+`packages.el` only keeps `unpin!`/`disable-packages!` overrides. `ai` and
+`tasks` keep their functions in `autoload/*.el`, every definition cookied, so
+Doom loads a file the first time one of its functions is called; `config.el`
+holds the variables you set, the hooks, the keys and the `after!` blocks.
 
 | module | owns |
 |---|---|
@@ -59,19 +62,24 @@ machine-local values. Missing `secrets.el` is tolerated.
 
 ```sh
 bin/test           # ERT, plain `emacs --batch`, no Doom needed
+bin/test --cold    # the same with autoload/ files reached only through their cookies
 bin/compile-check  # byte-compile every config file, after!/use-package! bodies included; warnings fail
 bin/jail-check     # macOS: run probes under agent.sb, check what the jail allows
 ```
 
-The first two run in GitHub Actions on Emacs 29 and 30
-(`.github/workflows/test.yml`), both required. A third job runs `doom sync`
+The first three run in GitHub Actions on Emacs 29 and 30
+(`.github/workflows/test.yml`), all required. A third job runs `doom sync`
 and `doom doctor` against a fresh Doom checkout; it is the only check that
 sees `map!`, package recipes and `init.el`, and is allowed to fail until it
 has proven itself. `bin/jail-check` needs a Mac.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
 files load outside Doom; `test/run.el` loads every file under `modules/my/`
-except `packages.el` and the ones in `+test-unloadable`. `test/compile-stubs.el`
+except `packages.el` and the ones in `+test-unloadable`. `test/cold.el` leaves
+the `autoload/` files out and loads the loaddefs Emacs generates from their
+cookies instead, as Doom would: a function without a cookie, or a variable an
+autoload file defines but `config.el` reads, fails there (`+test--defined`
+loads a file ahead of a test that stubs what it defines). `test/compile-stubs.el`
 keeps the bodies of `after!`, `use-package!`, `add-hook!` and `defadvice!` so
 the compile check compiles them. Tests cover the pure functions
 (`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--flymake-*`, `+ai--llama-model-ids`, `+github-explorer--*`,

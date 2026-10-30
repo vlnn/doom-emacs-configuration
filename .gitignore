@@ -5,3 +5,4 @@ custom.el
 *.elc
 *.bak
 secrets.el
+.cold-loaddefs.el

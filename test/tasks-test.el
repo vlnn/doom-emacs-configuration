@@ -1197,6 +1197,7 @@
        (kill-buffer buffer)))))
 
 (ert-deftest +tasks--agenda-custom-commands/board-walks-the-pipeline-top-down ()
+  (+test--defined '+tasks--install-agenda)
   (let ((board (cadr (cdr (assoc "b" +tasks--agenda-custom-commands)))))
     (ert-info ("the board should read as the pipeline, ideas at the top, finished work piling at the bottom")
       (should (equal '("IDEA" "TODO" "PLAN" "RED" "GREEN" "REVIEW" "WAIT" "DONE|DROPPED")
@@ -1210,6 +1211,7 @@
                              '("TODO" "IDEA")))))))
 
 (ert-deftest +tasks--agenda-custom-commands/board-settings-survive-the-agenda-eval ()
+  (+test--defined '+tasks--install-agenda)
   (let ((board (cadr (cdr (assoc "b" +tasks--agenda-custom-commands)))))
     (dolist (block board)
       (pcase-dolist (`(,variable ,form) (nth 2 block))

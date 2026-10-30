@@ -4,12 +4,6 @@
 (require 'cl-lib)
 (require 'json)
 
-(defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
-
-(defvar +ai-trust-reviews-file
-  (expand-file-name "ai-trust-reviews.el"
-                    (if (boundp 'doom-cache-dir) doom-cache-dir user-emacs-directory)))
-
 (defconst +ai-trust-pi-entries
   '("settings.json" "mcp.json" "SYSTEM.md" "APPEND_SYSTEM.md"
     "extensions" "skills" "prompts" "themes"))
@@ -50,9 +44,6 @@
     (external . "agent inputs changed by someone else since your review")
     (changed . "agent inputs changed since your review (no git history)")))
 
-(defvar +ai-trust-own-emails nil
-  "Commit emails that count as yours besides git's user.email, e.g. other machines.")
-
 (defconst +ai-trust--pi-choices
   '((?t "C-c C-c" "trust")
     (?u "C-c C-u" "untrusted once")
@@ -65,32 +56,39 @@
 
 ;;; files
 
+;;;###autoload
 (defun +ai-trust--descend-p (dir)
   (let ((name (file-name-nondirectory dir)))
     (not (or (string-prefix-p "." name) (member name +ai-trust-skipped-dirs)))))
 
+;;;###autoload
 (defun +ai-trust--files-under (root relative)
   (let ((path (expand-file-name relative root)))
     (cond ((file-directory-p path) (directory-files-recursively path "" nil))
           ((file-exists-p path) (list path)))))
 
+;;;###autoload
 (defun +ai-trust--pi-files (root)
   (mapcan (lambda (entry) (+ai-trust--files-under root (concat ".pi/" entry)))
           +ai-trust-pi-entries))
 
+;;;###autoload
 (defun +ai-trust--skipped-path-p (relative)
   (seq-some (lambda (dir) (not (+ai-trust--descend-p dir)))
             (butlast (split-string relative "/"))))
 
+;;;###autoload
 (defun +ai-trust--git-context-files (root)
   (mapcar (lambda (relative) (expand-file-name relative root))
           (seq-remove #'+ai-trust--skipped-path-p
                       (apply #'+ai-trust--git root "ls-files" "--cached" "--others" "--exclude-standard"
                              "--" +ai-trust-context-pathspecs))))
 
+;;;###autoload
 (defun +ai-trust--context-file-regexp ()
   (concat "\\`" (regexp-opt +ai-trust-context-files) "\\'"))
 
+;;;###autoload
 (defun +ai-trust--context-files (root)
   "Every pi context file under ROOT, in any case: the ones git knows about, else all."
   (if (+ai-trust--git-ok-p root "rev-parse" "--is-inside-work-tree")
@@ -98,6 +96,7 @@
     (let ((case-fold-search t))
       (directory-files-recursively root (+ai-trust--context-file-regexp) nil #'+ai-trust--descend-p))))
 
+;;;###autoload
 (defun +ai-trust--scan-files (root)
   "Files under ROOT that reach pi or hax, relative and sorted."
   (sort (mapcar (lambda (file) (file-relative-name file root))
@@ -107,6 +106,7 @@
                         (+justfiles root)))
         #'string<))
 
+;;;###autoload
 (defun +ai-trust--content-hash (root files)
   (secure-hash 'sha256
                (mapconcat (lambda (file)
@@ -115,17 +115,20 @@
 
 ;;; flags
 
+;;;###autoload
 (defun +ai-trust--line-flags (line)
   (let ((case-fold-search t))
     (mapcar #'car (seq-filter (lambda (pattern) (string-match-p (cdr pattern) line))
                               +ai-trust-patterns))))
 
+;;;###autoload
 (defun +ai-trust--flag-lines (text)
   (delq nil (seq-map-indexed (lambda (line i)
                                (when-let* ((labels (+ai-trust--line-flags line)))
                                  (list (1+ i) labels line)))
                              (split-string text "\n"))))
 
+;;;###autoload
 (defun +ai-trust--file-flags (root files)
   (seq-filter #'cdr
               (mapcar (lambda (file)
@@ -136,9 +139,11 @@
 
 ;;; trust.json, in pi's format
 
+;;;###autoload
 (defun +ai-trust--valid-entry-p (entry)
   (and (consp entry) (stringp (car entry)) (memq (cdr entry) '(t :false :null))))
 
+;;;###autoload
 (defun +ai-trust--parse-store (text)
   "Decisions in TEXT as ((PATH . t|:false|:null) ...), or :invalid."
   (let ((parsed (condition-case nil
@@ -153,9 +158,11 @@
         parsed
       :invalid)))
 
+;;;###autoload
 (defun +ai-trust--parent-dir (dir)
   (directory-file-name (file-name-directory dir)))
 
+;;;###autoload
 (defun +ai-trust--decision-for (store dir)
   "Nearest t or :false in STORE for DIR or one of its parents, like pi."
   (let ((current (directory-file-name dir))
@@ -166,13 +173,16 @@
         (setq current (unless (equal parent current) parent))))
     decision))
 
+;;;###autoload
 (defun +ai-trust--store-with (store dir decision)
   (sort (cons (cons dir decision) (assoc-delete-all dir (copy-alist store)))
         (lambda (a b) (string< (car a) (car b)))))
 
+;;;###autoload
 (defun +ai-trust--json-value (decision)
   (pcase decision ('t "true") (:false "false") (_ "null")))
 
+;;;###autoload
 (defun +ai-trust--serialize-store (store)
   (if (null store)
       "{}\n"
@@ -184,19 +194,23 @@
                        ",\n")
             "\n}\n")))
 
+;;;###autoload
 (defun +ai-trust--acquire-lock (lock)
   (condition-case nil
       (progn (make-directory lock) t)
     (file-already-exists nil)))
 
+;;;###autoload
 (defun +ai-trust--existing-store (file)
   (if (file-exists-p file) (+ai-trust--parse-store (+read-file file)) nil))
 
+;;;###autoload
 (defun +ai-trust--replace-file (file text)
   (let ((temp (make-temp-file (expand-file-name ".trust.json.tmp." (file-name-directory file)))))
     (with-temp-file temp (insert text))
     (rename-file temp file t)))
 
+;;;###autoload
 (defun +ai-trust--write-decision (file dir decision)
   "Set DIR to DECISION in FILE under pi's lock; nil when locked or FILE is not understood."
   (make-directory (file-name-directory file) t)
@@ -210,6 +224,7 @@
               t))
         (delete-directory lock)))))
 
+;;;###autoload
 (defun +ai-trust--current-decision (dir)
   (let ((store (+ai-trust--existing-store +ai-trust-store-file)))
     (unless (eq store :invalid)
@@ -217,25 +232,31 @@
 
 ;;; reviews and external changes
 
+;;;###autoload
 (defun +ai-trust--load-reviews ()
   (when (file-exists-p +ai-trust-reviews-file)
     (ignore-errors (read (+read-file +ai-trust-reviews-file)))))
 
+;;;###autoload
 (defun +ai-trust--review-key (agent dir)
   (cons agent dir))
 
+;;;###autoload
 (defun +ai-trust--reviews-with (reviews key marker)
   (append (assoc-delete-all key (copy-alist reviews)) (list (cons key marker))))
 
+;;;###autoload
 (defun +ai-trust--save-reviews (reviews)
   (make-directory (file-name-directory +ai-trust-reviews-file) t)
   (with-temp-file +ai-trust-reviews-file
     (prin1 reviews (current-buffer))))
 
+;;;###autoload
 (defun +ai-trust--external-authors (emails mine)
   (let ((own (mapcar #'downcase mine)))
     (seq-uniq (seq-remove (lambda (email) (member (downcase email) own)) emails))))
 
+;;;###autoload
 (defun +ai-trust--scan-reason (agent decision review now)
   "Why AGENT needs a review before starting, or nil.
 DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state."
@@ -248,25 +269,32 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 
 ;;; git
 
+;;;###autoload
 (defun +ai-trust--git (root &rest args)
   (apply #'+git-lines "-C" root args))
 
+;;;###autoload
 (defun +ai-trust--git-ok-p (root &rest args)
   (apply #'+git-ok-p "-C" root args))
 
+;;;###autoload
 (defun +ai-trust--head (root)
   (when (+ai-trust--git-ok-p root "rev-parse" "--verify" "--quiet" "HEAD")
     (car (+ai-trust--git root "rev-parse" "HEAD"))))
 
+;;;###autoload
 (defun +ai-trust--authors-since (root sha)
   (apply #'+ai-trust--git root "log" "--format=%ae" (concat sha "..HEAD") "--" +ai-trust-pathspecs))
 
+;;;###autoload
 (defun +ai-trust--changed-files (root sha)
   (apply #'+ai-trust--git root "diff" "--name-only" sha "--" +ai-trust-pathspecs))
 
+;;;###autoload
 (defun +ai-trust--diff-since (root sha)
   (string-join (apply #'+ai-trust--git root "diff" sha "--" +ai-trust-pathspecs) "\n"))
 
+;;;###autoload
 (defun +ai-trust--now (root review files)
   (pcase review
     (`(commit . ,sha)
@@ -279,21 +307,25 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
        (list :commit-known nil)))
     (`(hash . ,_) (list :hash (+ai-trust--content-hash root files)))))
 
+;;;###autoload
 (defun +ai-trust--marker (root files)
   (if-let* ((head (+ai-trust--head root)))
       (cons 'commit head)
     (cons 'hash (+ai-trust--content-hash root files))))
 
+;;;###autoload
 (defun +ai-trust--record-review (key root files)
   (+ai-trust--save-reviews
    (+ai-trust--reviews-with (+ai-trust--load-reviews) key (+ai-trust--marker root files))))
 
 ;;; report
 
+;;;###autoload
 (defun +ai-trust--flag-line (file flag)
   (pcase-let ((`(,line ,labels ,text) flag))
     (format "%s:%d: [%s] %s" file line (mapconcat #'symbol-name labels ",") (string-trim text))))
 
+;;;###autoload
 (defun +ai-trust--report-text (reason files flags diff)
   (concat (format "Agent review: %s.\n\n" (alist-get reason +ai-trust--reason-texts))
           (mapconcat (lambda (file) (format "%s:1: reaches the agent\n" file)) files "")
@@ -306,18 +338,22 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
             "No risky lines matched; read the files anyway.\n")
           (if diff (concat "\nDiff since your last review:\n\n" diff "\n") "")))
 
+;;;###autoload
 (defun +ai-trust--report-buffer-name (root)
   (format "*agent-review:%s*" (file-name-nondirectory (directory-file-name root))))
 
 ;;; launch
 
+;;;###autoload
 (defun +ai-trust--canonical (root)
   (directory-file-name (file-truename root)))
 
+;;;###autoload
 (defun +ai-trust--open-pi-for-trust (root)
   (+ai--eat-in root (format "*pi-trust:%s*" (file-name-nondirectory (directory-file-name root))) '("pi"))
   (message "Could not write %s; run /trust in this pi, quit it, then SPC 3 again" +ai-trust-store-file))
 
+;;;###autoload
 (defun +ai-trust--verdict (choice)
   (pcase choice
     (?t 'trusted)
@@ -325,9 +361,11 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
     (?d 'distrusted)
     (?p 'proceed)))
 
+;;;###autoload
 (defun +ai-trust--pilish-policy (verdict current)
   (if (eq verdict 'untrusted-once) 'no-approve current))
 
+;;;###autoload
 (defun +ai-trust--decide (choice key dir root files)
   (pcase choice
     ((or ?u ?p) (+ai-trust--record-review key root files) (+ai-trust--verdict choice))
@@ -337,6 +375,7 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
        (+ai-trust--open-pi-for-trust root)
        nil))))
 
+;;;###autoload
 (defun +ai-trust--trust-empty (agent dir decision)
   "Trust DIR for pi when it holds nothing to review and no DECISION exists yet.
 Reviewing nothing and deciding nothing would leave pi treating the project as
@@ -346,6 +385,7 @@ load. Inputs that reach the main checkout later still bring a review."
              (+ai-trust--write-decision +ai-trust-store-file dir t))
     (message "Nothing for an agent to review in %s; trusted it for pi in %s" dir +ai-trust-store-file)))
 
+;;;###autoload
 (defun +ai-trust--assess (agent root)
   "`unchanged' when AGENT may start in ROOT without a review, else the review due."
   (let* ((dir (+ai-trust--canonical root))
@@ -362,13 +402,16 @@ load. Inputs that reach the main checkout later still bring a review."
           (t (list :agent agent :root root :dir dir :key key
                    :reason reason :files files :review review)))))
 
+;;;###autoload
 (defun +ai-trust--agent-choices (agent)
   (if (eq agent 'pi) +ai-trust--pi-choices +ai-trust--hax-choices))
 
+;;;###autoload
 (defun +ai-trust--choice-hint (agent)
   (mapconcat (pcase-lambda (`(,_ ,key ,label)) (concat key " " label))
              (+ai-trust--agent-choices agent) "  "))
 
+;;;###autoload
 (defun +ai-trust--pending-report (pending)
   (let* ((root (plist-get pending :root))
          (review (plist-get pending :review))
@@ -388,9 +431,11 @@ load. Inputs that reach the main checkout later still bring a review."
     (define-key map (kbd "C-c C-k") #'+ai-trust/cancel)
     map))
 
+;;;###autoload
 (define-minor-mode +ai-trust-review-mode
   "Decide in an agent review buffer whether the agent may start.")
 
+;;;###autoload
 (defun +ai-trust--open-review (pending on-allow)
   (let ((root (plist-get pending :root))
         (agent (plist-get pending :agent)))
@@ -405,12 +450,14 @@ load. Inputs that reach the main checkout later still bring a review."
       (+ai-trust-review-mode 1)
       (pop-to-buffer (current-buffer)))))
 
+;;;###autoload
 (defun +ai-trust--gate (agent root on-allow)
   "Call ON-ALLOW with a verdict once AGENT may start in ROOT, after a review if due."
   (pcase (+ai-trust--assess agent root)
     ('unchanged (funcall on-allow 'unchanged))
     (pending (+ai-trust--open-review pending on-allow))))
 
+;;;###autoload
 (defun +ai-trust--choose (choice)
   (let* ((pending (or +ai-trust--pending (user-error "No agent review waiting here")))
          (agent (plist-get pending :agent)))
@@ -424,24 +471,26 @@ load. Inputs that reach the main checkout later still bring a review."
       (with-current-buffer (window-buffer (selected-window))
         (funcall (plist-get pending :on-allow) verdict)))))
 
+;;;###autoload
 (defun +ai-trust/accept ()
   "Trust the repo (pi) or proceed (hax), then start the agent."
   (interactive)
   (+ai-trust--choose (car (car (+ai-trust--agent-choices (plist-get +ai-trust--pending :agent))))))
 
+;;;###autoload
 (defun +ai-trust/untrusted-once ()
   "Start pi without the repo's .pi/ resources this time."
   (interactive)
   (+ai-trust--choose ?u))
 
+;;;###autoload
 (defun +ai-trust/distrust ()
   "Record that pi must not trust this repo, then start it."
   (interactive)
   (+ai-trust--choose ?d))
 
+;;;###autoload
 (defun +ai-trust/cancel ()
   "Start nothing."
   (interactive)
   (+ai-trust--choose ?c))
-
-(set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select t :quit t)

@@ -14,6 +14,8 @@
 (defvar +tasks-branch-prefixes '("feat/")
   "Git branch prefixes the branches block treats as tracked work.")
 
+(defconst +tasks-plan-file-name "PLAN.md")
+
 (defvar +tasks-agenda-commands '(org-agenda org-agenda-list org-todo-list)
   "Agenda entry points that refresh `org-agenda-files' first.")
 
@@ -53,11 +55,32 @@ tests run unjailed, any :MODEL: passes.")
   (when-let* ((fn (+tasks--agent key)))
     (apply fn args)))
 
-(load! "plan")
-(load! "agenda")
-(load! "branches")
-(load! "worktree")
-(load! "flow")
+
+;;; knobs the autoload files read
+
+(defvar +tasks-board-scope 'all
+  "Which projects the board shows: `all', or `project' for the one it is opened from.")
+
+(defvar +tasks-guarded-files
+  (list (rx bos (or "modules/my/ai/" "modules/my/tasks/" ".pi/" ".agents/"))
+        (rx (or bos "/")
+            (or "AGENTS.md" "AGENTS.override.md" "CLAUDE.md" ".justfile" "justfile"
+                (seq ".dir-locals" (? "-2") ".el"))
+            eos))
+  "Regexps over repo-relative paths, matched in any case, whose change can widen what agents may do.
+The jail, the trust review, this flow and agent inputs pi loads as a
+directory live in the first group; context files and files Emacs or the test
+run act on with your rights, in the second.")
+
+;;; what runs at startup for the autoload files
+
+(after! org-agenda
+  (+tasks--install-agenda))
+
+(after! lsp-mode
+  (add-to-list 'lsp-file-watch-ignored-directories (+tasks--worktrees-dir-regexp)))
+
+(add-hook 'compilation-finish-functions #'+tasks--mark-compiled-tests)
 
 (defun +tasks--string-list-p (value)
   (and (listp value) (seq-every-p #'stringp value) t))

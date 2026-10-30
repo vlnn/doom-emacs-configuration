@@ -1,8 +1,6 @@
 ;;; my/tasks/plan.el -*- lexical-binding: t; -*-
 ;; PLAN.md: what the agent's interview settled, approved by you before any code is written.
 
-(defconst +tasks-plan-file-name "PLAN.md")
-
 (defconst +tasks--plan-headings
   '("## Decisions" "## Tests, in order" "## Functions" "## Touches guarded files" "## Open")
   "The sections a PLAN.md must carry, in order; the parser and the prompt both read this.")
@@ -32,15 +30,18 @@
     ("## Touches guarded files" . "- none | <paths>")
     ("## Open" . "")))
 
+;;;###autoload
 (defun +tasks--plan-section-format (heading)
   (string-trim-right (concat heading "\n" (alist-get heading +tasks--plan-section-bodies nil nil #'equal))))
 
+;;;###autoload
 (defun +tasks--plan-format ()
   "The PLAN.md shape the interview must write, built from the headings the parser checks."
   (string-join (append '("# Plan: <heading>" "ACCEPT: <the acceptance line>")
                        (mapcar #'+tasks--plan-section-format +tasks--plan-headings))
                "\n\n"))
 
+;;;###autoload
 (defun +tasks--interview-prompt (heading &optional accept parents)
   "What s puts in pi's input: the grilling skill on HEADING, then the plan to write when done."
   (concat (format "/skill:grilling %s" heading)
@@ -51,9 +52,11 @@
           (format "Leave \"%s\" bare when nothing is unresolved. Then say \"%s written; waiting for approval.\" and stop."
                   (car (last +tasks--plan-headings)) +tasks-plan-file-name)))
 
+;;;###autoload
 (defun +tasks--interview-of (task)
   (+tasks--interview-prompt (plist-get task :heading) (plist-get task :accept) (plist-get task :parents)))
 
+;;;###autoload
 (defun +tasks--resume-draft (task plan-text worktree session &optional force)
   "The interview again, for a fresh session on a PLAN task whose plan is still unwritten; else nil.
 FORCE drafts it for a running session too."
@@ -63,6 +66,7 @@ FORCE drafts it for a running session too."
                  (not (+tasks--agent-call :live-p worktree session))))
     (+tasks--interview-of task)))
 
+;;;###autoload
 (defun +tasks--clear-session-input (task)
   "Empty TASK's pi input, keeping what it held on the kill ring."
   (let ((default-directory (+tasks--task-worktree-of task)))
@@ -72,6 +76,7 @@ FORCE drafts it for a running session too."
         (unless (string-blank-p (buffer-string))
           (kill-region (point-min) (point-max)))))))
 
+;;;###autoload
 (defun +tasks/interview ()
   "Open the task's pi session with the grilling interview in its input, for a PLAN task whose session lost it.
 Whatever the input held goes to the kill ring."
@@ -115,9 +120,11 @@ change that passes, tick it. Finish with a summary of the diff and how
 
 (defconst +tasks--skill-dir ".agents/skills/grilling/")
 
+;;;###autoload
 (defun +tasks--own-skill-dir ()
   (expand-file-name +tasks--skill-dir doom-user-dir))
 
+;;;###autoload
 (defun +tasks--offer-skill (root)
   (let ((target (expand-file-name +tasks--skill-dir root)))
     (when (and (not (file-exists-p target))
@@ -125,22 +132,26 @@ change that passes, tick it. Finish with a summary of the diff and how
                (y-or-n-p "Copy the grilling skill into this project, so s can interview you? "))
       (copy-directory (+tasks--own-skill-dir) target nil t t))))
 
+;;;###autoload
 (defun +tasks--offer-agents-md (root)
   (let ((target (expand-file-name "AGENTS.md" root)))
     (when (and (not (file-exists-p target))
                (y-or-n-p "Write an AGENTS.md with the plan gate and the interview rule? "))
       (with-temp-file target (insert +tasks--agents-md-text)))))
 
+;;;###autoload
 (defun +tasks--skill-source (root)
   "Where to copy the grilling skill from: ROOT's own copy, else the one this config ships."
   (seq-find #'file-directory-p (list (expand-file-name +tasks--skill-dir root) (+tasks--own-skill-dir))))
 
+;;;###autoload
 (defun +tasks--skill-missing-p (root worktree)
   "Whether WORKTREE lacks the grilling skill while there is a copy to give it."
   (and worktree
        (+tasks--skill-source root)
        (not (file-directory-p (expand-file-name +tasks--skill-dir worktree)))))
 
+;;;###autoload
 (defun +tasks--ensure-skill (root worktree)
   "Offer to copy the grilling skill into WORKTREE when it has none; /skill:grilling resolves there.
 A worktree cut before the skill reached ROOT, or a project that never had it, both get the offer."
@@ -148,6 +159,7 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
              (y-or-n-p "This worktree has no grilling skill; copy it in so the interview can run? "))
     (copy-directory (+tasks--skill-source root) (expand-file-name +tasks--skill-dir worktree) nil t t)))
 
+;;;###autoload
 (defun +tasks--offer-agent-inputs (root)
   "Ask, never silently, before giving a new project the skill and the AGENTS.md the flow expects."
   (+tasks--offer-skill root)
@@ -155,59 +167,74 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
 
 ;;; reading the plan
 
+;;;###autoload
 (defun +tasks--plan-file (worktree)
   (and worktree (expand-file-name +tasks-plan-file-name worktree)))
 
+;;;###autoload
 (defun +tasks--plan-text (worktree)
   (when-let* ((file (+tasks--plan-file worktree))
               ((file-exists-p file)))
     (+read-file file)))
 
+;;;###autoload
 (defun +tasks--plan-approved-p (text)
   (and text (string-match-p +tasks--plan-approved-regexp text) t))
 
+;;;###autoload
 (defun +tasks--plan-mark (text)
   "What a PLAN task waits for: the interview to write the plan, or you to approve it."
   (cond ((null text) "plan?")
         ((not (+tasks--plan-approved-p text)) "approve!")))
 
+;;;###autoload
 (defun +tasks--plan-mark-at-point ()
   (when (equal (org-get-todo-state) "PLAN")
     (+tasks--plan-mark (+tasks--plan-text (+tasks--worktree-at-point)))))
 
+;;;###autoload
 (defun +tasks--worktree-at-point ()
   (+tasks--branch-worktree-in default-directory (org-entry-get nil "BRANCH")))
 
+;;;###autoload
 (defun +tasks--line-regexp (line)
   "LINE on its own, trailing blanks aside; a title line (ending in a colon) may carry anything after it."
   (concat "^" (regexp-quote line) (if (string-suffix-p ":" line) "" "[ \t]*$")))
 
+;;;###autoload
 (defun +tasks--has-line-p (line text)
   (string-match-p (+tasks--line-regexp line) text))
 
+;;;###autoload
 (defun +tasks--plan-missing-heading (text)
   "The first required line PLAN.md TEXT lacks, else nil."
   (seq-find (lambda (line) (not (+tasks--has-line-p line text))) +tasks--plan-required-lines))
 
 ;;; which model runs which stage
 
+;;;###autoload
 (defun +tasks--work-model (task)
   (or (plist-get task :model) "local"))
 
+;;;###autoload
 (defun +tasks--interview-model (task)
   "The model that runs the interview: :PLAN_MODEL:, else the work model."
   (or (plist-get task :plan-model) (+tasks--work-model task)))
 
+;;;###autoload
 (defun +tasks--session-model (task plan-text)
   "The model a session of TASK runs on now: the interview's until PLAN-TEXT is approved, the work model after."
   (if (+tasks--plan-approved-p plan-text) (+tasks--work-model task) (+tasks--interview-model task)))
 
+;;;###autoload
 (defun +tasks--model-names ()
   (+tasks--agent-call :models))
 
+;;;###autoload
 (defun +tasks--read-plan-model ()
   (completing-read "Model for the interview: " (+tasks--model-names) nil t))
 
+;;;###autoload
 (defun +tasks--check-models (&rest models)
   "Refuse a model `+ai-pi-model-args' has no flags for, before any review or worktree."
   (dolist (model models)
@@ -215,38 +242,45 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
 
 ;;; approving
 
+;;;###autoload
 (defun +tasks--plan-with-approval (text date)
   "TEXT with Approved: DATE under its first ACCEPT line; unchanged when already approved or without one."
   (if (or (+tasks--plan-approved-p text) (not (string-match +tasks--plan-accept-regexp text)))
       text
     (concat (substring text 0 (match-end 0)) "Approved: " date "\n" (substring text (match-end 0)))))
 
+;;;###autoload
 (defun +tasks--approved-plan (text date)
   (let ((approved (+tasks--plan-with-approval text date)))
     (unless (+tasks--plan-approved-p approved)
       (user-error "%s has no \"ACCEPT: <line>\" to write the approval under" +tasks-plan-file-name))
     approved))
 
+;;;###autoload
 (defun +tasks--write-plan (worktree text)
   (with-temp-file (+tasks--plan-file worktree) (insert text))
   (when-let* ((buffer (get-file-buffer (+tasks--plan-file worktree))))
     (with-current-buffer buffer (revert-buffer t t))))
 
+;;;###autoload
 (defun +tasks--refuse-unsaved-plan (worktree)
   (when-let* ((buffer (get-file-buffer (+tasks--plan-file worktree)))
               ((buffer-modified-p buffer)))
     (user-error "%s has unsaved edits; save them first (they would be lost)" +tasks-plan-file-name)))
 
+;;;###autoload
 (defun +tasks--send-to-session (task line)
   "Send LINE to TASK's pi session, run from its worktree so pilish finds the right one."
   (let ((default-directory (+tasks--task-worktree-of task)))
     (unless (+tasks--agent-call :send line (plist-get task :branch))
       (message "No pi session took this; resume the task and send it yourself: %s" line))))
 
+;;;###autoload
 (defun +tasks--prefill-session (task draft)
   (let ((default-directory (+tasks--task-worktree-of task)))
     (+tasks--agent-call :prefill draft (plist-get task :branch))))
 
+;;;###autoload
 (defun +tasks--restart-on-work-model (task worktree)
   "Trade the interview's session for one on the work model, which sends the go line once it is up."
   (+tasks--agent-call :stop worktree (plist-get task :branch))
@@ -257,11 +291,13 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
                     :session (plist-get task :branch)
                     :model (+tasks--work-model task)))
 
+;;;###autoload
 (defun +tasks--go (task worktree)
   (if (equal (+tasks--work-model task) (+tasks--interview-model task))
       (+tasks--send-to-session task +tasks--plan-go-line)
     (+tasks--restart-on-work-model task worktree)))
 
+;;;###autoload
 (defun +tasks--approve (task worktree)
   "Date the plan, move TASK to RED and tell pi to start on the first test."
   (+tasks--refuse-unsaved-plan worktree)
@@ -270,26 +306,31 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
   (+tasks--set-state task "RED")
   (+tasks--go task worktree))
 
+;;;###autoload
 (defun +tasks--plan-buffer (worktree)
   "PLAN.md visited as text: the agent wrote it, so none of its local variables run."
   (let ((enable-local-variables nil)
         (enable-dir-local-variables nil))
     (find-file-noselect (+tasks--plan-file worktree))))
 
+;;;###autoload
 (defun +tasks--show-plan (worktree)
   (let ((buffer (+tasks--plan-buffer worktree)))
     (with-current-buffer buffer (read-only-mode 1))
     (display-buffer buffer '(display-buffer-in-side-window (side . right)))))
 
+;;;###autoload
 (defun +tasks--read-approval ()
   (read-char-choice "Approve this plan? (y, n, e to edit) " '(?y ?n ?e)))
 
 (defvar-local +tasks--plan-task nil
   "The task whose PLAN.md this buffer edits.")
 
+;;;###autoload
 (defun +tasks--send-reread-h ()
   (+tasks--send-to-session +tasks--plan-task +tasks--plan-reread-line))
 
+;;;###autoload
 (defun +tasks--edit-plan (task worktree)
   "Open PLAN.md writable; each save asks pi to read it again."
   (let ((buffer (+tasks--plan-buffer worktree)))
@@ -299,20 +340,24 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
       (add-hook 'after-save-hook #'+tasks--send-reread-h nil t))
     (pop-to-buffer buffer)))
 
+;;;###autoload
 (defun +tasks--refuse-plan (task)
   (+tasks--resume-task task)
   (+tasks--prefill-session task +tasks--plan-refusal-draft))
 
+;;;###autoload
 (defun +tasks--decide-plan (task worktree answer)
   (pcase answer
     (?y (+tasks--approve task worktree))
     (?n (+tasks--refuse-plan task))
     (?e (+tasks--edit-plan task worktree))))
 
+;;;###autoload
 (defun +tasks--check-plan (text)
   (when-let* ((missing (+tasks--plan-missing-heading text)))
     (user-error "%s has no \"%s\"" +tasks-plan-file-name missing)))
 
+;;;###autoload
 (defun +tasks/approve-plan ()
   "Read the task's PLAN.md and approve it (y), refuse it (n) or edit it (e).
 Without one, the interview is still running: go back to it."
@@ -329,6 +374,7 @@ Without one, the interview is still running: go back to it."
 
 ;;; what review and done read from the plan
 
+;;;###autoload
 (defun +tasks--plan-section (heading text)
   "The lines of TEXT under HEADING, up to the next heading."
   (when text
@@ -339,30 +385,36 @@ Without one, the interview is still running: go back to it."
               ((string-prefix-p "#" line) (setq in-section nil))
               (in-section (push line result)))))))
 
+;;;###autoload
 (defun +tasks--plan-test-lines (text)
   (seq-filter (apply-partially #'string-match-p "\\`- \\[[ xX]\\]")
               (+tasks--plan-section "## Tests, in order" text)))
 
+;;;###autoload
 (defun +tasks--plan-tick-count (text)
   "(TICKED . TOTAL) over the test boxes of the plan."
   (let ((tests (+tasks--plan-test-lines text)))
     (cons (seq-count (apply-partially #'string-match-p "\\`- \\[[xX]\\]") tests)
           (length tests))))
 
+;;;###autoload
 (defun +tasks--plan-open-items (text)
   (seq-remove #'string-blank-p (+tasks--plan-section "## Open" text)))
 
+;;;###autoload
 (defun +tasks--plan-tick-line (text)
   (when text
     (pcase-let ((`(,ticked . ,total) (+tasks--plan-tick-count text)))
       (format "plan: %d/%d tests ticked" ticked total))))
 
+;;;###autoload
 (defun +tasks--refuse-open-items (text)
   "Stop done while the plan's Open section still has a bullet."
   (when-let* ((items (+tasks--plan-open-items text)))
     (user-error "%s still has open items; settle them, or C-u to merge anyway:\n%s"
                 +tasks-plan-file-name (string-join items "\n"))))
 
+;;;###autoload
 (defun +tasks--unparked-state (task)
   "RED when TASK's plan is approved, else PLAN: the interview, or its approval, is still due."
   (if (+tasks--plan-approved-p (+tasks--plan-text (+tasks--task-worktree-of task))) "RED" "PLAN"))

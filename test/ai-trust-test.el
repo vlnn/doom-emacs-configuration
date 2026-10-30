@@ -373,6 +373,7 @@
       (should (equal '(unchanged nil) (list allowed opened))))))
 
 (ert-deftest +ai-trust--gate/due-review-waits-for-a-choice ()
+  (+test--defined '+ai-trust--gate)
   (let (allowed opened)
     (cl-letf (((symbol-function '+ai-trust--assess) (lambda (_agent _root) '(:agent pi)))
               ((symbol-function '+ai-trust--open-review) (lambda (&rest _) (setq opened t))))

@@ -1,4 +1,10 @@
 ;;; my/ai/flymake.el -*- lexical-binding: t; -*-
+
+(defvar gptel-backend)
+(defvar gptel-model)
+(defvar gptel-use-context)
+(defvar gptel-use-tools)
+(defvar flymake-show-diagnostics-at-end-of-line)
 ;; SPC o l r: have an LLM review every code buffer through Flymake, on open and on save.
 ;; SPC o l b: the same for this buffer only.
 ;; SPC o l R: switch the reviewer between llama-server (default) and Claude.
@@ -10,41 +16,9 @@
 (declare-function gptel-request "gptel")
 (declare-function gptel-get-backend "gptel")
 (declare-function gptel-make-anthropic "gptel-anthropic")
-(defvar gptel-backend)
-(defvar gptel-model)
-(defvar gptel-use-context)
-(defvar gptel-use-tools)
-(defvar flymake-show-diagnostics-at-end-of-line)
 
 (defconst +ai-flymake-directive
   "You review source code, each line prefixed by its number and a colon. Report what a careful reviewer would say: bugs and unhandled cases as error, non-idiomatic constructs, oversized functions, misleading names, missing or weak tests and asserts lacking explanation strings as warning, remarks worth knowing as note, and possible improvements, simplifications or more idiomatic alternatives as idea. Output one line per finding of the form `N: SEVERITY: message`, N being the line number, SEVERITY one of error, warning, note or idea, the message under 60 characters. Output nothing else: no code, no prose, no fences. Output nothing at all when there is nothing worth saying.")
-
-(defvar +ai-flymake-provider 'llama
-  "Who reviews: `llama' for the local llama-server (the default) or `claude'.")
-
-(defvar +ai-flymake-claude-model 'claude-sonnet-4-6)
-
-(defvar +ai-flymake-max-lines 400
-  "Buffers longer than this are not sent for review.")
-
-(defvar +ai-flymake-display 'column
-  "Where findings show: `column', aligned just past the code; `margin', the window's
-right margin; or `eol', right after each line.")
-
-(defvar +ai-flymake-column nil
-  "Column the `column' display aligns to; nil means two past the longest line or `fill-column'.")
-
-(defvar +ai-flymake-margin-width 48)
-
-(defvar +ai-flymake-wrap-width nil
-  "Width the `column' display wraps findings to; nil means what is left of the window.")
-
-(defvar +ai-flymake-ignore-regexps
-  '("\\`secrets\\.el\\'" "\\`\\.env\\(\\.\\|\\'\\)" "\\`\\.authinfo" "\\`\\.netrc\\'" "\\.pem\\'" "\\.key\\'")
-  "File names, matched against the base name, never sent for review: they hold secrets.")
-
-(defvar +ai-flymake-skip-ignored t
-  "Whether files git ignores are left out too; they are usually generated, local or secret.")
 
 (defvar-local +ai--flymake-run 0
   "Reviews started in this buffer; a reply to an earlier one is dropped.")
@@ -54,10 +28,12 @@ right margin; or `eol', right after each line.")
 
 ;;; ideas: a fourth severity, counted by flymake as a note, shown quietly
 
+;;;###autoload
 (defface +ai-flymake-idea
   '((t :inherit flymake-note :underline nil))
   "Code an idea was offered for.")
 
+;;;###autoload
 (defface +ai-flymake-idea-echo
   '((t :inherit (font-lock-doc-face italic)))
   "An idea, in the margin or echo area.")
@@ -71,14 +47,17 @@ right margin; or `eol', right after each line.")
 
 ;;; providers
 
+;;;###autoload
 (defun +ai--anthropic-key ()
   (or (getenv "ANTHROPIC_API_KEY")
       (user-error "ANTHROPIC_API_KEY is not set; see secrets.el.example")))
 
+;;;###autoload
 (defun +ai--flymake-known-backend (name)
   "gptel's backend NAME, or nil; gptel's own lookup signals for an unknown name."
   (ignore-errors (gptel-get-backend name)))
 
+;;;###autoload
 (defun +ai--flymake-llama ()
   (cons (or (+ai--flymake-known-backend "llama-server") (+ai--llama-backend))
         +ai-fast-model))
@@ -86,6 +65,7 @@ right margin; or `eol', right after each line.")
 (defconst +ai--flymake-claude-backend-name "Claude-review"
   "Our own gptel backend, keyed from the environment; Doom's llm module may register a \"Claude\" too.")
 
+;;;###autoload
 (defun +ai--flymake-claude ()
   (cons (or (+ai--flymake-known-backend +ai--flymake-claude-backend-name)
             (gptel-make-anthropic +ai--flymake-claude-backend-name :key #'+ai--anthropic-key))
@@ -95,25 +75,30 @@ right margin; or `eol', right after each line.")
   '((llama . +ai--flymake-llama)
     (claude . +ai--flymake-claude)))
 
+;;;###autoload
 (defun +ai--flymake-provider (name)
   "The (BACKEND . MODEL) gptel uses for reviewer NAME."
   (funcall (or (alist-get name +ai-flymake-providers)
                (error "Unknown review provider %S; expected one of %S"
                       name (mapcar #'car +ai-flymake-providers)))))
 
+;;;###autoload
 (defun +ai--flymake-next-provider (current)
   (let ((names (mapcar #'car +ai-flymake-providers)))
     (or (cadr (memq current names)) (car names))))
 
+;;;###autoload
 (defun +ai--flymake-buffers ()
   (seq-filter (lambda (buffer) (buffer-local-value '+ai-flymake-mode buffer)) (buffer-list)))
 
+;;;###autoload
 (defun +ai--flymake-restart-all ()
   "Review every buffer with the mode on again, even where flymake had given up on the backend."
   (dolist (buffer (+ai--flymake-buffers))
     (with-current-buffer buffer (flymake-start nil t)))
   (length (+ai--flymake-buffers)))
 
+;;;###autoload
 (defun +ai/flymake-toggle-provider ()
   "Switch the reviewer between llama-server and Claude.
 Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing starts."
@@ -133,9 +118,11 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 (defconst +ai--flymake-finding-regexp
   "\\`\\s-*\\([0-9]+\\)[.:)]\\s-*\\(?:\\(error\\|warning\\|note\\|idea\\)\\s-*:\\s-*\\)?\\(.+\\)\\'")
 
+;;;###autoload
 (defun +ai--flymake-severity (word)
   (if word (alist-get (downcase word) +ai--flymake-severities :note nil #'equal) :note))
 
+;;;###autoload
 (defun +ai--flymake-finding (line)
   (let ((case-fold-search t))
     (when (string-match +ai--flymake-finding-regexp line)
@@ -143,14 +130,17 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
             (+ai--flymake-severity (match-string 2 line))
             (string-trim (match-string 3 line))))))
 
+;;;###autoload
 (defun +ai--flymake-parse (response)
   "((LINE SEVERITY MESSAGE) ...) from RESPONSE, skipping lines that are not findings."
   (delq nil (mapcar #'+ai--flymake-finding (split-string response "\n" t))))
 
+;;;###autoload
 (defun +ai--flymake-in-range-p (buffer line)
   (with-current-buffer buffer
     (<= 1 line (count-lines (point-min) (point-max)))))
 
+;;;###autoload
 (defun +ai--flymake-diagnostic (buffer provider finding)
   "A flymake diagnostic for FINDING, its line and bare message kept in the data slot."
   (pcase-let ((`(,line ,severity ,text) finding))
@@ -159,35 +149,45 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
       (flymake-make-diagnostic buffer (car region) (cdr region) severity
                                (format "%s: %s" provider text) (cons line text)))))
 
+;;;###autoload
 (defun +ai--flymake-line (diagnostic) (car (flymake-diagnostic-data diagnostic)))
+;;;###autoload
 (defun +ai--flymake-message (diagnostic) (cdr (flymake-diagnostic-data diagnostic)))
 
+;;;###autoload
 (defun +ai--flymake-diagnostics (buffer provider response)
   (delq nil (mapcar (lambda (finding) (+ai--flymake-diagnostic buffer provider finding))
                     (+ai--flymake-parse response))))
 
+;;;###autoload
 (defun +ai--flymake-current-run-p (buffer run)
   (and (buffer-live-p buffer)
        (= run (buffer-local-value '+ai--flymake-run buffer))))
 
+;;;###autoload
 (defun +ai--flymake-findings-text (count)
   (format "%d finding%s" count (if (= count 1) "" "s")))
 
+;;;###autoload
 (defun +ai--flymake-outcome-text (provider count)
   (format "AI review by %s: %s" provider
           (if (zerop count) "nothing to flag" (+ai--flymake-findings-text count))))
 
+;;;###autoload
 (defun +ai--flymake-settle (buffer)
   (with-current-buffer buffer
     (setq +ai--flymake-pending nil)))
 
+;;;###autoload
 (defun +ai--flymake-failure-reason (info)
   (let ((details (delq nil (list (plist-get info :status) (plist-get info :error)))))
     (if details (mapconcat (lambda (d) (format "%s" d)) details " ") "no response")))
 
+;;;###autoload
 (defun +ai--flymake-failure-text (provider info)
   (format "AI review by %s failed: %s" provider (+ai--flymake-failure-reason info)))
 
+;;;###autoload
 (defun +ai--flymake-fail (buffer provider report-fn info)
   "End the run empty and say why; a bad reply must not get the backend disabled."
   (+ai--flymake-settle buffer)
@@ -206,32 +206,39 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 
 (defconst +ai--flymake-displays '(column margin eol))
 
+;;;###autoload
 (defun +ai--flymake-native-eol-p ()
   (boundp 'flymake-show-diagnostics-at-end-of-line))
 
+;;;###autoload
 (defun +ai--flymake-worst (diagnostics)
   (seq-find (lambda (severity)
               (seq-some (lambda (d) (eq severity (flymake-diagnostic-type d))) diagnostics))
             +ai--flymake-severity-order))
 
+;;;###autoload
 (defun +ai--flymake-summary (diagnostics)
   "One line's findings, bare messages joined, in the face of the worst."
   (propertize (mapconcat #'+ai--flymake-message diagnostics " │ ")
               'face (alist-get (+ai--flymake-worst diagnostics) +ai--flymake-echo-faces)))
 
+;;;###autoload
 (defun +ai--flymake-fit (text)
   (truncate-string-to-width text +ai-flymake-margin-width nil nil "…"))
 
+;;;###autoload
 (defun +ai--flymake-by-line (diagnostics)
   "((LINE DIAGNOSTIC...) ...) from the findings' own line numbers."
   (seq-group-by #'+ai--flymake-line diagnostics))
 
+;;;###autoload
 (defun +ai--flymake-line-bounds (line)
   (save-excursion
     (goto-char (point-min))
     (forward-line (1- line))
     (cons (point) (line-end-position))))
 
+;;;###autoload
 (defun +ai--flymake-longest-line ()
   (let ((longest 0))
     (save-excursion
@@ -242,26 +249,32 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
         (forward-line 1)))
     longest))
 
+;;;###autoload
 (defun +ai--flymake-column ()
   (or +ai-flymake-column (+ 2 (max fill-column (+ai--flymake-longest-line)))))
 
+;;;###autoload
 (defun +ai--flymake-overlay (beg end)
   (let ((overlay (make-overlay beg end nil t nil)))
     (overlay-put overlay '+ai-flymake t)
     overlay))
 
+;;;###autoload
 (defun +ai--flymake-eol-overlay (line diagnostics)
   (let ((eol (cdr (+ai--flymake-line-bounds line))))
     (overlay-put (+ai--flymake-overlay eol eol)
                  'after-string (concat "  ⟵ " (+ai--flymake-summary diagnostics)))))
 
+;;;###autoload
 (defun +ai--flymake-stretch-to (column)
   (propertize " " 'display `(space :align-to ,column)))
 
+;;;###autoload
 (defun +ai--flymake-wrap-width (column)
   (or +ai-flymake-wrap-width
       (max 16 (- (window-body-width (or (get-buffer-window) (selected-window))) column 2))))
 
+;;;###autoload
 (defun +ai--flymake-wrap (text width)
   (with-temp-buffer
     (insert text)
@@ -269,14 +282,17 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
       (fill-region (point-min) (point-max)))
     (split-string (buffer-string) "\n" t)))
 
+;;;###autoload
 (defun +ai--flymake-free-rows (line annotated total)
   "How many lines below LINE, up to TOTAL, have no finding of their own."
   (let ((next (seq-min (cons (1+ total) (seq-filter (lambda (l) (> l line)) annotated)))))
     (- next line 1)))
 
+;;;###autoload
 (defun +ai--flymake-cut (line width)
   (concat (truncate-string-to-width line (1- width)) "…"))
 
+;;;###autoload
 (defun +ai--flymake-chunks (summary width rows)
   "SUMMARY wrapped to WIDTH over its own row and ROWS below, cut with an ellipsis past that."
   (let* ((face (get-text-property 0 'face summary))
@@ -288,6 +304,7 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
                 (append (butlast kept) (list (+ai--flymake-cut (car (last kept)) width)))
               kept))))
 
+;;;###autoload
 (defun +ai--flymake-column-overlays (line chunks column)
   (seq-map-indexed (lambda (chunk i)
                      (let ((eol (cdr (+ai--flymake-line-bounds (+ line i)))))
@@ -295,6 +312,7 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
                                     'after-string (concat (+ai--flymake-stretch-to column) " " chunk))))
                    chunks))
 
+;;;###autoload
 (defun +ai--flymake-render-column (groups)
   (let* ((column (+ai--flymake-column))
          (width (+ai--flymake-wrap-width column))
@@ -306,21 +324,26 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
                                  (+ai--flymake-free-rows line annotated total))
        column))))
 
+;;;###autoload
 (defun +ai--flymake-margin-string (diagnostics)
   (propertize " " 'display `((margin right-margin) ,(+ai--flymake-fit (+ai--flymake-summary diagnostics)))))
 
+;;;###autoload
 (defun +ai--flymake-margin-overlay (line diagnostics)
   (let ((bol (car (+ai--flymake-line-bounds line))))
     (overlay-put (+ai--flymake-overlay bol bol)
                  'before-string (+ai--flymake-margin-string diagnostics))))
 
+;;;###autoload
 (defun +ai--flymake-clear ()
   (remove-overlays (point-min) (point-max) '+ai-flymake t))
 
+;;;###autoload
 (defun +ai--flymake-render-each (render groups)
   (pcase-dolist (`(,line . ,group) groups)
     (funcall render line group)))
 
+;;;###autoload
 (defun +ai--flymake-render (diagnostics)
   (let ((groups (+ai--flymake-by-line diagnostics)))
     (pcase +ai-flymake-display
@@ -330,17 +353,20 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
               (+ai--flymake-render-each #'+ai--flymake-eol-overlay groups)))
       (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays)))))
 
+;;;###autoload
 (defun +ai--flymake-annotate (buffer diagnostics)
   (with-current-buffer buffer
     (+ai--flymake-clear)
     (+ai--flymake-render diagnostics)))
 
+;;;###autoload
 (defun +ai--flymake-report (buffer provider report-fn response)
   (let ((diagnostics (+ai--flymake-diagnostics buffer provider response)))
     (funcall report-fn diagnostics)
     (+ai--flymake-annotate buffer diagnostics)
     (message "%s" (+ai--flymake-outcome-text provider (length diagnostics)))))
 
+;;;###autoload
 (defun +ai--flymake-callback (buffer run report-fn provider)
   (lambda (response info)
     (when (+ai--flymake-current-run-p buffer run)
@@ -355,10 +381,12 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 
 ;;; the margin column and flymake's own eol display, per buffer
 
+;;;###autoload
 (defun +ai--flymake-apply-margins ()
   (dolist (window (get-buffer-window-list nil nil t))
     (set-window-margins window (car (window-margins window)) right-margin-width)))
 
+;;;###autoload
 (defun +ai--flymake-setup-display ()
   (pcase +ai-flymake-display
     ('margin (setq right-margin-width +ai-flymake-margin-width)
@@ -366,14 +394,17 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
     ('eol (when (+ai--flymake-native-eol-p)
             (setq-local flymake-show-diagnostics-at-end-of-line 'short)))))
 
+;;;###autoload
 (defun +ai--flymake-teardown-display ()
   (kill-local-variable 'right-margin-width)
   (+ai--flymake-apply-margins)
   (kill-local-variable 'flymake-show-diagnostics-at-end-of-line))
 
+;;;###autoload
 (defun +ai--flymake-next-display (current)
   (or (cadr (memq current +ai--flymake-displays)) (car +ai--flymake-displays)))
 
+;;;###autoload
 (defun +ai/flymake-toggle-display ()
   "Cycle findings through the column past the code, the right margin and the end of each line."
   (interactive)
@@ -386,12 +417,15 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 
 ;;; backend
 
+;;;###autoload
 (defun +ai--flymake-too-long-p ()
   (> (count-lines (point-min) (point-max)) +ai-flymake-max-lines))
 
+;;;###autoload
 (defun +ai--flymake-numbered-buffer ()
   (+ai--annotate-number-lines (buffer-substring-no-properties (point-min) (point-max))))
 
+;;;###autoload
 (defun +ai--flymake-request (report-fn)
   (require 'gptel)
   (let* ((provider (+ai--flymake-provider +ai-flymake-provider))
@@ -406,6 +440,7 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
       :system +ai-flymake-directive
       :callback (+ai--flymake-callback (current-buffer) run report-fn +ai-flymake-provider))))
 
+;;;###autoload
 (defun +ai--flymake-cannot-start (report-fn err)
   (setq +ai--flymake-pending nil)
   (funcall report-fn nil)
@@ -413,6 +448,7 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
     (flymake-log :error "%s" text)
     (message "%s" text)))
 
+;;;###autoload
 (defun +ai-flymake-backend (report-fn &rest _)
   "Flymake backend: ask `+ai-flymake-provider' to review the buffer.
 Whatever goes wrong is reported as an empty run, never thrown: an error here
@@ -426,21 +462,25 @@ would make flymake disable the backend for the buffer until the mode restarts."
 
 ;;; mode
 
+;;;###autoload
 (defun +ai--flymake-lighter ()
   (if +ai--flymake-pending (format " AIrev[%s…]" +ai--flymake-pending) " AIrev"))
 
+;;;###autoload
 (defun +ai--flymake-status-text (on count pending)
   (format "AI review by %s: %s" +ai-flymake-provider
           (cond ((not on) "off (SPC o l r to review every code buffer)")
                 (pending (format "on in %d buffer(s); this one waiting on %s" count pending))
                 (t (format "on in %d buffer(s); this one idle" count)))))
 
+;;;###autoload
 (defun +ai/flymake-status ()
   "Say who reviews, where the review is on, and whether this buffer's is still out."
   (interactive)
   (let ((buffers (+ai--flymake-buffers)))
     (message "%s" (+ai--flymake-status-text buffers (length buffers) +ai--flymake-pending))))
 
+;;;###autoload
 (define-minor-mode +ai-flymake-mode
   "Review this buffer with an LLM through Flymake, on save and when the mode starts.
 Edits alone do not trigger a review; a model call per keystroke would be noise.
@@ -460,36 +500,34 @@ Edits alone do not trigger a review; a model call per keystroke would be noise.
          (kill-local-variable 'flymake-fringe-indicator-position)
          (flymake-mode -1))))
 
+;;;###autoload
 (defun +ai--flymake-secret-name-p (file)
   (let ((name (file-name-nondirectory file)))
     (seq-some (lambda (regexp) (string-match-p regexp name)) +ai-flymake-ignore-regexps)))
 
+;;;###autoload
 (defun +ai--flymake-git-ignored-p (file)
   (and +ai-flymake-skip-ignored
        (not (file-remote-p file))
        (zerop (call-process "git" nil nil nil "-C" (file-name-directory file) "check-ignore" "-q" file))))
 
+;;;###autoload
 (defun +ai--flymake-ignored-p (file)
   "Whether FILE must not reach a reviewer: a secret by name, or ignored by git."
   (and (or (+ai--flymake-secret-name-p file) (+ai--flymake-git-ignored-p file)) t))
 
+;;;###autoload
 (defun +ai--flymake-reviewable-p ()
   (and buffer-file-name
        (derived-mode-p 'prog-mode)
        (not (+ai--flymake-ignored-p buffer-file-name))
        t))
 
+;;;###autoload
 (defun +ai--flymake-turn-on ()
   (when (+ai--flymake-reviewable-p)
     (+ai-flymake-mode 1)))
 
+;;;###autoload
 (define-globalized-minor-mode +ai-flymake-global-mode +ai-flymake-mode +ai--flymake-turn-on
   :group 'flymake)
-
-(map! :leader
-      :desc "AI review code buffers" "o l r" #'+ai-flymake-global-mode
-      :desc "AI review this buffer"  "o l b" #'+ai-flymake-mode
-      :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
-      :desc "AI review display"  "o l m" #'+ai/flymake-toggle-display
-      :desc "AI review status"   "o l ?" #'+ai/flymake-status
-      :desc "AI review list"     "o l l" #'flymake-show-buffer-diagnostics)

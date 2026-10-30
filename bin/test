@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# bin/test          every config file loaded, then ERT
+# bin/test --cold   config files only; autoload/ files load through their cookies
 set -euo pipefail
 cd "$(dirname "$0")/.."
-emacs --batch -Q -l test/run.el
+runner=test/run.el
+[[ "${1:-}" == "--cold" ]] && runner=test/cold.el
+emacs --batch -Q -l "$runner"

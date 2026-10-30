@@ -23,6 +23,11 @@ jobs:
           LUA: ${{ matrix.lua }}
           SDL_AUDIODRIVER: dummy
           ALSOFT_DRIVERS: "null"
+      - run: bin/test --cold
+        env:
+          LUA: ${{ matrix.lua }}
+          SDL_AUDIODRIVER: dummy
+          ALSOFT_DRIVERS: "null"
       - run: bin/compile-check
   doom:
     # the only check that sees map!, package recipes and init.el: a real doom sync

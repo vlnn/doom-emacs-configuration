@@ -89,13 +89,69 @@
 (map! :leader :desc "Explain quickly" "o l e" #'+ai/quick)
 
 
+
+;;; knobs the autoload files read
+
+(defvar +ai-flymake-provider 'llama
+  "Who reviews: `llama' for the local llama-server (the default) or `claude'.")
+
+(defvar +ai-flymake-claude-model 'claude-sonnet-4-6)
+
+(defvar +ai-flymake-max-lines 400
+  "Buffers longer than this are not sent for review.")
+
+(defvar +ai-flymake-display 'column
+  "Where findings show: `column', aligned just past the code; `margin', the window's
+right margin; or `eol', right after each line.")
+
+(defvar +ai-flymake-column nil
+  "Column the `column' display aligns to; nil means two past the longest line or `fill-column'.")
+
+(defvar +ai-flymake-margin-width 48)
+
+(defvar +ai-flymake-wrap-width nil
+  "Width the `column' display wraps findings to; nil means what is left of the window.")
+
+(defvar +ai-flymake-ignore-regexps
+  '("\\`secrets\\.el\\'" "\\`\\.env\\(\\.\\|\\'\\)" "\\`\\.authinfo" "\\`\\.netrc\\'" "\\.pem\\'" "\\.key\\'")
+  "File names, matched against the base name, never sent for review: they hold secrets.")
+
+(defvar +ai-flymake-skip-ignored t
+  "Whether files git ignores are left out too; they are usually generated, local or secret.")
+
+(defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
+
+(defvar +ai-trust-reviews-file
+  (expand-file-name "ai-trust-reviews.el"
+                    (if (boundp 'doom-cache-dir) doom-cache-dir user-emacs-directory)))
+
+(defvar +ai-trust-own-emails nil
+  "Commit emails that count as yours besides git's user.email, e.g. other machines.")
+
+(defvar +ai-pi-model-args
+  '(("local" "--model" "qwopus-coder")
+    ("claude" "--provider" "anthropic" "--model" "claude-sonnet-4-6"))
+  "pi CLI flags for each tasks.org :MODEL: value, used when a session starts.")
+
+(defvar +ai-pi-model-networks '(("local" . "local"))
+  "Jail network for each tasks.org :MODEL: value; other models get \"open\".")
+
 ;;; annotated explanation — SPC o l E
 
-(load! "annotate")
+(set-popup-rule! "^\\*gptel-annotate\\*$"
+  :side 'right :size 0.5 :select t :quit t :ttl nil)
+
+(map! :leader :desc "Explain annotated" "o l E" #'+ai/annotate)
 
 ;;; AI review through Flymake — SPC o l r / SPC o l R
 
-(load! "flymake")
+(map! :leader
+      :desc "AI review code buffers" "o l r" #'+ai-flymake-global-mode
+      :desc "AI review this buffer"  "o l b" #'+ai-flymake-mode
+      :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
+      :desc "AI review display"  "o l m" #'+ai/flymake-toggle-display
+      :desc "AI review status"   "o l ?" #'+ai/flymake-status
+      :desc "AI review list"     "o l l" #'flymake-show-buffer-diagnostics)
 
 ;;; gptel-magit — commit messages and diff explanations
 
@@ -162,8 +218,28 @@
 (set-popup-rule! "^\\*pilish-" :ignore t)
 
 (load! "jail")
-(load! "trust")
-(load! "pi")
+
+(defun +ai--hook-pi-jail ()
+  "Every pi process pilish starts goes through the jail with its session's flags (pi.el)."
+  (advice-add 'pilish--start-process :around #'+ai--pi-start-process-jailed))
+
+(+ai--hook-pi-jail)
+
+(defvar +tasks-agent)
+(setq +tasks-agent
+      (list :launch #'+ai--launch-pi
+            :send #'+ai--send-pilish-input
+            :prefill #'+ai--prefill-pilish-input
+            :input-buffer #'+ai--pilish-input-buffer
+            :stop #'+ai--stop-pilish-session
+            :live-p #'+ai--live-pilish-session-p
+            :jail #'+ai--jailed
+            :check-model #'+ai--check-pi-model
+            :models (lambda () (mapcar #'car +ai-pi-model-args))
+            :review-model (lambda () +ai-fast-model)))
+
+(set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select t :quit t)
+(set-popup-rule! "^\\*\\(hax\\|pi-trust\\):" :side 'right :size 0.4 :select t :quit nil :ttl nil)
 
 (map! :leader
       :desc "pi"  "3" #'+ai/pi
