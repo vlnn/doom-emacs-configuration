@@ -589,3 +589,16 @@
          (make-directory other)
          (+ai-trust--assess 'hax other)
          (should-not (+ai-trust--current-decision (+ai-trust--canonical other))))))))
+
+(ert-deftest +ai-trust--trust-empty/says-when-it-trusts ()
+  (+ai-trust-test--in-temp-dir
+   (let* ((+ai-trust-store-file (expand-file-name "trust.json" root))
+          (dir (+ai-trust--canonical root))
+          (said nil))
+     (cl-letf (((symbol-function 'message) (lambda (format &rest args) (push (apply #'format format args) said))))
+       (+ai-trust--trust-empty 'pi dir nil)
+       (ert-info ("a trust written without a review should be announced, naming the directory")
+         (should (string-match-p (regexp-quote dir) (car said))))
+       (+ai-trust--trust-empty 'pi dir t)
+       (ert-info ("a directory already decided should not be announced again")
+         (should (= 1 (length said))))))))

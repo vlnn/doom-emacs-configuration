@@ -1119,7 +1119,13 @@ A task's run leaves it GREEN or RED when it finishes."
     (unless (y-or-n-p "No test command found; merge without running tests? ")
       (user-error "Stopped before merging"))))
 
+(defun +tasks--fetch (main)
+  "Refresh origin/MAIN when there is an origin; what it held last time may be stale."
+  (when (+tasks--git-ok-p "remote" "get-url" "origin")
+    (+tasks--git-ok-p "fetch" "--quiet" "origin" main)))
+
 (defun +tasks--catch-up (branch main)
+  (+tasks--fetch main)
   (when (and (not (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main))
              (+tasks--git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main)))
     (unless (+tasks--git-ok-p "merge" "--ff-only" (concat "origin/" main))

@@ -392,8 +392,9 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 Reviewing nothing and deciding nothing would leave pi treating the project as
 untrusted, so the inputs a task worktree gains, the grilling skill, would never
 load. Inputs that reach the main checkout later still bring a review."
-  (when (and (eq agent 'pi) (null decision))
-    (+ai-trust--write-decision +ai-trust-store-file dir t)))
+  (when (and (eq agent 'pi) (null decision)
+             (+ai-trust--write-decision +ai-trust-store-file dir t))
+    (message "Nothing for an agent to review in %s; trusted it for pi in %s" dir +ai-trust-store-file)))
 
 (defun +ai-trust--assess (agent root)
   "`unchanged' when AGENT may start in ROOT without a review, else the review due."

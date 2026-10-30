@@ -35,3 +35,16 @@
                    (+avy-test--with-eval-spies #'emacs-lisp-mode
                      (goto-char 5)
                      (+avy--eval-defun-at-point))))))
+
+(ert-deftest +avy--bounds-at/names-the-missing-thing ()
+  (cl-letf (((symbol-function 'sp-backward-up-sexp) #'ignore))
+    (with-temp-buffer
+      (emacs-lisp-mode)
+      (insert "   ")
+      (ert-info ("a point with no defun around it should stop with a user error naming the thing")
+        (should (equal "No defun at the chosen point"
+                       (cadr (should-error (+avy--bounds-at 2 'defun) :type 'user-error)))))
+      (erase-buffer)
+      (insert "(+ 1 2)")
+      (ert-info ("a point inside a defun should still give its bounds")
+        (should (equal '(1 . 8) (+avy--bounds-at 3 'defun)))))))

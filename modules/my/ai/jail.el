@@ -34,12 +34,20 @@
       (file-truename sock)
     "/nonexistent"))
 
+(defun +ai--emacs-socket-dir ()
+  "Where this Emacs listens, whatever `server-socket-dir' was set to; the default is a regex in agent.sb."
+  (require 'server)
+  (if (bound-and-true-p server-socket-dir)
+      (+ai--real-dir server-socket-dir)
+    "/nonexistent"))
+
 (defun +ai--jail-params (root network)
   (append (+ai--jail-param "PROJECT" (+ai--real-dir root))
           (+ai--jail-param "HOME" (+ai--real-dir "~"))
           (+ai--jail-param "TMPDIR" (+ai--real-dir temporary-file-directory))
           (+ai--jail-param "NETWORK" network)
-          (+ai--jail-param "SSH_AUTH_SOCK" (+ai--ssh-agent-socket))))
+          (+ai--jail-param "SSH_AUTH_SOCK" (+ai--ssh-agent-socket))
+          (+ai--jail-param "EMACS_SOCKET_DIR" (+ai--emacs-socket-dir))))
 
 (defun +ai--jail-cache-env ()
   (cons "env" (mapcar (pcase-lambda (`(,var . ,dir))

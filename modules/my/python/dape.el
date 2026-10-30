@@ -16,8 +16,13 @@
 (defun +dape--pytest-config (&rest targets)
   `(,@(+dape--uv-debugpy-base) :module "pytest" :args ,(vconcat targets)))
 
+(defun +dape--pytest-node-id (file function)
+  (if function
+      (concat file "::" (string-replace "." "::" function))
+    file))
+
 (defun +dape--current-pytest-target ()
-  (concat (buffer-file-name) "::" (which-function)))
+  (+dape--pytest-node-id (buffer-file-name) (which-function)))
 
 (defun +dape--test-file-p (file)
   (let ((name (file-name-nondirectory file)))

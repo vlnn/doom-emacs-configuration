@@ -32,10 +32,12 @@ real_path() {
 
 ssh_sock="$(if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then real_path "$SSH_AUTH_SOCK"; else echo /nonexistent; fi)"
 
+emacs_socket_dir="$(real_path "${XDG_RUNTIME_DIR:-/tmp}/emacs$(id -u)")"
+
 jailed() {
   sandbox-exec -f "$profile" \
     -D PROJECT="$project" -D HOME="$real_home" -D TMPDIR="$real_tmp" -D NETWORK="$network" \
-    -D SSH_AUTH_SOCK="$ssh_sock" \
+    -D SSH_AUTH_SOCK="$ssh_sock" -D EMACS_SOCKET_DIR="$emacs_socket_dir" \
     "$@"
 }
 

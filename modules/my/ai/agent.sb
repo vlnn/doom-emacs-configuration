@@ -1,5 +1,5 @@
 ;; Seatbelt profile for pi, hax and task tests; see modules/my/ai/jail.el.
-;; Params: PROJECT, HOME, TMPDIR, SSH_AUTH_SOCK, all real paths; NETWORK.
+;; Params: PROJECT, HOME, TMPDIR, SSH_AUTH_SOCK, EMACS_SOCKET_DIR, all real paths; NETWORK.
 ;; The last matching rule wins.
 
 (version 1)
@@ -78,6 +78,7 @@
 ;; sockets and services that act as you, whatever the network mode
 (deny network-outbound
   (regex #"/emacs[0-9]+/[^/]+$")
+  (subpath (param "EMACS_SOCKET_DIR"))
   (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
   (literal (param "SSH_AUTH_SOCK"))
   (subpath (home "/.gnupg"))

@@ -95,7 +95,7 @@ commits never count as someone else's. A repo with nothing to review is
 trusted for pi outright the first time, so the inputs a task worktree gains
 (the `grilling` skill `s`/`c` copy in) load there; inputs that reach the
 main checkout later bring the review as usual, and inputs on a task branch
-show in the guard note at `r`/`d`. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
+show in the guard note at `r`/`d`; the echo area says when that trust is written. Your choice for pi is written to `~/.pi/agent/trust.json`; pilish runs
 with `pilish-project-trust-policy` `'default`, so that file decides what loads,
 except "untrusted once", which starts that session with `--no-approve`, reloads
 included. Reviews are
@@ -138,7 +138,8 @@ In the jail:
 - ssh, gpg, AWS, gcloud, kube, gh, docker, npm, PyPI and cargo credentials,
   `~/.git-credentials`, `~/.authinfo*`, `~/.netrc` and any `secrets.el` are
   unreadable;
-- the Emacs server socket (`emacsclient --eval` would reach your Emacs),
+- the Emacs server socket (`emacsclient --eval` would reach your Emacs; the
+  default dir by pattern and `server-socket-dir` by name),
   ssh-agent (launchd's and whatever `SSH_AUTH_SOCK` names), gpg-agent, the
   Docker socket, LaunchServices and AppleEvents (`open`, `osascript`) are
   off limits;
@@ -252,7 +253,8 @@ into the session by hand, or `x` and `s` for a fresh start.
 
 The plan is what the rest of the flow reads: `R` reviews the diff against it,
 `r` and `d` show how many of its tests are ticked (shown, not enforced), and
-`d` refuses while `## Open` has any line. Only the `Approved: <date>` line Emacs writes right under `ACCEPT:` counts as approval; one the agent writes elsewhere does not, and the plan is opened with file-local variables off. Decisions the plan did not settle go
+`d` refuses while `## Open` has any line. `d` fetches `origin/main` before
+deciding whether the branch already landed there. Only the `Approved: <date>` line Emacs writes right under `ACCEPT:` counts as approval; one the agent writes elsewhere does not, and the plan is opened with file-local variables off. Decisions the plan did not settle go
 through the same interview later and land under `## Decisions`; approval is
 not reopened for them. `:PLAN_MODEL:` can run the interview on a better model
 than the work: the plan is the handoff, and `y` restarts the session on
@@ -318,7 +320,10 @@ on the line named: buffers already open are reviewed at once, each buffer
 opened afterwards when it opens, every buffer again when it is saved, never
 on edits alone. `SPC o l b` (`+ai-flymake-mode`) does the same for one buffer.
 `flymake-mode` is turned on with the mode and off with it. Buffers over
-`+ai-flymake-max-lines` (400) are skipped with a note in `*Flymake log*`.
+`+ai-flymake-max-lines` (400) are skipped with a note in `*Flymake log*`, and
+so are files that hold secrets: names matching `+ai-flymake-ignore-regexps`
+(`secrets.el`, `.env*`, `.authinfo*`, `.netrc`, `*.pem`, `*.key`) and, while
+`+ai-flymake-skip-ignored` is on, anything git ignores.
 
 `SPC o l R` (`+ai/flymake-toggle-provider`) switches `+ai-flymake-provider`
 between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`

@@ -366,6 +366,7 @@
                    '(("(param \"NETWORK\") \"local\"" . "switch to loopback-only on NETWORK=local")
                      ("remote ip \"localhost:8080\"" . "keep llama-server's port open on loopback")
                      ("emacs\\[0-9\\]" . "block the Emacs server socket, a way back into your Emacs")
+                     ("(subpath (param \"EMACS_SOCKET_DIR\"))" . "block the socket dir this Emacs actually listens in")
                      ("Listeners" . "block the launchd ssh-agent socket")
                      ("(literal (param \"SSH_AUTH_SOCK\"))" . "block whatever ssh-agent SSH_AUTH_SOCK names")
                      ("docker\\.sock" . "block the Docker socket")
@@ -375,3 +376,12 @@
         (should (string-match-p regexp text))))
     (ert-info ("agent.sb should not open every loopback port or name lookups to local-model sessions")
       (should-not (string-match-p "localhost:\\*\\|mDNSResponder" text)))))
+
+(ert-deftest +ai--jailed/passes-the-emacs-socket-dir-to-deny ()
+  (+ai-jail-test--available
+   (let ((server-socket-dir (file-name-as-directory (make-temp-file "emacs-sockets" t))))
+     (unwind-protect
+         (ert-info ("jailed should pass server-socket-dir as a real path, so a custom socket dir is denied too")
+           (should (equal (concat "EMACS_SOCKET_DIR=" (directory-file-name (file-truename server-socket-dir)))
+                          (+ai-jail-test--param "EMACS_SOCKET_DIR" (+ai--jailed temporary-file-directory '("pi"))))))
+       (delete-directory server-socket-dir t)))))

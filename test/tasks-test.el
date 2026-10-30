@@ -1470,3 +1470,37 @@
              (should (equal tip (car (+tasks--git-lines "rev-parse" "refs/aborted/feat/x"))))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
+
+(defun +tasks-test--head (dir)
+  (let ((default-directory dir))
+    (car (+tasks--git-lines "rev-parse" "HEAD"))))
+
+(ert-deftest +tasks--catch-up/fetches-before-trusting-origin-main ()
+  (+tasks-test--in-git-repo
+   (let* ((repo default-directory)
+          (origin (file-name-as-directory (file-truename (make-temp-file "tasks-origin" t))))
+          (other (file-name-as-directory (file-truename (make-temp-file "tasks-other" t)))))
+     (unwind-protect
+         (progn
+           (+tasks-test--git "init" "-q" "--bare" "-b" "main" origin)
+           (+tasks-test--git "remote" "add" "origin" origin)
+           (+tasks-test--git "push" "-q" "-u" "origin" "main")
+           (+tasks-test--git "switch" "-q" "-c" "feat/x")
+           (+tasks-test--commit-file "feature.txt" "done")
+           (+tasks-test--git "push" "-q" "-u" "origin" "feat/x")
+           (+tasks-test--git "switch" "-q" "main")
+           (+tasks-test--git "clone" "-q" origin other)
+           (let ((default-directory other))
+             (+tasks-test--git "merge" "-q" "--no-ff" "-m" "merge elsewhere" "origin/feat/x")
+             (+tasks-test--git "push" "-q" "origin" "main"))
+           (let ((default-directory repo))
+             (+tasks--catch-up "feat/x" "main"))
+           (ert-info ("catch-up should fetch, so a branch merged on origin since the last fetch fast-forwards main")
+             (should (equal (+tasks-test--head other) (+tasks-test--head repo)))))
+       (delete-directory origin t)
+       (delete-directory other t)))))
+
+(ert-deftest +tasks--fetch/tolerates-a-repo-without-origin ()
+  (+tasks-test--in-git-repo
+   (ert-info ("fetch should do nothing, quietly, when the repo has no origin")
+     (should-not (+tasks--fetch "main")))))

@@ -5,10 +5,11 @@
   t)
 
 (defun +avy--bounds-at (pt thing)
-  (save-excursion
-    (goto-char pt)
-    (when (eq thing 'sexp) (sp-backward-up-sexp))
-    (bounds-of-thing-at-point thing)))
+  (or (save-excursion
+        (goto-char pt)
+        (when (eq thing 'sexp) (sp-backward-up-sexp))
+        (bounds-of-thing-at-point thing))
+      (user-error "No %s at the chosen point" thing)))
 
 (defun +avy--on-thing (pt thing fn)
   (cl-destructuring-bind (start . end) (+avy--bounds-at pt thing)

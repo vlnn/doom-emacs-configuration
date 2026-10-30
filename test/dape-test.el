@@ -28,3 +28,12 @@
       (should (equal "/tmp/x.py" (plist-get config :program))))
     (ert-info ("program config should run the adapter through uv")
       (should (equal "uv" (plist-get config 'command))))))
+
+(ert-deftest +dape--pytest-node-id/addresses-the-test-as-pytest-does ()
+  (pcase-dolist (`(,function ,expected ,why)
+                 '(("test_bar" "/p/test_x.py::test_bar" "a module-level test")
+                   ("TestFoo.test_bar" "/p/test_x.py::TestFoo::test_bar" "a method, class and name separated by ::")
+                   ("Outer.Inner.test_bar" "/p/test_x.py::Outer::Inner::test_bar" "a nested class")
+                   (nil "/p/test_x.py" "point outside any function: the whole file")))
+    (ert-info ((format "pytest node id should handle %s" why))
+      (should (equal expected (+dape--pytest-node-id "/p/test_x.py" function))))))

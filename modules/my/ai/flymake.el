@@ -39,6 +39,13 @@ right margin; or `eol', right after each line.")
 (defvar +ai-flymake-wrap-width nil
   "Width the `column' display wraps findings to; nil means what is left of the window.")
 
+(defvar +ai-flymake-ignore-regexps
+  '("\\`secrets\\.el\\'" "\\`\\.env\\(\\.\\|\\'\\)" "\\`\\.authinfo" "\\`\\.netrc\\'" "\\.pem\\'" "\\.key\\'")
+  "File names, matched against the base name, never sent for review: they hold secrets.")
+
+(defvar +ai-flymake-skip-ignored t
+  "Whether files git ignores are left out too; they are usually generated, local or secret.")
+
 (defvar-local +ai--flymake-run 0
   "Reviews started in this buffer; a reply to an earlier one is dropped.")
 
@@ -453,8 +460,24 @@ Edits alone do not trigger a review; a model call per keystroke would be noise.
          (kill-local-variable 'flymake-fringe-indicator-position)
          (flymake-mode -1))))
 
+(defun +ai--flymake-secret-name-p (file)
+  (let ((name (file-name-nondirectory file)))
+    (seq-some (lambda (regexp) (string-match-p regexp name)) +ai-flymake-ignore-regexps)))
+
+(defun +ai--flymake-git-ignored-p (file)
+  (and +ai-flymake-skip-ignored
+       (not (file-remote-p file))
+       (zerop (call-process "git" nil nil nil "-C" (file-name-directory file) "check-ignore" "-q" file))))
+
+(defun +ai--flymake-ignored-p (file)
+  "Whether FILE must not reach a reviewer: a secret by name, or ignored by git."
+  (and (or (+ai--flymake-secret-name-p file) (+ai--flymake-git-ignored-p file)) t))
+
 (defun +ai--flymake-reviewable-p ()
-  (and buffer-file-name (derived-mode-p 'prog-mode) t))
+  (and buffer-file-name
+       (derived-mode-p 'prog-mode)
+       (not (+ai--flymake-ignored-p buffer-file-name))
+       t))
 
 (defun +ai--flymake-turn-on ()
   (when (+ai--flymake-reviewable-p)
