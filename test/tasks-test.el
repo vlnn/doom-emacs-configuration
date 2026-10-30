@@ -1504,3 +1504,21 @@
   (+tasks-test--in-git-repo
    (ert-info ("fetch should do nothing, quietly, when the repo has no origin")
      (should-not (+tasks--fetch "main")))))
+
+(ert-deftest +tasks-agent/absent-agent-falls-back ()
+  (let ((+tasks-agent nil) (kill-ring nil) (prepared nil))
+    (cl-letf (((symbol-function 'message) #'ignore))
+      (+tasks--hand-off "/r/" :draft "interview" :prepare (lambda () (setq prepared t))))
+    (ert-info ("without an agent, hand-off should still run prepare and leave the draft on the kill ring")
+      (should (equal '(t "interview") (list prepared (car kill-ring)))))
+    (ert-info ("without an agent, tests should run unjailed")
+      (should (equal (list shell-file-name shell-command-switch "just test")
+                     (+tasks--test-argv "/r/" "just test"))))
+    (ert-info ("without an agent, any model name should pass and none be offered")
+      (should-not (+tasks--check-models "whatever"))
+      (should-not (+tasks--model-names)))))
+
+(ert-deftest +tasks-agent/ai-module-fills-every-key ()
+  (ert-info ("the ai module should provide a function for every key tasks calls")
+    (should-not (seq-remove (lambda (key) (functionp (plist-get +tasks-agent key)))
+                            '(:launch :send :prefill :input-buffer :stop :live-p :jail :check-model :models :review-model)))))

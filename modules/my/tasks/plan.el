@@ -60,18 +60,17 @@ FORCE drafts it for a running session too."
   (when (and (equal (plist-get task :state) "PLAN")
              (null plan-text)
              (or force
-                 (not (and (fboundp '+ai--live-pilish-session-p) (+ai--live-pilish-session-p worktree session)))))
+                 (not (+tasks--agent-call :live-p worktree session))))
     (+tasks--interview-of task)))
 
 (defun +tasks--clear-session-input (task)
   "Empty TASK's pi input, keeping what it held on the kill ring."
-  (when (fboundp '+ai--pilish-input-buffer)
-    (let ((default-directory (+tasks--task-worktree-of task)))
-      (when-let* ((input (+ai--pilish-input-buffer (plist-get task :branch)))
-                  ((buffer-live-p input)))
-        (with-current-buffer input
-          (unless (string-blank-p (buffer-string))
-            (kill-region (point-min) (point-max))))))))
+  (let ((default-directory (+tasks--task-worktree-of task)))
+    (when-let* ((input (+tasks--agent-call :input-buffer (plist-get task :branch)))
+                ((buffer-live-p input)))
+      (with-current-buffer input
+        (unless (string-blank-p (buffer-string))
+          (kill-region (point-min) (point-max)))))))
 
 (defun +tasks/interview ()
   "Open the task's pi session with the grilling interview in its input, for a PLAN task whose session lost it.
@@ -204,15 +203,15 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
   (if (+tasks--plan-approved-p plan-text) (+tasks--work-model task) (+tasks--interview-model task)))
 
 (defun +tasks--model-names ()
-  (mapcar #'car (bound-and-true-p +ai-pi-model-args)))
+  (+tasks--agent-call :models))
 
 (defun +tasks--read-plan-model ()
   (completing-read "Model for the interview: " (+tasks--model-names) nil t))
 
 (defun +tasks--check-models (&rest models)
   "Refuse a model `+ai-pi-model-args' has no flags for, before any review or worktree."
-  (when (fboundp '+ai--check-pi-model)
-    (mapc #'+ai--check-pi-model models)))
+  (dolist (model models)
+    (+tasks--agent-call :check-model model)))
 
 ;;; approving
 
@@ -241,19 +240,16 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
 (defun +tasks--send-to-session (task line)
   "Send LINE to TASK's pi session, run from its worktree so pilish finds the right one."
   (let ((default-directory (+tasks--task-worktree-of task)))
-    (unless (and (fboundp '+ai--send-pilish-input)
-                 (+ai--send-pilish-input line (plist-get task :branch)))
+    (unless (+tasks--agent-call :send line (plist-get task :branch))
       (message "No pi session took this; resume the task and send it yourself: %s" line))))
 
 (defun +tasks--prefill-session (task draft)
-  (when (fboundp '+ai--prefill-pilish-input)
-    (let ((default-directory (+tasks--task-worktree-of task)))
-      (+ai--prefill-pilish-input draft (plist-get task :branch)))))
+  (let ((default-directory (+tasks--task-worktree-of task)))
+    (+tasks--agent-call :prefill draft (plist-get task :branch))))
 
 (defun +tasks--restart-on-work-model (task worktree)
   "Trade the interview's session for one on the work model, which sends the go line once it is up."
-  (when (fboundp '+ai--stop-pilish-session)
-    (+ai--stop-pilish-session worktree (plist-get task :branch)))
+  (+tasks--agent-call :stop worktree (plist-get task :branch))
   (+tasks--hand-off worktree
                     :review-root (+tasks--task-root task)
                     :draft +tasks--plan-go-line

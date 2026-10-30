@@ -29,7 +29,9 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `snippets` | yasnippet helpers (`+snippets-body`, `SPC i w` wraps the region's lines in a snippet); snippet files stay in `snippets/` |
 
 Adding a feature = new directory + one line in `init.el`; removing one is the
-reverse, and `doom sync` drops its packages with it.
+reverse, and `doom sync` drops its packages with it. `tasks` reaches the coding
+agent only through `+tasks-agent`, a plist of functions `ai`'s `pi.el` fills;
+without it drafts go to the kill ring and tests run unjailed.
 
 Naming follows Doom: `+scope/command` (interactive), `+scope--helper`
 (private), `+scope-var`; `lib`'s shared helpers alone drop the scope.

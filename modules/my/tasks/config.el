@@ -36,6 +36,23 @@
 (defun +tasks--skeleton ()
   +tasks--skeleton-text)
 
+(defvar +tasks-agent nil
+  "How tasks reach the coding agent; the module that provides one sets it (ai's pi.el).
+A plist of functions: :launch (root &rest keys), :send (line &optional session),
+:prefill (draft &optional session), :input-buffer (&optional session),
+:stop (root &optional session), :live-p (root &optional session),
+:jail (root command &optional network), :check-model (model), :models (),
+:review-model (). A missing key means no agent: drafts go to the kill ring,
+tests run unjailed, any :MODEL: passes.")
+
+(defun +tasks--agent (key)
+  (plist-get +tasks-agent key))
+
+(defun +tasks--agent-call (key &rest args)
+  "Call the agent's KEY function with ARGS; nil when there is none."
+  (when-let* ((fn (+tasks--agent key)))
+    (apply fn args)))
+
 (load! "plan")
 (load! "agenda")
 (load! "branches")
@@ -324,9 +341,9 @@ With WITHIN-TREE, only leaves in the subtree at point."
 
 (cl-defun +tasks--hand-off (root &key draft send prepare session model review-root)
   "Give a task to pi in ROOT; PREPARE runs only once REVIEW-ROOT's review allows it."
-  (if (fboundp '+ai--launch-pi)
-      (+ai--launch-pi root :draft draft :send send :prepare prepare :session session :model model
-                      :review-root review-root)
+  (if (+tasks--agent :launch)
+      (+tasks--agent-call :launch root :draft draft :send send :prepare prepare :session session :model model
+                          :review-root review-root)
     (when prepare
       (funcall prepare))
     (when draft

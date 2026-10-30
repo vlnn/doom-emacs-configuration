@@ -266,7 +266,7 @@ run act on with your rights, in the second.")
   (with-current-buffer (get-buffer-create (format "*tasks-review:%s*" branch))
     (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert (+tasks--review-header branch (or (bound-and-true-p +ai-fast-model) "gptel") guard-note)))
+      (insert (+tasks--review-header branch (or (+tasks--agent-call :review-model) "gptel") guard-note)))
     (current-buffer)))
 
 (defun +tasks--review-callback (buffer)
@@ -289,7 +289,7 @@ run act on with your rights, in the second.")
          (diff (string-join (+git-lines "diff" (+tasks--range main branch)) "\n"))
          (buffer (+tasks--review-buffer branch (+tasks--guard-note (+tasks--changed-files main branch))))
          (plan (+tasks--plan-text (+tasks--task-worktree-of task)))
-         (gptel-model (or (bound-and-true-p +ai-fast-model) gptel-model)))
+         (gptel-model (or (+tasks--agent-call :review-model) gptel-model)))
     (+tasks--set-state task "REVIEW")
     (pop-to-buffer buffer)
     (gptel-request (+tasks--review-prompt (plist-get task :accept) diff plan)
@@ -330,7 +330,7 @@ run act on with your rights, in the second.")
 (defun +tasks--test-argv (root command)
   "COMMAND as a shell call, in the agent jail when it applies: the tests are agent code."
   (let ((argv (list shell-file-name shell-command-switch command)))
-    (if (fboundp '+ai--jailed) (+ai--jailed root argv) argv)))
+    (if (+tasks--agent :jail) (+tasks--agent-call :jail root argv) argv)))
 
 (defun +tasks--shell-line (argv)
   (mapconcat #'shell-quote-argument argv " "))
@@ -492,8 +492,8 @@ Refuses while the task's PLAN.md lists open items, unless DESPITE-OPEN-ITEMS (\\
     (org-todo state)))
 
 (defun +tasks--stop-session (tree branch)
-  (when (and tree (fboundp '+ai--stop-pilish-session))
-    (+ai--stop-pilish-session tree branch)))
+  (when tree
+    (+tasks--agent-call :stop tree branch)))
 
 (defun +tasks--backup-ref (branch)
   (concat "refs/aborted/" branch))

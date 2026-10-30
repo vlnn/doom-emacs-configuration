@@ -210,4 +210,17 @@ Inside a pi buffer, hide the session instead."
       (+ai-trust--gate 'hax (+main-checkout root)
                        (lambda (_verdict) (+ai--eat-in root name (+ai--jailed root '("hax"))))))))
 
+(defvar +tasks-agent)
+(setq +tasks-agent
+      (list :launch #'+ai--launch-pi
+            :send #'+ai--send-pilish-input
+            :prefill #'+ai--prefill-pilish-input
+            :input-buffer #'+ai--pilish-input-buffer
+            :stop #'+ai--stop-pilish-session
+            :live-p #'+ai--live-pilish-session-p
+            :jail #'+ai--jailed
+            :check-model #'+ai--check-pi-model
+            :models (lambda () (mapcar #'car +ai-pi-model-args))
+            :review-model (lambda () +ai-fast-model)))
+
 (set-popup-rule! "^\\*\\(hax\\|pi-trust\\):" :side 'right :size 0.4 :select t :quit nil :ttl nil)
