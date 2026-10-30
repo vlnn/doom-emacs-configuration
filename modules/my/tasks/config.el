@@ -124,15 +124,6 @@ Empty, it is `org-directory', as Doom's default would have it."
 
 ;;; branches dynamic block
 
-(defun +tasks--git-ok-p (&rest args)
-  (zerop (apply #'call-process "git" nil nil nil args)))
-
-(defun +tasks--git-lines (&rest args)
-  "Stdout lines of git ARGS, or nil when git fails."
-  (with-temp-buffer
-    (when (zerop (apply #'call-process "git" nil (list t nil) nil args))
-      (split-string (buffer-string) "\n" t))))
-
 (defun +tasks--default-branch-from (origin-head locals)
   (cond (origin-head (string-remove-prefix "refs/remotes/origin/" origin-head))
         ((member "main" locals) "main")
@@ -141,15 +132,15 @@ Empty, it is `org-directory', as Doom's default would have it."
 
 (defun +tasks--default-branch ()
   (+tasks--default-branch-from
-   (car (+tasks--git-lines "symbolic-ref" "-q" "refs/remotes/origin/HEAD"))
-   (+tasks--git-lines "branch" "--format=%(refname:short)")))
+   (car (+git-lines "symbolic-ref" "-q" "refs/remotes/origin/HEAD"))
+   (+git-lines "branch" "--format=%(refname:short)")))
 
 (defun +tasks--merged-p (branch main)
-  (or (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main)
-      (+tasks--git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main))))
+  (or (+git-ok-p "merge-base" "--is-ancestor" branch main)
+      (+git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main))))
 
 (defun +tasks--ahead (branch main)
-  (string-to-number (or (car (+tasks--git-lines "rev-list" "--count" (concat main ".." branch))) "0")))
+  (string-to-number (or (car (+git-lines "rev-list" "--count" (concat main ".." branch))) "0")))
 
 (defun +tasks--branch-patterns (prefixes)
   (mapcar (lambda (prefix) (concat prefix "*")) prefixes))
@@ -247,19 +238,8 @@ Empty, it is `org-directory', as Doom's default would have it."
 
 ;;; capture and init
 
-(defun +tasks--project-root ()
-  (or (projectile-project-root) default-directory))
-
-(defun +tasks--main-root (dir)
-  "The main checkout of the repo DIR is in, so a task worktree finds its tasks.org."
-  (let* ((default-directory dir)
-         (common (car (+tasks--git-lines "rev-parse" "--path-format=absolute" "--git-common-dir"))))
-    (if (and common (equal (file-name-nondirectory common) ".git"))
-        (file-name-directory common)
-      dir)))
-
 (defun +tasks--existing-project-file ()
-  (let ((file (+tasks--project-file (+tasks--main-root (+tasks--project-root)))))
+  (let ((file (+tasks--project-file (+main-checkout (+project-root)))))
     (unless (file-exists-p file)
       (user-error "No %s in this project; run M-x +tasks/init" +tasks-file-name))
     file))
@@ -268,7 +248,7 @@ Empty, it is `org-directory', as Doom's default would have it."
   "Write the tasks.org skeleton at the project root and open it.
 Offers the grilling skill and an AGENTS.md too, asking before each."
   (interactive)
-  (let* ((root (+tasks--main-root (+tasks--project-root)))
+  (let* ((root (+main-checkout (+project-root)))
          (file (+tasks--project-file root)))
     (when (file-exists-p file)
       (user-error "%s already exists" file))
@@ -285,21 +265,16 @@ Offers the grilling skill and an AGENTS.md too, asking before each."
   (seq-difference (+tasks--excluded-files) (split-string existing "\n" t)))
 
 (defun +tasks--exclude-file ()
-  (when-let* ((path (car (+tasks--git-lines "rev-parse" "--git-path" "info/exclude"))))
+  (when-let* ((path (car (+git-lines "rev-parse" "--git-path" "info/exclude"))))
     (expand-file-name path)))
 
 (defun +tasks--exclude-from-git ()
   "Keep tasks.org and its archive out of git via .git/info/exclude."
   (when-let* ((file (+tasks--exclude-file)))
-    (let ((missing (+tasks--exclude-lines (if (file-exists-p file) (+tasks--read-file file) ""))))
+    (let ((missing (+tasks--exclude-lines (if (file-exists-p file) (+read-file file) ""))))
       (when missing
         (make-directory (file-name-directory file) t)
         (write-region (concat (mapconcat #'identity missing "\n") "\n") nil file t)))))
-
-(defun +tasks--read-file (file)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (buffer-string)))
 
 (defconst +tasks--capture-template
   '("pi" "Project idea" entry
@@ -571,14 +546,14 @@ With WITHIN-TREE, only leaves in the subtree at point."
 
 (defun +tasks--branch-worktree-in (root branch)
   (let ((default-directory root))
-    (cdr (assoc branch (+tasks--parse-worktrees (+tasks--git-lines "worktree" "list" "--porcelain"))))))
+    (cdr (assoc branch (+tasks--parse-worktrees (+git-lines "worktree" "list" "--porcelain"))))))
 
 (defun +tasks--task-worktree (root branch)
   "Where BRANCH's work happens: the worktree it is checked out in, else the one start will add."
   (or (+tasks--branch-worktree-in root branch) (+tasks--worktree-path root branch)))
 
 (defun +tasks--worktree-add-args (tree branch)
-  (if (+tasks--git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/heads/" branch))
+  (if (+git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/heads/" branch))
       (list tree branch)
     (list "-b" branch tree)))
 
@@ -588,7 +563,7 @@ With WITHIN-TREE, only leaves in the subtree at point."
     (or (+tasks--branch-worktree-in root branch)
         (let ((tree (+tasks--worktree-path root branch)))
           (+tasks--exclude-from-git)
-          (unless (apply #'+tasks--git-ok-p "worktree" "add" "--quiet" (+tasks--worktree-add-args tree branch))
+          (unless (apply #'+git-ok-p "worktree" "add" "--quiet" (+tasks--worktree-add-args tree branch))
             (user-error "git could not add a worktree for %s at %s" branch tree))
           (when (fboundp 'magit-refresh-all)
             (magit-refresh-all))
@@ -701,7 +676,7 @@ Nothing changes until the repo review lets pi start."
 (defun +tasks/board ()
   "Open the Board agenda view, narrowed to this project when `+tasks-board-scope' says so."
   (interactive)
-  (let ((filter (+tasks--board-filter +tasks-board-scope (+tasks--project-root))))
+  (let ((filter (+tasks--board-filter +tasks-board-scope (+project-root))))
     (org-agenda nil "b")
     (org-agenda-filter-show-all-cat)
     (when filter
@@ -874,7 +849,7 @@ The task at point in tasks.org or on the Board; elsewhere, the one on the curren
     (+tasks--task-at (nth 2 task))))
 
 (defun +tasks--task-on-current-branch ()
-  (when-let* ((branch (car (+tasks--git-lines "branch" "--show-current"))))
+  (when-let* ((branch (car (+git-lines "branch" "--show-current"))))
     (with-current-buffer (+tasks--tasks-buffer)
       (when-let* ((task (+tasks--branch-task branch)))
         (+tasks--task-at (nth 2 task))))))
@@ -927,7 +902,7 @@ run act on with your rights, in the second.")
     (concat "Touches agent guards: " (string-join guarded ", "))))
 
 (defun +tasks--changed-files (main branch)
-  (+tasks--git-lines "diff" "--name-only" (+tasks--range main branch)))
+  (+git-lines "diff" "--name-only" (+tasks--range main branch)))
 
 (defun +tasks--confirm-guarded (branch files)
   (when-let* ((guarded (seq-filter #'+tasks--guarded-p files)))
@@ -1011,7 +986,7 @@ run act on with your rights, in the second.")
          (default-directory (+tasks--task-root task))
          (branch (plist-get task :branch))
          (main (+tasks--default-branch))
-         (diff (string-join (+tasks--git-lines "diff" (+tasks--range main branch)) "\n"))
+         (diff (string-join (+git-lines "diff" (+tasks--range main branch)) "\n"))
          (buffer (+tasks--review-buffer branch (+tasks--guard-note (+tasks--changed-files main branch))))
          (plan (+tasks--plan-text (+tasks--task-worktree-of task)))
          (gptel-model (or (bound-and-true-p +ai-fast-model) gptel-model)))
@@ -1026,16 +1001,9 @@ run act on with your rights, in the second.")
              (string-match-p "^@?test\\(?:[ \t][^:\n]*\\)?:\\(?:[^=]\\|$\\)" justfile-text))
     "just test"))
 
-(defun +tasks--justfile (root)
-  "ROOT's justfile, named in any case, as just finds it."
-  (let ((case-fold-search t))
-    (and (file-directory-p root)
-         (seq-find (lambda (file) (string-match-p "\\`\\.?justfile\\'" (file-name-nondirectory file)))
-                   (directory-files root t directory-files-no-dot-files-regexp)))))
-
 (defun +tasks--justfile-text (root)
-  (when-let* ((file (+tasks--justfile root)))
-    (+tasks--read-file file)))
+  (when-let* ((file (car (+justfiles root))))
+    (+read-file file)))
 
 (defun +tasks--choose-test-command (recipe-p just-p projectile-command)
   (if (and recipe-p just-p) "just test" projectile-command))
@@ -1074,7 +1042,7 @@ run act on with your rights, in the second.")
   "TASK's worktree, by default the task at point in tasks.org, else the current project."
   (or (when-let* ((task (or task (+tasks--linked-task-at-point))))
         (+tasks--task-worktree-of task))
-      (+tasks--project-root)))
+      (+project-root)))
 
 (defun +tasks--compile-tests (task root command)
   (with-current-buffer (compile (+tasks--shell-line (+tasks--test-argv root command)))
@@ -1095,10 +1063,10 @@ A task's run leaves it GREEN or RED when it finishes."
   (format "Merge %s: %s" branch heading))
 
 (defun +tasks--dirty-p ()
-  (+tasks--git-lines "status" "--porcelain" "--untracked-files=no"))
+  (+git-lines "status" "--porcelain" "--untracked-files=no"))
 
 (defun +tasks--switch (branch)
-  (unless (+tasks--git-ok-p "switch" branch)
+  (unless (+git-ok-p "switch" branch)
     (user-error "git could not switch to %s" branch)))
 
 (defun +tasks--run-tests (root command)
@@ -1120,34 +1088,34 @@ A task's run leaves it GREEN or RED when it finishes."
 
 (defun +tasks--fetch (main)
   "Refresh origin/MAIN when there is an origin; what it held last time may be stale."
-  (when (+tasks--git-ok-p "remote" "get-url" "origin")
-    (+tasks--git-ok-p "fetch" "--quiet" "origin" main)))
+  (when (+git-ok-p "remote" "get-url" "origin")
+    (+git-ok-p "fetch" "--quiet" "origin" main)))
 
 (defun +tasks--catch-up (branch main)
   (+tasks--fetch main)
-  (when (and (not (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main))
-             (+tasks--git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main)))
-    (unless (+tasks--git-ok-p "merge" "--ff-only" (concat "origin/" main))
+  (when (and (not (+git-ok-p "merge-base" "--is-ancestor" branch main))
+             (+git-ok-p "merge-base" "--is-ancestor" branch (concat "origin/" main)))
+    (unless (+git-ok-p "merge" "--ff-only" (concat "origin/" main))
       (user-error "%s is merged on origin, but %s cannot fast-forward to it" branch main))))
 
 (defun +tasks--merge (branch main heading)
   (+tasks--switch main)
   (+tasks--catch-up branch main)
-  (unless (+tasks--git-ok-p "merge-base" "--is-ancestor" branch main)
-    (unless (+tasks--git-ok-p "merge" "--no-ff" "-m" (+tasks--merge-message branch heading) branch)
+  (unless (+git-ok-p "merge-base" "--is-ancestor" branch main)
+    (unless (+git-ok-p "merge" "--no-ff" "-m" (+tasks--merge-message branch heading) branch)
       (user-error "Merging %s stopped; finish it in magit, then run done again" branch))))
 
 (defun +tasks--delete-local-branch (branch)
   "Delete BRANCH once HEAD contains it; plain -d also wants its upstream to."
-  (unless (and (+tasks--git-ok-p "merge-base" "--is-ancestor" branch "HEAD")
-               (+tasks--git-ok-p "branch" "-D" branch))
+  (unless (and (+git-ok-p "merge-base" "--is-ancestor" branch "HEAD")
+               (+git-ok-p "branch" "-D" branch))
     (user-error "%s is not merged into HEAD; kept it" branch)))
 
 (defun +tasks--delete-branch (branch)
   (+tasks--delete-local-branch branch)
-  (when (and (+tasks--git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/remotes/origin/" branch))
+  (when (and (+git-ok-p "show-ref" "--verify" "--quiet" (concat "refs/remotes/origin/" branch))
              (y-or-n-p (format "Also delete origin/%s? " branch)))
-    (+tasks--git-ok-p "push" "origin" "--delete" branch)))
+    (+git-ok-p "push" "origin" "--delete" branch)))
 
 (defun +tasks--same-dir-p (a b)
   (equal (file-name-as-directory (file-truename a)) (file-name-as-directory (file-truename b))))
@@ -1160,7 +1128,7 @@ A task's run leaves it GREEN or RED when it finishes."
 
 (defun +tasks--worktree-dirty-p (tree)
   (let ((default-directory tree))
-    (+tasks--git-lines "status" "--porcelain")))
+    (+git-lines "status" "--porcelain")))
 
 (defun +tasks--test-branch (root branch tree)
   "Test BRANCH in its worktree TREE, or checked out in ROOT when it has none."
@@ -1170,7 +1138,7 @@ A task's run leaves it GREEN or RED when it finishes."
     (+tasks--run-tests-or-confirm root)))
 
 (defun +tasks--remove-worktree (tree)
-  (unless (+tasks--git-ok-p "worktree" "remove" tree)
+  (unless (+git-ok-p "worktree" "remove" tree)
     (user-error "Merged, but git could not remove %s; run git worktree remove there" tree)))
 
 (defun +tasks--mark-done (branch buffer)
@@ -1248,7 +1216,7 @@ Refuses while the task's PLAN.md lists open items, unless DESPITE-OPEN-ITEMS (\\
     (+ai--stop-pilish-session tree branch)))
 
 (defun +tasks--drop-worktree (tree)
-  (unless (+tasks--git-ok-p "worktree" "remove" "--force" tree)
+  (unless (+git-ok-p "worktree" "remove" "--force" tree)
     (user-error "git could not remove %s" tree)))
 
 (defun +tasks--backup-ref (branch)
@@ -1256,8 +1224,8 @@ Refuses while the task's PLAN.md lists open items, unless DESPITE-OPEN-ITEMS (\\
 
 (defun +tasks--drop-branch (branch)
   "Delete BRANCH, keeping its tip under refs/aborted/ so the dropped work can still be read."
-  (+tasks--git-ok-p "update-ref" (+tasks--backup-ref branch) branch)
-  (unless (+tasks--git-ok-p "branch" "-D" branch)
+  (+git-ok-p "update-ref" (+tasks--backup-ref branch) branch)
+  (unless (+git-ok-p "branch" "-D" branch)
     (user-error "git could not delete %s" branch)))
 
 (defun +tasks--abort-question (task branch main)

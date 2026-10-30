@@ -12,6 +12,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 
 | module | owns |
 |---|---|
+| `lib` | helpers more than one module needs (`+git-lines`, `+read-file`, `+main-checkout`, `+justfiles`, `+project-root`), named without a scope |
 | `system` | macOS shell/modifiers, `secrets.el`, global auto-revert |
 | `appearance` | fonts, theme, cursor, scrolling, mini-ontop, beacon |
 | `editing` | corfu/abbrev, `jkl;` evil layout, key chords, avy actions, projectile, small editing packages |
@@ -31,7 +32,7 @@ Adding a feature = new directory + one line in `init.el`; removing one is the
 reverse, and `doom sync` drops its packages with it.
 
 Naming follows Doom: `+scope/command` (interactive), `+scope--helper`
-(private), `+scope-var`.
+(private), `+scope-var`; `lib`'s shared helpers alone drop the scope.
 
 ## LÖVE
 

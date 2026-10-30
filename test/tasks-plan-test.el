@@ -328,7 +328,7 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
                    (push prompt asked)
                    (cdr (seq-find (lambda (a) (string-search (car a) prompt)) ,answers))))
                 ((symbol-function 'find-file) #'ignore)
-                ((symbol-function '+tasks--project-root) (lambda () repo)))
+                ((symbol-function '+project-root) (lambda () repo)))
         (+tasks/init)
         ,@body))))
 
@@ -339,7 +339,7 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
     (ert-info ("a yes should copy the grilling skill into the new project")
       (should (file-exists-p (expand-file-name ".agents/skills/grilling/SKILL.md" repo))))
     (ert-info ("a yes should write an AGENTS.md holding the gate and the standing rule only")
-      (let ((text (+tasks--read-file (expand-file-name "AGENTS.md" repo))))
+      (let ((text (+read-file (expand-file-name "AGENTS.md" repo))))
         (should (string-search "without an `Approved:` line" text))
         (should (string-search "grilling interview" text))
         (should (string-search "no sub-agents" text))
@@ -361,11 +361,11 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
      (with-temp-file (expand-file-name "AGENTS.md" repo) (insert "theirs"))
      (cl-letf (((symbol-function 'y-or-n-p) (lambda (prompt) (push prompt asked) t))
                ((symbol-function 'find-file) #'ignore)
-               ((symbol-function '+tasks--project-root) (lambda () repo)))
+               ((symbol-function '+project-root) (lambda () repo)))
        (+tasks/init))
      (ert-info ("init should not ask about, or overwrite, a skill or AGENTS.md the project already has")
        (should-not asked)
-       (should (equal "theirs" (+tasks--read-file (expand-file-name "AGENTS.md" repo))))))))
+       (should (equal "theirs" (+read-file (expand-file-name "AGENTS.md" repo))))))))
 
 ;;; a model per stage
 
@@ -634,7 +634,7 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
      (cl-letf (((symbol-function 'y-or-n-p) (lambda (_) t)))
        (+tasks--ensure-skill repo tree)
        (ert-info ("a yes should copy the main checkout's skill into the worktree, so /skill:grilling resolves there")
-         (should (equal "skill" (+tasks--read-file (expand-file-name ".agents/skills/grilling/SKILL.md" tree))))))
+         (should (equal "skill" (+read-file (expand-file-name ".agents/skills/grilling/SKILL.md" tree))))))
      (ert-info ("the copied skill should be untracked work the branch carries, visible to the dirty check")
        (should (+tasks--worktree-dirty-p tree))))))
 
@@ -689,7 +689,7 @@ BODY sees `tree', `tasks' (the task buffer), `sent' (lines sent to pi), `prefill
              (+tasks--ensure-skill repo tree))
            (ert-info ("a project that never had the skill should be offered this config's copy, into the worktree")
              (should asked)
-             (should (equal "dooms" (+tasks--read-file (expand-file-name ".agents/skills/grilling/SKILL.md" tree))))))
+             (should (equal "dooms" (+read-file (expand-file-name ".agents/skills/grilling/SKILL.md" tree))))))
        (delete-directory doom t)))))
 
 (ert-deftest +tasks--start-at/offers-the-skill-to-the-new-worktree ()

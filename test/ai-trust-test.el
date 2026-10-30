@@ -65,13 +65,13 @@
      (should (equal (sort (copy-sequence +ai-trust-test--context-files) #'string<)
                     (+ai-trust--scan-files root))))))
 
-(ert-deftest +ai-trust--justfiles/lists-each-once-under-its-own-name ()
+(ert-deftest +justfiles/lists-each-once-under-its-own-name ()
   (dolist (name '("justfile" "Justfile" "JUSTFILE" ".justfile"))
     (+ai-trust-test--in-temp-dir
      (+ai-trust-test--write root name)
      (+ai-trust-test--write root "README.md")
      (ert-info ((format "justfiles should list %s once, as it is named on disk, since just reads any case" name))
-       (should (equal (list (expand-file-name name root)) (+ai-trust--justfiles root)))))))
+       (should (equal (list (expand-file-name name root)) (+justfiles root)))))))
 
 (ert-deftest +ai-trust--changed-files/sees-a-justfile-in-any-case ()
   (+ai-trust-test--in-temp-dir
@@ -177,7 +177,7 @@
        (should (+ai-trust--write-decision store "/repo" t)))
      (ert-info ("write-decision should keep other keys and add the new one")
        (should (equal '(("/keep" . :false) ("/repo" . t))
-                      (+ai-trust--parse-store (+ai-trust--read-file store)))))
+                      (+ai-trust--parse-store (+read-file store)))))
      (ert-info ("write-decision should remove its lock directory")
        (should-not (file-exists-p (concat store ".lock")))))))
 
@@ -193,7 +193,7 @@
      (ert-info ("write-decision should refuse to rewrite a store it does not understand")
        (should-not (+ai-trust--write-decision store "/repo" t)))
      (ert-info ("write-decision should leave an unknown store untouched")
-       (should (equal "[1]" (+ai-trust--read-file store)))))))
+       (should (equal "[1]" (+read-file store)))))))
 
 ;;; reviews and external changes
 
@@ -351,7 +351,7 @@
   (let (called)
     (cl-letf (((symbol-function 'pilish-toggle) (lambda () (setq called 'toggle)))
               ((symbol-function '+ai--launch-pi) (lambda (&rest _) (setq called 'launch)))
-              ((symbol-function '+ai--project-root) (lambda () "/r/")))
+              ((symbol-function '+project-root) (lambda () "/r/")))
       (with-temp-buffer
         (setq major-mode 'pilish-input-mode)
         (+ai/pi))
@@ -450,20 +450,20 @@
     (+ai-trust-test--git repo "worktree" "add" "-q" "-b" "feat/x" tree)
     (cons repo tree)))
 
-(ert-deftest +ai--main-checkout/maps-a-worktree-to-its-repo ()
+(ert-deftest +main-checkout/maps-a-worktree-to-its-repo ()
   (pcase-let ((`(,repo . ,tree) (+ai-trust-test--repo-with-worktree)))
     (unwind-protect
         (progn
           (ert-info ("main-checkout should map a task worktree to the repo it belongs to")
-            (should (equal repo (+ai--main-checkout tree))))
+            (should (equal repo (+main-checkout tree))))
           (ert-info ("main-checkout should keep the main checkout as it is")
-            (should (equal repo (+ai--main-checkout repo)))))
+            (should (equal repo (+main-checkout repo)))))
       (delete-directory repo t))))
 
-(ert-deftest +ai--main-checkout/keeps-dirs-outside-git ()
+(ert-deftest +main-checkout/keeps-dirs-outside-git ()
   (+ai-trust-test--in-temp-dir
    (ert-info ("main-checkout should return a dir outside any repo unchanged")
-     (should (equal root (+ai--main-checkout root))))))
+     (should (equal root (+main-checkout root))))))
 
 (ert-deftest +ai--launch-pi/reviews-the-repo-and-starts-in-the-worktree ()
   (let (gated started)
@@ -486,7 +486,7 @@
               (gated nil))
     (unwind-protect
         (cl-letf (((symbol-function 'executable-find) (lambda (&rest _) "/bin/hax"))
-                  ((symbol-function '+ai--project-root) (lambda () tree))
+                  ((symbol-function '+project-root) (lambda () tree))
                   ((symbol-function '+ai--live-buffer) #'ignore)
                   ((symbol-function '+ai-trust--gate) (lambda (_agent root _on-allow) (setq gated root))))
           (+ai/hax)

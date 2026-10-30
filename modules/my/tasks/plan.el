@@ -162,7 +162,7 @@ A worktree cut before the skill reached ROOT, or a project that never had it, bo
 (defun +tasks--plan-text (worktree)
   (when-let* ((file (+tasks--plan-file worktree))
               ((file-exists-p file)))
-    (+tasks--read-file file)))
+    (+read-file file)))
 
 (defun +tasks--plan-approved-p (text)
   (and text (string-match-p +tasks--plan-approved-regexp text) t))

@@ -312,7 +312,7 @@
   (let (started)
     (+ai-jail-test--available
      (cl-letf (((symbol-function 'executable-find) (lambda (&rest _) "/bin/hax"))
-               ((symbol-function '+ai--project-root) (lambda () temporary-file-directory))
+               ((symbol-function '+project-root) (lambda () temporary-file-directory))
                ((symbol-function '+ai--live-buffer) #'ignore)
                ((symbol-function '+ai-trust--gate) (lambda (_agent _root on-allow) (funcall on-allow 'unchanged)))
                ((symbol-function '+ai--eat-in) (lambda (_root _name command) (setq started command))))

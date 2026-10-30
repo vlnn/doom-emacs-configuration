@@ -782,7 +782,7 @@
 (ert-deftest +tasks/test/compiles-the-jailed-command ()
   (let (compiled)
     (+tasks-test--jail-on
-     (cl-letf (((symbol-function '+tasks--project-root) (lambda () temporary-file-directory))
+     (cl-letf (((symbol-function '+project-root) (lambda () temporary-file-directory))
                ((symbol-function '+tasks--project-test-command) (lambda (_) "bin/test"))
                ((symbol-function 'compile) (lambda (command &rest _) (setq compiled command) (current-buffer))))
        (+tasks/test)))
@@ -794,7 +794,7 @@
 
 (defun +tasks-test--current-branch (dir)
   (let ((default-directory dir))
-    (car (+tasks--git-lines "branch" "--show-current"))))
+    (car (+git-lines "branch" "--show-current"))))
 
 (ert-deftest +tasks--worktree-path/one-dir-per-branch-under-the-repo ()
   (ert-info ("worktree-path should keep task worktrees under .worktrees, slashes flattened")
@@ -814,13 +814,13 @@
                       "worktree /r/.worktrees/feat-x" "HEAD def" "branch refs/heads/feat/x"
                       "worktree /tmp/d" "HEAD 123" "detached"))))))
 
-(ert-deftest +tasks--main-root/finds-the-repo-from-a-worktree ()
+(ert-deftest +main-checkout/finds-the-repo-from-a-worktree ()
   (+tasks-test--in-git-repo
    (+tasks-test--git "worktree" "add" "-q" "-b" "feat/x" ".worktrees/feat-x")
    (ert-info ("main-root should find the repo from inside a task worktree, where tasks.org is not")
-     (should (equal default-directory (+tasks--main-root (expand-file-name ".worktrees/feat-x/")))))
+     (should (equal default-directory (+main-checkout (expand-file-name ".worktrees/feat-x/")))))
    (ert-info ("main-root should keep the main checkout")
-     (should (equal default-directory (+tasks--main-root default-directory))))))
+     (should (equal default-directory (+main-checkout default-directory))))))
 
 (ert-deftest +tasks--add-worktree/creates-a-branch-worktree-leaving-main-alone ()
   (+tasks-test--in-git-repo
@@ -833,7 +833,7 @@
      (ert-info ("the main checkout, the one Emacs loads, should stay on main")
        (should (equal "main" (+tasks-test--current-branch default-directory))))
      (ert-info ("worktrees should be kept out of git status")
-       (should-not (+tasks--git-lines "status" "--porcelain"))))))
+       (should-not (+git-lines "status" "--porcelain"))))))
 
 (ert-deftest +tasks--add-worktree/reuses-what-a-branch-has ()
   (+tasks-test--in-git-repo
@@ -872,7 +872,7 @@
 
 (ert-deftest +tasks--test-root/falls-back-to-the-project ()
   (cl-letf (((symbol-function '+tasks--linked-task-at-point) #'ignore)
-            ((symbol-function '+tasks--project-root) (lambda () "/p/")))
+            ((symbol-function '+project-root) (lambda () "/p/")))
     (ert-info ("SPC 5 t elsewhere should test the current project")
       (should (equal "/p/" (+tasks--test-root))))))
 
@@ -911,7 +911,7 @@
            (ert-info ("done should remove the task worktree")
              (should-not (file-exists-p tree)))
            (ert-info ("done should delete the merged branch")
-             (should-not (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x")))
+             (should-not (+git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x")))
            (ert-info ("done should mark the task DONE")
              (should (equal "DONE" (with-current-buffer buffer
                                      (+tasks-test--goto-heading "Ship it")
@@ -975,7 +975,7 @@
                (should-error (+tasks--start-at (point-marker) repo "feat/fix-it" "it works") :type 'user-error)))
            (ert-info ("a refused start should not have added the worktree or the branch")
              (should-not (file-exists-p (+tasks--worktree-path repo "feat/fix-it")))
-             (should-not (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/fix-it")))
+             (should-not (+git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/fix-it")))
            (ert-info ("a refused start should leave the task where it was")
              (should (with-current-buffer buffer (string-match-p "IDEA Fix it" (buffer-string))))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
@@ -1255,7 +1255,7 @@
     (let ((+tasks-board-scope scope)
           (org-agenda-category-filter '("+stale"))
           (steps nil))
-      (cl-letf (((symbol-function '+tasks--project-root) (lambda () "/p/doom/"))
+      (cl-letf (((symbol-function '+project-root) (lambda () "/p/doom/"))
                 ((symbol-function 'org-agenda) #'ignore)
                 ((symbol-function 'org-agenda-filter-show-all-cat)
                  (lambda () (setq org-agenda-category-filter nil) (push 'shown-all steps)))
@@ -1399,7 +1399,7 @@
            (ert-info ("abort should remove the worktree, uncommitted work included")
              (should-not (file-exists-p tree)))
            (ert-info ("abort should delete the branch, unmerged commits included")
-             (should-not (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x")))
+             (should-not (+git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x")))
            (ert-info ("abort should leave main as it was")
              (should-not (file-exists-p (expand-file-name "half.txt" repo)))
              (should (equal "main" (+tasks-test--current-branch repo))))
@@ -1424,7 +1424,7 @@
              (should-error (+tasks/abort) :type 'user-error))
            (ert-info ("a declined abort should keep the worktree and the branch")
              (should (file-exists-p tree))
-             (should (+tasks--git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x"))))
+             (should (+git-ok-p "show-ref" "--verify" "--quiet" "refs/heads/feat/x"))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
 
@@ -1460,20 +1460,20 @@
          (progn
            (let ((default-directory tree))
              (+tasks-test--commit-file "half.txt" "unfinished")
-             (setq tip (car (+tasks--git-lines "rev-parse" "HEAD"))))
+             (setq tip (car (+git-lines "rev-parse" "HEAD"))))
            (+tasks-test--write-active-task buffer "Risky idea" "feat/x")
            (cl-letf (((symbol-function '+tasks--work-task) (lambda () (+tasks-test--task-in buffer "Risky idea")))
                      ((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
                      ((symbol-function 'message) #'ignore))
              (+tasks/abort))
            (ert-info ("abort should park the branch tip under refs/aborted so the agent's work can still be read")
-             (should (equal tip (car (+tasks--git-lines "rev-parse" "refs/aborted/feat/x"))))))
+             (should (equal tip (car (+git-lines "rev-parse" "refs/aborted/feat/x"))))))
        (with-current-buffer buffer (set-buffer-modified-p nil))
        (kill-buffer buffer)))))
 
 (defun +tasks-test--head (dir)
   (let ((default-directory dir))
-    (car (+tasks--git-lines "rev-parse" "HEAD"))))
+    (car (+git-lines "rev-parse" "HEAD"))))
 
 (ert-deftest +tasks--catch-up/fetches-before-trusting-origin-main ()
   (+tasks-test--in-git-repo

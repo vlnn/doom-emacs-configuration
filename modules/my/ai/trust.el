@@ -18,9 +18,6 @@
   '("settings.json" "mcp.json" "SYSTEM.md" "APPEND_SYSTEM.md"
     "extensions" "skills" "prompts" "themes"))
 
-(defconst +ai-trust-justfile-regexp "\\`\\.?justfile\\'"
-  "Names just reads as the justfile, matched in any case, as just does.")
-
 (defconst +ai-trust-skipped-dirs '("node_modules" "venv" "target" "dist" "build"))
 
 (defconst +ai-trust-context-files '("AGENTS.md" "AGENTS.override.md" "CLAUDE.md")
@@ -72,11 +69,6 @@
 
 ;;; files
 
-(defun +ai-trust--read-file (file)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (buffer-string)))
-
 (defun +ai-trust--descend-p (dir)
   (let ((name (file-name-nondirectory dir)))
     (not (or (string-prefix-p "." name) (member name +ai-trust-skipped-dirs)))))
@@ -110,26 +102,19 @@
     (let ((case-fold-search t))
       (directory-files-recursively root (+ai-trust--context-file-regexp) nil #'+ai-trust--descend-p))))
 
-(defun +ai-trust--justfiles (root)
-  "ROOT's justfiles, each once under its name on disk, whatever its case."
-  (let ((case-fold-search t))
-    (and (file-directory-p root)
-         (seq-filter (lambda (file) (string-match-p +ai-trust-justfile-regexp (file-name-nondirectory file)))
-                     (directory-files root t directory-files-no-dot-files-regexp)))))
-
 (defun +ai-trust--scan-files (root)
   "Files under ROOT that reach pi or hax, relative and sorted."
   (sort (mapcar (lambda (file) (file-relative-name file root))
                 (append (+ai-trust--pi-files root)
                         (+ai-trust--files-under root ".agents/skills")
                         (+ai-trust--context-files root)
-                        (+ai-trust--justfiles root)))
+                        (+justfiles root)))
         #'string<))
 
 (defun +ai-trust--content-hash (root files)
   (secure-hash 'sha256
                (mapconcat (lambda (file)
-                            (concat file "\0" (+ai-trust--read-file (expand-file-name file root))))
+                            (concat file "\0" (+read-file (expand-file-name file root))))
                           files "\0")))
 
 ;;; flags
@@ -150,7 +135,7 @@
               (mapcar (lambda (file)
                         (let ((path (expand-file-name file root)))
                           (cons file (and (file-readable-p path)
-                                          (+ai-trust--flag-lines (+ai-trust--read-file path))))))
+                                          (+ai-trust--flag-lines (+read-file path))))))
                       files)))
 
 ;;; trust.json, in pi's format
@@ -209,7 +194,7 @@
     (file-already-exists nil)))
 
 (defun +ai-trust--existing-store (file)
-  (if (file-exists-p file) (+ai-trust--parse-store (+ai-trust--read-file file)) nil))
+  (if (file-exists-p file) (+ai-trust--parse-store (+read-file file)) nil))
 
 (defun +ai-trust--replace-file (file text)
   (let ((temp (make-temp-file (expand-file-name ".trust.json.tmp." (file-name-directory file)))))
@@ -238,7 +223,7 @@
 
 (defun +ai-trust--load-reviews ()
   (when (file-exists-p +ai-trust-reviews-file)
-    (ignore-errors (read (+ai-trust--read-file +ai-trust-reviews-file)))))
+    (ignore-errors (read (+read-file +ai-trust-reviews-file)))))
 
 (defun +ai-trust--review-key (agent dir)
   (cons agent dir))
@@ -268,15 +253,10 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 ;;; git
 
 (defun +ai-trust--git (root &rest args)
-  "Stdout lines of git ARGS in ROOT, whatever its exit status; git's stderr never mixes in."
-  (with-temp-buffer
-    (apply #'call-process "git" nil (list t nil) nil "-C" root args)
-    (let ((output (string-remove-suffix "\n" (buffer-string))))
-      (unless (string-empty-p output)
-        (split-string output "\n")))))
+  (apply #'+git-lines "-C" root args))
 
 (defun +ai-trust--git-ok-p (root &rest args)
-  (zerop (apply #'call-process "git" nil nil nil "-C" root args)))
+  (apply #'+git-ok-p "-C" root args))
 
 (defun +ai-trust--head (root)
   (when (+ai-trust--git-ok-p root "rev-parse" "--verify" "--quiet" "HEAD")
@@ -335,21 +315,8 @@ DECISION is pi's trust.json answer, REVIEW the stored marker, NOW the repo state
 
 ;;; launch
 
-(defun +ai--project-root ()
-  (or (projectile-project-root) default-directory))
-
 (defun +ai-trust--canonical (root)
   (directory-file-name (file-truename root)))
-
-(defun +ai--git-common-dir (root)
-  (car (+ai-trust--git root "rev-parse" "--path-format=absolute" "--git-common-dir")))
-
-(defun +ai--main-checkout (root)
-  "The repo ROOT belongs to: its main checkout for a worktree, else ROOT itself."
-  (let ((common (and (file-directory-p root) (+ai--git-common-dir root))))
-    (if (and common (equal (file-name-nondirectory common) ".git"))
-        (file-name-as-directory (file-name-directory common))
-      root)))
 
 (defun +ai--hax-buffer-name (root)
   (format "*hax:%s*" (file-name-nondirectory (directory-file-name root))))
@@ -658,7 +625,7 @@ skips the review: its inputs are already loaded."
   (+ai--check-pi-model model)
   (if (+ai--live-pilish-session-p root session)
       (apply #'+ai--start-pi root 'live args)
-    (+ai-trust--gate 'pi (or review-root (+ai--main-checkout root))
+    (+ai-trust--gate 'pi (or review-root (+main-checkout root))
                      (lambda (verdict) (apply #'+ai--start-pi root verdict args)))))
 
 (defun +ai/pi ()
@@ -667,18 +634,18 @@ Inside a pi buffer, hide the session instead."
   (interactive)
   (if (derived-mode-p 'pilish-chat-mode 'pilish-input-mode)
       (pilish-toggle)
-    (+ai--launch-pi (+ai--project-root))))
+    (+ai--launch-pi (+project-root))))
 
 (defun +ai/hax ()
   "Start or focus hax in eat at the project root, reviewing the repo first when due."
   (interactive)
   (unless (executable-find "hax")
     (user-error "hax is not on PATH"))
-  (let* ((root (+ai--project-root))
+  (let* ((root (+project-root))
          (name (+ai--hax-buffer-name root)))
     (if-let* ((live (+ai--live-buffer name)))
         (pop-to-buffer live)
-      (+ai-trust--gate 'hax (+ai--main-checkout root)
+      (+ai-trust--gate 'hax (+main-checkout root)
                        (lambda (_verdict) (+ai--eat-in root name (+ai--jailed root '("hax"))))))))
 
 (set-popup-rule! "^\\*agent-review:" :side 'bottom :size 0.4 :select t :quit t)

@@ -199,6 +199,7 @@
 
        ;; private modules, modules/my/*; order is load order
        :my
+       lib               ; helpers shared by the modules below
        system            ; macOS shell/modifiers, secrets.el, auto-revert
        appearance        ; fonts, theme, cursor, scrolling
        editing           ; completion, jkl; evil layout, key chords, avy actions
