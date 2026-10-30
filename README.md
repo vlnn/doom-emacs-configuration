@@ -19,7 +19,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
 | `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
-| `notes` | denote, ob-duckdb |
+| `notes` | denote |
 | `tasks` | per-repo `tasks.org`: agenda views, `branches` block, a worktree per task, `p i` idea capture, `+tasks/init` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
 | `lua` | lua-mode REPL run by `evaluator.lua` (not `lua -i`) with inline results, file-based interrupts, cider-shaped localleader, busted runners; LÖVE games run the REPL in-game |
@@ -190,7 +190,7 @@ that is the config Emacs loads: a restart mid-task never loads the agent's code.
 | `r` | magit diff `main...feat/x` for the task, task → REVIEW; its `:ACCEPT:` is echoed, with a guard note when the diff touches agent guards (below) and `plan: 4/5 tests ticked` when the worktree has a `PLAN.md` |
 | `R` | AI review of that diff against `:ACCEPT:` and the task's `PLAN.md` when there is one (gptel `review` directive, fast model) into `*tasks-review:<branch>*`, the guard note first; task → REVIEW |
 | `t` | run the tests of the tree at hand in the jail: the task's worktree on a task in `tasks.org`, else the current project. The command is that tree's: `just test` when its justfile has a `test` recipe and `just` is installed, else projectile's test command with that tree's dir-locals applied (so a committed `.dir-locals.el` setting `projectile-project-test-cmd` works from any buffer); says so when `just` is missing. A task's run leaves it GREEN or RED when the compilation finishes, echoing the plan's tick count; a GREEN while plan tests are unticked is flagged, since it only says the existing tests pass |
-| `d` | done: refuse if the main checkout is dirty, the worktree holds uncommitted or untracked work, or its `PLAN.md` lists anything under `## Open` (`C-u d` merges anyway), ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Failing tests leave the task RED; a merge that cannot finish (main cannot fast-forward to origin, conflicts) leaves it WAIT with the obstacle as `:REASON:`. Nothing is pushed; quit the task's pi session afterwards |
+| `d` | done: refuse if the main checkout is dirty, the worktree holds uncommitted or untracked work, or its `PLAN.md` lists anything under `## Open` (`C-u d` merges anyway), ask before merging a diff that touches agent guards, run the worktree's tests there in the jail (same command lookup as `t`; stop on failure), merge `--no-ff` into main as `Merge feat/x: <heading>`, remove the worktree, delete the branch (asks about `origin`), mark DONE. Failing tests leave the task RED; a merge that cannot finish (main cannot fast-forward to origin, conflicts) leaves it WAIT with the obstacle as `:REASON:`. Nothing is pushed, except the deletion of `origin/<branch>` when you say yes to it; quit the task's pi session afterwards |
 | `x` | abort: throw the agent's work away. Asks, naming how many commits go; ends the task's pi session and every process it started; removes the worktree, uncommitted files included; deletes the branch, keeping its tip at `refs/aborted/<branch>` for reading; returns the heading to the state it was started from (its own state log, else TODO), dropping `:BRANCH:` and `:REASON:`, keeping `:ACCEPT:` and `:MODEL:`. Refuses a branch main already contains: that is `d`'s job |
 | `l` | on a `branches` row: link that branch to a task, or to a new IDEA named after it |
 | `b` | refresh the `branches` block (also done on every save) |
@@ -206,18 +206,18 @@ keyword by hand works too (`SPC m t`), but then nothing else happens.
 | `IDEA` | captured, not committed to | `i`, `I`, `l` | `s` |
 | `TODO` | ready: a leaf you intend to start | you | `s` |
 | `PLAN` | started: pi is interviewing you, or `PLAN.md` waits for your approval | `s`, `n` on WAIT while the plan is not approved | approve the plan: `y` dates it and goes to RED, `n` prefills a refusal, `e` edits it |
-| `RED` | plan approved, pi is working; or the last test run failed | `n` → `y`, `t`, `d`, `n` on WAIT once the plan is approved; a failed run after pi's `## Done` is sent back, `:TRY:` counting up to `TRIES_TOTAL` | `t` |
-| `GREEN` | last test run passed | `t`, run by Emacs when pi settles with `## Done` in `PLAN.md` | `r` (run by Emacs: `R` and REVIEW follow a GREEN) |
-| `REVIEW` | tests pass, the AI verdict is in; the diff is yours to read | `r`, `R`, Emacs after GREEN | open the diff and a commit prefilled from the plan while the worktree is dirty; `d` once it is clean |
-| `WAIT` | parked; `:REASON:` says what: something outside the repo, pi asking a question, no progress, out of tries, a merge that could not finish | `w`, `d`, Emacs, a keyword change by hand (asks why) | back to RED (PLAN while the plan is not approved), reason dropped, pi resumed |
+| `RED` | plan approved, pi is working; or the last test run failed | `n` → `y`, `t`, `d`, `n` on WAIT once the plan is approved | `t` |
+| `GREEN` | last test run passed | `t` | `r` |
+| `REVIEW` | the diff is yours to read, with or without an AI verdict | `r`, `R` | `d` |
+| `WAIT` | parked; `:REASON:` says what: something outside the repo, or a merge that could not finish | `w`, `d`, a keyword change by hand (asks why) | back to RED (PLAN while the plan is not approved), reason dropped, pi resumed |
 | `DONE` / `DROPPED` | merged / abandoned | `d` / you | archive the subtree |
 
 Every transition is timestamped (`!`), so the "Last week" agenda view is a log
 of the flow. `x` is the way back: it undoes `s`.
-From `y` to REVIEW no key of yours is needed; `docs/autopilot.md` is that
-stretch: how Emacs learns pi settled, retries, stalls, the one-task rule,
-and what tells you. PLAN, RED, GREEN, REVIEW and DONE are set only by their
-commands; the other keywords you may still type.
+After `y` every step is still a key of yours: `t` when pi says it is done,
+`r` or `R` on GREEN, `d` on REVIEW. `docs/autopilot.md` is the design for
+running that stretch on events instead (settling, retries with `:TRY:`,
+stalls, keywords only their commands may set); none of it is built yet.
 
 The Board (`SPC 5 o`) is one block per stage in that order, ideas at the top,
 DONE and DROPPED gathered at the bottom as the pile to archive. Each row shows

@@ -29,7 +29,7 @@ or later, goes through the grilling interview
 so when a round changes the test list.
 
 There are no sub-agents here. Look facts up yourself with read, grep and
-bash.
+bash; where the grilling skill says to dispatch a sub-agent, do that instead.
 
 ## The loop, once the plan is approved
 

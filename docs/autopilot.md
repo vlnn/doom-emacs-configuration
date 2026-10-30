@@ -1,5 +1,8 @@
 # Autopilot: the stretch after approval
 
+Status: design only. Nothing below is in `modules/` yet; README describes
+what the commands do today.
+
 `docs/planning-flow.md` is the design of the plan gate: nothing is written
 until you approve `PLAN.md`. This is the design of what follows it: from
 `Approved:` to REVIEW, no key of yours is needed. Decided 2026-10-19 in a

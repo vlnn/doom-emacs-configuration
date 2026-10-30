@@ -4,13 +4,12 @@
 
 (unpin! clj-refactor)
 (unpin! flycheck)
-(unpin! parinfer-rust-mode)
 (unpin! transient)
 
 (disable-packages!
  anaconda-mode
  company-anaconda
- lsp-python-ms       ; prefer lsp-pyright
+ lsp-python-ms       ; prefer pylsp
  nose                ; prefer pytest
  pipenv)             ; prefer uv
 

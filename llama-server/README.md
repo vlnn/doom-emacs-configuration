@@ -1,8 +1,9 @@
-# llama-server for ai.el
+# llama-server for the `ai` module
 
 `config.ini` is the single source of truth for local models: one section per
-served name (`qwopus-coder`, `qwopus-reason`, ...). `ai.el` asks the running
-server for that list at startup, so Emacs never drifts from what is installed.
+served name (`qwopus-coder`, `qwopus-reason`, ...). `modules/my/ai/config.el`
+asks the running server for that list when gptel loads, so Emacs never drifts
+from what is installed.
 
 ```sh
 ./install.sh            # brew install llama.cpp, link config.ini, start launchd agent

@@ -11,7 +11,7 @@
       :desc "Undo abbrev"          "U" #'unexpand-abbrev
       :desc "Consult flycheck"     "F" #'consult-flycheck)
 
-;; smartparens is BAD if you have parinfer (e.g. it autocompletes (|)() instead of (|()))
+;; pairs are typed by hand; the sp-* helpers in avy-functions.el still work with the mode off
 (remove-hook 'doom-first-buffer-hook #'smartparens-global-mode)
 
 (use-package! demo-it
