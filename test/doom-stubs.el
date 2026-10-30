@@ -13,6 +13,8 @@
 (defmacro set-popup-rules! (&rest _args) nil)
 (defmacro set-repl-handler! (&rest _args) nil)
 (defmacro set-eval-handler! (&rest _args) nil)
+(defmacro dir! ()
+  `(file-name-directory (or load-file-name (bound-and-true-p byte-compile-current-file) buffer-file-name)))
 (defvar doom-user-dir default-directory)
 
 (provide 'doom-stubs)

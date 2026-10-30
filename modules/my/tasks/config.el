@@ -4,8 +4,7 @@
 
 (defvar gptel-model)
 
-(defconst +tasks--dir
-  (file-name-directory (or load-file-name (bound-and-true-p byte-compile-current-file) buffer-file-name)))
+(defconst +tasks--dir (dir!))
 
 (defvar +tasks-file-name "tasks.org")
 
@@ -243,7 +242,7 @@ Empty, it is `org-directory', as Doom's default would have it."
   "Update the branches block of the current tasks.org."
   (interactive)
   (save-excursion
-    (when-let ((bounds (+tasks--block-body-bounds)))
+    (when-let* ((bounds (+tasks--block-body-bounds)))
       (+tasks--replace-body bounds (concat (+tasks--current-table) "\n")))))
 
 ;;; capture and init

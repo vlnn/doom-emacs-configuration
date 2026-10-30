@@ -25,7 +25,7 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `lua` | lua-mode REPL run by `evaluator.lua` (not `lua -i`) with inline results, file-based interrupts, cider-shaped localleader, busted runners; LÖVE games run the REPL in-game |
 | `dirvish` | dired/dirvish |
 | `vc` | magit-todos, magit-delta, why-this, github-explorer |
-| `snippets` | yasnippet helpers (`+snippets-body`); snippet files stay in `snippets/` |
+| `snippets` | yasnippet helpers (`+snippets-body`, `SPC i w` wraps the region's lines in a snippet); snippet files stay in `snippets/` |
 
 Adding a feature = new directory + one line in `init.el`; removing one is the
 reverse, and `doom sync` drops its packages with it.

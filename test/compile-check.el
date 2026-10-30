@@ -11,7 +11,7 @@
   (defvar gptel-model nil)
   (defvar vertico-sort-function nil)
   ;; free-vars stays off: a config is mostly setq of package variables
-  (setq byte-compile-warnings '(not docstrings free-vars unresolved noruntime obsolete)
+  (setq byte-compile-warnings '(not docstrings free-vars unresolved noruntime)
         byte-compile-dest-file-function (lambda (_) (make-temp-file "compile-check" nil ".elc")))
   (let ((files (append (directory-files root t "^[^.].*\\.el\\'")
                        (directory-files-recursively (expand-file-name "modules" root) "\\.el\\'")))

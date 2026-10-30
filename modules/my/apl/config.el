@@ -12,7 +12,7 @@
             +apl-font-families))
 
 (defun +apl--use-apl-font ()
-  (when-let ((family (+apl--installed-font-family)))
+  (when-let* ((family (+apl--installed-font-family)))
     (buffer-face-set `(:family ,family :height ,+apl-font-height))))
 
 (defun +apl--enable-input-method ()

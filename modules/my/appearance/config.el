@@ -39,8 +39,8 @@
 
 (use-package! mini-ontop
   :config
-  (mini-ontop-mode 1)
-  (setq mini-ontop-lines 40))
+  (setq mini-ontop-lines 40)
+  (mini-ontop-mode 1))
 
 (use-package! beacon
   :config

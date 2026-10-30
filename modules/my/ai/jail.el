@@ -4,8 +4,7 @@
 (defvar +ai-jail-enabled t
   "Jail agents when the OS can; nil runs them with your full rights.")
 
-(defconst +ai-jail-dir
-  (file-name-directory (or load-file-name (bound-and-true-p byte-compile-current-file) buffer-file-name)))
+(defconst +ai-jail-dir (dir!))
 
 (defvar +ai-jail-profile (expand-file-name "agent.sb" +ai-jail-dir)
   "Seatbelt profile for agents, read from the live config so a project cannot swap it.")

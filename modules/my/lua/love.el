@@ -2,17 +2,19 @@
 
 (defvar +lua-interrupt-file)
 
-(defconst +lua-love-repl-file
-  (expand-file-name "love-repl.lua"
-                    (file-name-directory (or load-file-name buffer-file-name))))
+(defconst +lua-love-repl-file (expand-file-name "love-repl.lua" (dir!)))
 
 (defconst +lua-love-hook-line
   "if os.getenv(\"EMACS_LOVE_REPL\") then dofile(os.getenv(\"EMACS_LOVE_REPL\")) end"
   "Line for a LÖVE game's conf.lua that lets Emacs run the REPL inside the game.")
 
-(defvar +lua-love-command
-  (list (or (executable-find "love") "/Applications/love.app/Contents/MacOS/love"))
-  "Program and leading arguments that run a LÖVE game; the game root is appended.")
+(defvar +lua-love-command nil
+  "Program and leading arguments that run a LÖVE game; the game root is appended.
+Nil means `love' on PATH when the game starts, else the macOS app.")
+
+(defun +lua--love-command ()
+  (or +lua-love-command
+      (list (or (executable-find "love") "/Applications/love.app/Contents/MacOS/love"))))
 
 (defun +lua--file-mentions-p (file text)
   (and (file-readable-p file)
@@ -65,8 +67,9 @@
         (process-environment (append (+lua--love-environment +lua-interrupt-file)
                                      process-environment)))
     (get-buffer-process
-     (apply #'make-comint-in-buffer "lua" "*lua*" (car +lua-love-command) nil
-            (append (cdr +lua-love-command) (list root))))))
+     (let ((command (+lua--love-command)))
+       (apply #'make-comint-in-buffer "lua" "*lua*" (car command) nil
+              (append (cdr command) (list root)))))))
 
 (defun +lua--start-love-repl (root)
   (let ((proc (+lua--launch-love root)))

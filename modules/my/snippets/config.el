@@ -25,6 +25,7 @@
       (make-string indent ?\s)))
 
 (defun +snippets/wrap-region ()
+  "Insert a snippet around the region, widened to whole lines; `+snippets-body' re-indents it."
   (interactive)
   (when (region-active-p)
     (let ((beg (save-excursion (goto-char (region-beginning)) (line-beginning-position)))
@@ -32,3 +33,5 @@
       (set-mark beg)
       (goto-char end)))
   (yas-insert-snippet))
+
+(map! :leader :desc "Wrap region in snippet" "i w" #'+snippets/wrap-region)

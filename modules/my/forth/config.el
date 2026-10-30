@@ -8,7 +8,7 @@
       (modify-syntax-entry c "_" tab)))
 
   (add-hook! 'forth-mode-hook
-    (defun +forth/lookup-setup-h ()
+    (defun +forth--lookup-setup-h ()
       (setq-local +lookup-definition-functions '(+lookup-dumb-jump-backend-fn))
       (setq-local +lookup-references-functions '(+lookup-project-search-backend-fn)))))
 

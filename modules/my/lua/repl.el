@@ -6,9 +6,7 @@
 (defvar lua-process)
 (defvar lua-process-buffer)
 
-(defconst +lua-evaluator-file
-  (expand-file-name "evaluator.lua"
-                    (file-name-directory (or load-file-name buffer-file-name))))
+(defconst +lua-evaluator-file (expand-file-name "evaluator.lua" (dir!)))
 
 (defconst +lua--reply-regexp "\2\\([a-z]+\\)\37\\(\\(?:.\\|\n\\)*?\\)\3")
 
@@ -35,12 +33,12 @@
       (+lua--interrupt-file-in (process-command proc))))
 
 (defun +lua--request-interrupt (proc)
-  (if-let ((file (+lua--interrupt-file proc)))
+  (if-let* ((file (+lua--interrupt-file proc)))
       (write-region "" nil file nil 'silent)
     (interrupt-process proc)))
 
 (defun +lua--clear-interrupt (proc)
-  (when-let ((file (+lua--interrupt-file proc)))
+  (when-let* ((file (+lua--interrupt-file proc)))
     (ignore-errors (delete-file file))))
 
 ;;; Protocol
