@@ -59,17 +59,21 @@ machine-local values. Missing `secrets.el` is tolerated.
 
 ```sh
 bin/test           # ERT, plain `emacs --batch`, no Doom needed
-bin/compile-check  # byte-compile every config file with Doom macros stubbed
+bin/compile-check  # byte-compile every config file, after!/use-package! bodies included; warnings fail
 bin/jail-check     # macOS: run probes under agent.sb, check what the jail allows
 ```
 
 The first two run in GitHub Actions on Emacs 29 and 30
-(`.github/workflows/test.yml`); the compile check is advisory there.
-`bin/jail-check` needs a Mac, and `doom sync && doom doctor` stays a local
-step.
+(`.github/workflows/test.yml`), both required. A third job runs `doom sync`
+and `doom doctor` against a fresh Doom checkout; it is the only check that
+sees `map!`, package recipes and `init.el`, and is allowed to fail until it
+has proven itself. `bin/jail-check` needs a Mac.
 
 `test/doom-stubs.el` provides no-op `after!`/`map!`/`use-package!` so config
-files load outside Doom; tests cover the pure functions
+files load outside Doom; `test/run.el` loads every file under `modules/my/`
+except `packages.el` and the ones in `+test-unloadable`. `test/compile-stubs.el`
+keeps the bodies of `after!`, `use-package!`, `add-hook!` and `defadvice!` so
+the compile check compiles them. Tests cover the pure functions
 (`+snippets--*`, `+dape--*`, `+avy--eval-*`, `+ai--annotate-*`, `+ai--flymake-*`, `+ai--llama-model-ids`, `+github-explorer--*`,
 `+tasks--*`, `+ai-trust--*`, `+ai--jail*`); the tasks tests drive real git in
 temp repos for worktrees and `done`, and `test/tasks-plan-test.el` the plan
