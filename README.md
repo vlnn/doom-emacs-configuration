@@ -19,9 +19,9 @@ owns its `config.el` and, when it needs packages, a `packages.el`; the root
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`), hax (`SPC 4`), `trust.el`, `jail.el` + `agent.sb` |
+| `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote |
-| `tasks` | per-repo `tasks.org`: agenda views, `branches` block, a worktree per task, `p i` idea capture, `+tasks/init` |
+| `tasks` | per-repo `tasks.org`: `agenda.el` (Board and views), `branches.el` (the block), `worktree.el`, `flow.el` (next, review, test, done, abort), `plan.el` (the plan gate), `menu.el`; capture, start and `+tasks/init` in `config.el` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
 | `lua` | lua-mode REPL run by `evaluator.lua` (not `lua -i`) with inline results, file-based interrupts, cider-shaped localleader, busted runners; LÖVE games run the REPL in-game |
 | `dirvish` | dired/dirvish |

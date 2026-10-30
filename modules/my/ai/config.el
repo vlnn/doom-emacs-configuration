@@ -163,6 +163,7 @@
 
 (load! "jail")
 (load! "trust")
+(load! "pi")
 
 (map! :leader
       :desc "pi"  "3" #'+ai/pi
