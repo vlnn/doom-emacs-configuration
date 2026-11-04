@@ -22,7 +22,7 @@ holds the variables you set, the hooks, the keys and the `after!` blocks.
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
+| `ai` | llama-server backend, gptel, `annotate.el`, `implement.el` (`SPC o l i`), `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote |
 | `tasks` | per-repo `tasks.org`: `agenda.el` (Board and views), `branches.el` (the block), `worktree.el`, `flow.el` (next, review, test, done, abort), `plan.el` (the plan gate), `menu.el`; capture, start and `+tasks/init` in `config.el` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
@@ -326,6 +326,16 @@ behind the plan gate; `docs/autopilot.md` the design of the stretch after it.
 
 See `llama-server/README.md`. `M-x +ai/refresh-llama-models` re-reads the
 served model list into gptel.
+
+## Implement at point
+
+`SPC o l i` (`+ai/implement`) asks what to write, sends the active region
+(else the whole buffer) as context together with the request to
+`+ai-fast-model` under `+ai-implement-directive`, and puts the reply where
+point was when you asked, on lines of its own: a line point sat inside is
+split around it, the region that served as context stays as it was, and a
+fence in the reply is dropped. The echo area says how many lines landed and
+on which line; a failed request says so and writes nothing.
 
 ## AI review through Flymake
 

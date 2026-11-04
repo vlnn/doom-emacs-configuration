@@ -153,6 +153,10 @@ so the line can be edited with nothing glued to its end.")
 
 (map! :leader :desc "Explain annotated" "o l E" #'+ai/annotate)
 
+;;; implement at point — SPC o l i
+
+(map! :leader :desc "Implement here" "o l i" #'+ai/implement)
+
 ;;; AI review through Flymake — SPC o l r / SPC o l R
 
 (map! :leader
