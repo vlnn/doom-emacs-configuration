@@ -93,10 +93,21 @@
 
 ;;; the command
 
+(ert-deftest +ai/implement/loads-gptel-before-asking ()
+  (+ai-implement-test--in-buffer "x\n"
+    (let (steps)
+      (cl-letf (((symbol-function 'require) (lambda (feature &rest _) (push feature steps)))
+                ((symbol-function 'gptel-request) (lambda (&rest _) (push 'asked steps)))
+                ((symbol-function 'message) #'ignore))
+        (+ai/implement "y"))
+      (ert-info ("gptel should be loaded before its request function is called, since only loading defines it")
+        (should (equal '(gptel asked) (reverse steps)))))))
+
 (ert-deftest +ai/implement/sends-the-context-and-request-to-gptel ()
   (+ai-implement-test--in-buffer "(defun f ())\n"
     (let (sent)
-      (cl-letf (((symbol-function 'gptel-request) (lambda (prompt &rest args) (setq sent (cons prompt args))))
+      (cl-letf (((symbol-function 'require) #'ignore)
+                ((symbol-function 'gptel-request) (lambda (prompt &rest args) (setq sent (cons prompt args))))
                 ((symbol-function 'message) #'ignore))
         (+ai/implement "a g"))
       (ert-info ("the request should carry the context and the wish")

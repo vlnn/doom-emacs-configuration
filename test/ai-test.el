@@ -58,3 +58,14 @@
     (let ((transient-mark-mode t))
       (ert-info ("an active region should be used verbatim, over line or defun")
         (should (equal "abc\ndef" (+ai--text-at-point t)))))))
+
+(ert-deftest +ai/annotate/loads-gptel-before-asking ()
+  (+ai-test--in-buffer "(f)\n"
+    (let (steps)
+      (cl-letf (((symbol-function 'require) (lambda (feature &rest _) (push feature steps)))
+                ((symbol-function 'gptel-request) (lambda (&rest _) (push 'asked steps)))
+                ((symbol-function '+ai--annotate-buffer) (lambda (_) (current-buffer)))
+                ((symbol-function 'pop-to-buffer) #'ignore))
+        (+ai/annotate))
+      (ert-info ("gptel should be loaded before its request function is called, since only loading defines it")
+        (should (equal '(gptel asked) (reverse steps)))))))

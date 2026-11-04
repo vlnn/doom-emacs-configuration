@@ -1,6 +1,9 @@
 ;;; my/ai/implement.el -*- lexical-binding: t; -*-
 ;; SPC o l i: say what to write; the region (else the buffer) is the context, the code lands at point.
 
+(defvar gptel-model)
+(declare-function gptel-request "gptel")
+
 (defconst +ai-implement-directive
   "You write code. You receive source between <context> tags, then what to implement. Write only the code asked for, in the language and style of the context and ready to paste at the spot the request names: no prose, no fences, nothing from the context repeated. Prefer small named functions with clear names over one long one; no comments unless the why is non-obvious. In Python tests use pytest, parametrize, mock with pytest-mock, and give every assert an explanation string of the form 'X should Y'.")
 
@@ -57,6 +60,7 @@
   "Ask for REQUEST to be written, the region (else the whole buffer) being the context.
 The code lands where point is, on lines of its own; the region stays as it was."
   (interactive (list (read-string "Implement: ")))
+  (require 'gptel)
   (let ((gptel-model +ai-fast-model)
         (prompt (+ai--implement-prompt (+ai--implement-context) request)))
     (message "Implementing…")

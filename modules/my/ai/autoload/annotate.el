@@ -1,6 +1,9 @@
 ;;; my/ai/annotate.el -*- lexical-binding: t; -*-
 ;; SPC o l E: show the region (else line; defun with C-u) with a numbered explanation per line.
 
+(defvar gptel-model)
+(declare-function gptel-request "gptel")
+
 (defconst +ai-annotate-directive
   "You receive source code, each line prefixed by its number and a colon. For every non-blank line output exactly one line of the form `N: explanation`, N being that line's number, saying what the line does in under 80 characters, naming its steps in evaluation order. In stack languages the top of stack is consumed first. Output nothing else: no code, no prose, no fences.")
 
@@ -94,6 +97,7 @@
   "Explain the region, else the current line, one line at a time.
 With WHOLE-DEFUN (\[universal-argument]) explain the defun at point."
   (interactive "P")
+  (require 'gptel)
   (let* ((source (+ai--text-at-point whole-defun))
          (buffer (+ai--annotate-buffer major-mode))
          (gptel-model +ai-fast-model))
