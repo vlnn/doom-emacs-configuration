@@ -25,8 +25,9 @@
         "<M-down>" #'drag-stuff-down))
 
 (use-package! expand-region
-  :bind (:map evil-visual-state-map
-         ("v" . er/expand-region)))
+  :defer t
+  :init
+  (map! :v "v" #'er/expand-region))
 
 (use-package! super-save
   :config
