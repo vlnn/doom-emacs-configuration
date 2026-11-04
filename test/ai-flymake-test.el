@@ -417,6 +417,10 @@
       (ert-info ("the reason should be said aloud")
         (should (equal "AI review by claude could not start: ANTHROPIC_API_KEY is not set; see secrets.el.example" said))))))
 
+(ert-deftest +ai-flymake-backend/runs-in-buffers-flymake-does-not-trust ()
+  (ert-info ("the backend only reads the buffer, so flymake should run it in untrusted content too")
+    (should (function-get '+ai-flymake-backend 'flymake-always-safe))))
+
 (ert-deftest +ai--flymake-restart-all/forces-flymake-past-a-disabled-backend ()
   (+ai-flymake-test--with-mode-buffers 1
     (let (args)

@@ -125,6 +125,9 @@ right margin; or `eol', right after each line.")
 and `SPC o l X' flip it for the session.")
 (put '+ai-flymake-off 'safe-local-variable #'booleanp)
 
+;; flymake 1.4+ runs no backend in a buffer `trusted-content-p' rejects; the review only reads the buffer
+(put '+ai-flymake-backend 'flymake-always-safe t)
+
 (defvar +ai-flymake-yield t
   "Whether a line's findings step aside to the nearest free row while point is on that line,
 so the line can be edited with nothing glued to its end.")
