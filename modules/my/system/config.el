@@ -11,6 +11,13 @@
   (when-let* ((bash (executable-find "bash")))
     (setq shell-file-name bash)))
 
+(defun +system--start-server ()
+  (require 'server)
+  (unless (server-running-p)
+    (server-start)))
+
+(add-hook 'doom-after-init-hook #'+system--start-server)
+
 ;; machine-local values; git-ignored, see secrets.el.example
 (load! "secrets" doom-user-dir t)
 
