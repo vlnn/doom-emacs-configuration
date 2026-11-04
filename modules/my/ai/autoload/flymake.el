@@ -9,9 +9,11 @@
 ;; SPC o l b: the same for this buffer only.
 ;; SPC o l R: switch the reviewer between llama-server (default) and Claude.
 ;; SPC o l m: show findings in a column past the code (default), the right margin, or after each line.
+;; SPC o l x / X: switch the review off in this buffer / this project, and back on.
 
 (require 'cl-lib)
 (require 'flymake)
+(require 'project)
 
 (declare-function gptel-request "gptel")
 (declare-function gptel-get-backend "gptel")
@@ -208,7 +210,9 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 
 ;;;###autoload
 (defun +ai--flymake-native-eol-p ()
-  (boundp 'flymake-show-diagnostics-at-end-of-line))
+  "Whether flymake draws end-of-line findings itself; not while ours must step aside from point."
+  (and (boundp 'flymake-show-diagnostics-at-end-of-line)
+       (not +ai-flymake-yield)))
 
 ;;;###autoload
 (defun +ai--flymake-worst (diagnostics)
@@ -227,9 +231,57 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
   (truncate-string-to-width text +ai-flymake-margin-width nil nil "…"))
 
 ;;;###autoload
+(defun +ai--flymake-group (pairs)
+  "((LINE DIAGNOSTIC...) ...) from PAIRS of (LINE . DIAGNOSTIC)."
+  (mapcar (lambda (group) (cons (car group) (mapcar #'cdr (cdr group))))
+          (seq-group-by #'car pairs)))
+
+;;;###autoload
 (defun +ai--flymake-by-line (diagnostics)
   "((LINE DIAGNOSTIC...) ...) from the findings' own line numbers."
-  (seq-group-by #'+ai--flymake-line diagnostics))
+  (+ai--flymake-group (mapcar (lambda (d) (cons (+ai--flymake-line d) d)) diagnostics)))
+
+;;; stepping aside: the line point is on keeps its end clear
+
+;;;###autoload
+(defun +ai--flymake-rows-around (line total)
+  "Lines by distance from LINE, the one below before the one above, within 1..TOTAL."
+  (seq-filter (lambda (row) (<= 1 row total))
+              (cl-loop for d from 1 to total append (list (+ line d) (- line d)))))
+
+;;;###autoload
+(defun +ai--flymake-nearest-free (line taken total)
+  (seq-find (lambda (row) (not (memq row taken))) (+ai--flymake-rows-around line total)))
+
+;;;###autoload
+(defun +ai--flymake-pointed (diagnostic arrow)
+  "A copy of DIAGNOSTIC for display only, its message led by ARROW."
+  (flymake-make-diagnostic (flymake-diagnostic-buffer diagnostic)
+                           (flymake-diagnostic-beg diagnostic) (flymake-diagnostic-end diagnostic)
+                           (flymake-diagnostic-type diagnostic) (flymake-diagnostic-text diagnostic)
+                           (cons (+ai--flymake-line diagnostic)
+                                 (concat arrow " " (+ai--flymake-message diagnostic)))))
+
+;;;###autoload
+(defun +ai--flymake-way-back (from to)
+  (if (< from to) "↑" "↓"))
+
+;;;###autoload
+(defun +ai--flymake-point-back (group arrow)
+  (cons (+ai--flymake-pointed (car group) arrow) (cdr group)))
+
+;;;###autoload
+(defun +ai--flymake-yield (groups line total)
+  "GROUPS with the one on LINE moved to the nearest free row, its first message pointing back.
+With no free row that group is left out; the rest keep their lines."
+  (let ((group (alist-get line groups)))
+    (if (null group)
+        groups
+      (let ((others (assq-delete-all line (copy-sequence groups)))
+            (row (+ai--flymake-nearest-free line (mapcar #'car groups) total)))
+        (if row
+            (cons (cons row (+ai--flymake-point-back group (+ai--flymake-way-back line row))) others)
+          others)))))
 
 ;;;###autoload
 (defun +ai--flymake-line-bounds (line)
@@ -313,10 +365,11 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
                    chunks))
 
 ;;;###autoload
-(defun +ai--flymake-render-column (groups)
+(defun +ai--flymake-render-column (groups &optional blocked)
+  "Draw GROUPS at the column; no finding wraps onto an annotated line or onto BLOCKED."
   (let* ((column (+ai--flymake-column))
          (width (+ai--flymake-wrap-width column))
-         (annotated (mapcar #'car groups))
+         (annotated (delq nil (cons blocked (mapcar #'car groups))))
          (total (count-lines (point-min) (point-max))))
     (pcase-dolist (`(,line . ,diagnostics) groups)
       (+ai--flymake-column-overlays
@@ -344,20 +397,81 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
     (funcall render line group)))
 
 ;;;###autoload
-(defun +ai--flymake-render (diagnostics)
-  (let ((groups (+ai--flymake-by-line diagnostics)))
+(defun +ai--flymake-yielding-p ()
+  "Whether findings step aside from point: never in the margin, which blocks no typing."
+  (and +ai-flymake-yield (not (eq +ai-flymake-display 'margin))))
+
+;;;###autoload
+(defun +ai--flymake-cleared-line ()
+  "The line kept clear of findings, point's while yielding, else nil."
+  (when (+ai--flymake-yielding-p) (line-number-at-pos)))
+
+;;;###autoload
+(defun +ai--flymake-aside (groups)
+  (if-let* ((line (+ai--flymake-cleared-line)))
+      (+ai--flymake-yield groups line (count-lines (point-min) (point-max)))
+    groups))
+
+;;;###autoload
+(defun +ai--flymake-render-groups (groups)
+  (let ((groups (+ai--flymake-aside groups)))
     (pcase +ai-flymake-display
-      ('column (+ai--flymake-render-column groups))
+      ('column (+ai--flymake-render-column groups (+ai--flymake-cleared-line)))
       ('margin (+ai--flymake-render-each #'+ai--flymake-margin-overlay groups))
       ('eol (unless (+ai--flymake-native-eol-p)
               (+ai--flymake-render-each #'+ai--flymake-eol-overlay groups)))
       (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays)))))
 
 ;;;###autoload
+(defun +ai--flymake-render (diagnostics)
+  (+ai--flymake-render-groups (+ai--flymake-by-line diagnostics)))
+
+;;; following the code: findings sit where flymake's underline is now, not where it was
+
+(defvar-local +ai--flymake-stale nil
+  "Whether the buffer changed since findings were last placed.")
+
+(defvar-local +ai--flymake-row nil
+  "The line point was on when findings were last placed.")
+
+;;;###autoload
+(defun +ai--flymake-live-finding (overlay)
+  (when-let* ((diagnostic (overlay-get overlay 'flymake-diagnostic))
+              ((eq (flymake-diagnostic-backend diagnostic) '+ai-flymake-backend)))
+    (cons (line-number-at-pos (overlay-start overlay)) diagnostic)))
+
+;;;###autoload
+(defun +ai--flymake-live-findings ()
+  "((LINE . DIAGNOSTIC) ...) of our findings, LINE being where flymake's underline sits now."
+  (delq nil (mapcar #'+ai--flymake-live-finding (overlays-in (point-min) (point-max)))))
+
+;;;###autoload
+(defun +ai--flymake-place (pairs)
+  "Draw PAIRS of (LINE . DIAGNOSTIC) afresh and remember the buffer as seen."
+  (setq +ai--flymake-stale nil
+        +ai--flymake-row (line-number-at-pos))
+  (+ai--flymake-clear)
+  (+ai--flymake-render-groups (+ai--flymake-group pairs)))
+
+;;;###autoload
+(defun +ai--flymake-mark-stale (&rest _)
+  (setq +ai--flymake-stale t))
+
+;;;###autoload
+(defun +ai--flymake-left-row-p ()
+  (not (eql +ai--flymake-row (line-number-at-pos))))
+
+;;;###autoload
+(defun +ai--flymake-follow ()
+  "After an edit, or a move to another line while yielding, place the findings again."
+  (when (or +ai--flymake-stale
+            (and (+ai--flymake-yielding-p) (+ai--flymake-left-row-p)))
+    (+ai--flymake-place (+ai--flymake-live-findings))))
+
+;;;###autoload
 (defun +ai--flymake-annotate (buffer diagnostics)
   (with-current-buffer buffer
-    (+ai--flymake-clear)
-    (+ai--flymake-render diagnostics)))
+    (+ai--flymake-place (mapcar (lambda (d) (cons (+ai--flymake-line d) d)) diagnostics))))
 
 ;;;###autoload
 (defun +ai--flymake-report (buffer provider report-fn response)
@@ -467,18 +581,21 @@ would make flymake disable the backend for the buffer until the mode restarts."
   (if +ai--flymake-pending (format " AIrev[%s…]" +ai--flymake-pending) " AIrev"))
 
 ;;;###autoload
-(defun +ai--flymake-status-text (on count pending)
+(defun +ai--flymake-status-text (on count pending &optional muted)
   (format "AI review by %s: %s" +ai-flymake-provider
           (cond ((not on) "off (SPC o l r to review every code buffer)")
+                ((eq muted 'project) (format "on in %d buffer(s); this one off with its project (SPC o l X)" count))
+                (muted (format "on in %d buffer(s); this one off (SPC o l x)" count))
                 (pending (format "on in %d buffer(s); this one waiting on %s" count pending))
                 (t (format "on in %d buffer(s); this one idle" count)))))
 
 ;;;###autoload
 (defun +ai/flymake-status ()
-  "Say who reviews, where the review is on, and whether this buffer's is still out."
+  "Say who reviews, where the review is on, and whether this buffer's is still out or muted."
   (interactive)
   (let ((buffers (+ai--flymake-buffers)))
-    (message "%s" (+ai--flymake-status-text buffers (length buffers) +ai--flymake-pending))))
+    (message "%s" (+ai--flymake-status-text buffers (length buffers) +ai--flymake-pending
+                                            (+ai--flymake-muted-how)))))
 
 ;;;###autoload
 (define-minor-mode +ai-flymake-mode
@@ -488,12 +605,16 @@ Edits alone do not trigger a review; a model call per keystroke would be noise.
   :lighter (:eval (+ai--flymake-lighter))
   (cond (+ai-flymake-mode
          (add-hook 'flymake-diagnostic-functions #'+ai-flymake-backend nil t)
+         (add-hook 'after-change-functions #'+ai--flymake-mark-stale nil t)
+         (add-hook 'post-command-hook #'+ai--flymake-follow nil t)
          (setq-local flymake-no-changes-timeout nil
                      flymake-fringe-indicator-position 'right-fringe)
          (+ai--flymake-setup-display)
          (if flymake-mode (flymake-start) (flymake-mode 1)))
         (t
          (remove-hook 'flymake-diagnostic-functions #'+ai-flymake-backend t)
+         (remove-hook 'after-change-functions #'+ai--flymake-mark-stale t)
+         (remove-hook 'post-command-hook #'+ai--flymake-follow t)
          (+ai--flymake-clear)
          (+ai--flymake-teardown-display)
          (kill-local-variable 'flymake-no-changes-timeout)
@@ -516,12 +637,88 @@ Edits alone do not trigger a review; a model call per keystroke would be noise.
   "Whether FILE must not reach a reviewer: a secret by name, or ignored by git."
   (and (or (+ai--flymake-secret-name-p file) (+ai--flymake-git-ignored-p file)) t))
 
+;;; switching the review off: this buffer, or its whole project
+
+;;;###autoload
+(defvar +ai--flymake-muted-roots nil
+  "Project roots `+ai/flymake-mute-project' switched off this session.")
+
+;;;###autoload
+(defun +ai--flymake-root ()
+  "The project root of this buffer, else its directory."
+  (if-let* ((project (project-current nil default-directory)))
+      (project-root project)
+    default-directory))
+
+;;;###autoload
+(defun +ai--flymake-under-p (file root)
+  (string-prefix-p (file-name-as-directory (expand-file-name root)) (expand-file-name file)))
+
+;;;###autoload
+(defun +ai--flymake-muted-root (file)
+  "The muted project root FILE sits in, or nil."
+  (seq-find (lambda (root) (+ai--flymake-under-p file root)) +ai--flymake-muted-roots))
+
+;;;###autoload
+(defun +ai--flymake-muted-how ()
+  "`buffer' when this buffer is muted on its own, `project' through its project, else nil."
+  (cond (+ai-flymake-off 'buffer)
+        ((and buffer-file-name (+ai--flymake-muted-root buffer-file-name)) 'project)))
+
 ;;;###autoload
 (defun +ai--flymake-reviewable-p ()
   (and buffer-file-name
        (derived-mode-p 'prog-mode)
        (not (+ai--flymake-ignored-p buffer-file-name))
+       (not (+ai--flymake-muted-how))
        t))
+
+;;;###autoload
+(defun +ai--flymake-resume ()
+  "Review this buffer again if the global mode wants it."
+  (when (bound-and-true-p +ai-flymake-global-mode)
+    (+ai--flymake-turn-on)))
+
+;;;###autoload
+(defun +ai--flymake-silence ()
+  (when +ai-flymake-mode
+    (+ai-flymake-mode -1)))
+
+;;;###autoload
+(defun +ai/flymake-mute-buffer ()
+  "Switch AI review off for this buffer, or back on when it was switched off here.
+Nothing reviews a muted buffer, not even `+ai-flymake-global-mode' turning on later."
+  (interactive)
+  (setq-local +ai-flymake-off (not +ai-flymake-off))
+  (if +ai-flymake-off
+      (progn (+ai--flymake-silence) (message "AI review off in this buffer"))
+    (+ai--flymake-resume)
+    (message "AI review back on in this buffer")))
+
+;;;###autoload
+(defun +ai--flymake-buffers-under (root)
+  (seq-filter (lambda (buffer)
+                (when-let* ((file (buffer-file-name buffer))) (+ai--flymake-under-p file root)))
+              (buffer-list)))
+
+;;;###autoload
+(defun +ai--flymake-each-under (root action)
+  (dolist (buffer (+ai--flymake-buffers-under root))
+    (with-current-buffer buffer (funcall action))))
+
+;;;###autoload
+(defun +ai/flymake-mute-project ()
+  "Switch AI review off for every buffer of this project, or back on when it was off.
+The mute lasts the session; `+ai-flymake-off' in .dir-locals.el makes it permanent."
+  (interactive)
+  (let ((root (+ai--flymake-root)))
+    (if (member root +ai--flymake-muted-roots)
+        (progn (setq +ai--flymake-muted-roots (delete root +ai--flymake-muted-roots))
+               (+ai--flymake-each-under root #'+ai--flymake-resume)
+               (message "AI review back on in %s" root))
+      (push root +ai--flymake-muted-roots)
+      (+ai--flymake-each-under root #'+ai--flymake-silence)
+      (message "AI review off in %s" root))))
 
 ;;;###autoload
 (defun +ai--flymake-turn-on ()

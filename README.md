@@ -340,6 +340,17 @@ so are files that hold secrets: names matching `+ai-flymake-ignore-regexps`
 (`secrets.el`, `.env*`, `.authinfo*`, `.netrc`, `*.pem`, `*.key`) and, while
 `+ai-flymake-skip-ignored` is on, anything git ignores.
 
+`SPC o l x` (`+ai/flymake-mute-buffer`) switches the review off in this
+buffer and `SPC o l X` (`+ai/flymake-mute-project`) in every buffer of its
+project (`project-current`, else the directory): findings go, `flymake-mode`
+with them, and neither the global mode nor a later save brings them back;
+pressed again, the review resumes where the global mode is on. The project
+mute lasts the session. For good, set `+ai-flymake-off` (a safe local
+variable) in the file, or for a whole project in its `.dir-locals.el`:
+`((nil . ((+ai-flymake-off . t))))`. `SPC o l ?` says when this buffer is
+off, and whether on its own or with its project. `SPC o l b` still reviews a
+muted buffer on purpose.
+
 `SPC o l R` (`+ai/flymake-toggle-provider`) switches `+ai-flymake-provider`
 between `llama` (llama-server, `+ai-fast-model`, the default) and `claude`
 (`+ai-flymake-claude-model` through a gptel Anthropic backend of its own,
@@ -380,7 +391,19 @@ else what is left of the window). `SPC o l m` (`+ai/flymake-toggle-display`) cyc
 window's right margin, `+ai-flymake-margin-width` 48, cut with `…`) and
 `eol` (`⟵ …` straight after each line: Flymake's own end-of-line display on
 Emacs 30, an overlay of ours on 29), then back. Findings are placed by the
-line number the model named, never by Flymake's overlays, so each stays on
-its own row. The underline, fringe mark, tooltip and `SPC o l l`
+line number the model named when they land, so each stays on its own row;
+after that they follow Flymake's own underline, so a line added above moves
+them down with their code, a line deleted takes its finding with it, and a
+newline typed at the end of an annotated line no longer drags the finding
+onto the next one. The underline, fringe mark, tooltip and `SPC o l l`
 (`flymake-show-buffer-diagnostics`) are Flymake's as usual and carry the full
 text whatever the display.
+
+Findings step aside from point (`+ai-flymake-yield`, on by default): the
+line point is on keeps its end clear, its findings drawn instead on the
+nearest free row, below before above, led by `↑` or `↓` pointing back, and
+nothing from the lines above wraps onto it; move off the line and they come
+back. This holds for the `column` and `eol` displays (`eol` then uses an
+overlay of ours on every Emacs, since Flymake's own end-of-line display
+cannot move); the margin blocks no typing, so there nothing moves. Set
+`+ai-flymake-yield` to nil to keep every finding on its own line.

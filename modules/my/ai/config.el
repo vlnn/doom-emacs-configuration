@@ -119,6 +119,16 @@ right margin; or `eol', right after each line.")
 (defvar +ai-flymake-skip-ignored t
   "Whether files git ignores are left out too; they are usually generated, local or secret.")
 
+(defvar +ai-flymake-off nil
+  "Non-nil keeps the buffer from AI review. Set it file-locally for one file, or in
+.dir-locals.el as ((nil . ((+ai-flymake-off . t)))) for a whole project; `SPC o l x'
+and `SPC o l X' flip it for the session.")
+(put '+ai-flymake-off 'safe-local-variable #'booleanp)
+
+(defvar +ai-flymake-yield t
+  "Whether a line's findings step aside to the nearest free row while point is on that line,
+so the line can be edited with nothing glued to its end.")
+
 (defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
 
 (defvar +ai-trust-reviews-file
@@ -151,7 +161,9 @@ right margin; or `eol', right after each line.")
       :desc "AI review provider" "o l R" #'+ai/flymake-toggle-provider
       :desc "AI review display"  "o l m" #'+ai/flymake-toggle-display
       :desc "AI review status"   "o l ?" #'+ai/flymake-status
-      :desc "AI review list"     "o l l" #'flymake-show-buffer-diagnostics)
+      :desc "AI review list"     "o l l" #'flymake-show-buffer-diagnostics
+      :desc "AI review off here" "o l x" #'+ai/flymake-mute-buffer
+      :desc "AI review off in project" "o l X" #'+ai/flymake-mute-project)
 
 ;;; gptel-magit — commit messages and diff explanations
 
