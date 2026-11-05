@@ -132,6 +132,9 @@ and `SPC o l X' flip it for the session.")
   "Whether a line's findings step aside to the nearest free row while point is on that line,
 so the line can be edited with nothing glued to its end.")
 
+(defvar +ai-summarize-model nil
+  "Model `SPC o l s' summarizes with; nil means `+ai-fast-model', C-u means `+ai-think-model'.")
+
 (defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
 
 (defvar +ai-trust-reviews-file
@@ -155,6 +158,13 @@ so the line can be edited with nothing glued to its end.")
   :side 'right :size 0.5 :select t :quit t :ttl nil)
 
 (map! :leader :desc "Explain annotated" "o l E" #'+ai/annotate)
+
+;;; summary of a buffer — SPC o l s
+
+(set-popup-rule! "^\\*gptel-summary\\*$"
+  :side 'right :size 0.4 :select t :quit t :ttl nil)
+
+(map! :leader :desc "Summarize buffer" "o l s" #'+ai/summarize)
 
 ;;; implement at point — SPC o l i
 

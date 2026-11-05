@@ -22,7 +22,7 @@ holds the variables you set, the hooks, the keys and the `after!` blocks.
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, `implement.el` (`SPC o l i`), `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
+| `ai` | llama-server backend, gptel, `annotate.el`, `summarize.el` (`SPC o l s`), `implement.el` (`SPC o l i`), `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote |
 | `tasks` | per-repo `tasks.org`: `agenda.el` (Board and views), `branches.el` (the block), `worktree.el`, `flow.el` (next, review, test, done, abort), `plan.el` (the plan gate), `menu.el`; capture, start and `+tasks/init` in `config.el` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
@@ -326,6 +326,18 @@ behind the plan gate; `docs/autopilot.md` the design of the stretch after it.
 
 See `llama-server/README.md`. `M-x +ai/refresh-llama-models` re-reads the
 served model list into gptel.
+
+## Summarize a buffer
+
+`SPC o l s` (`+ai/summarize`) sends the active region (else the whole
+buffer) to `+ai-fast-model` under `+ai-summarize-directive` and shows what
+the program does in a `*gptel-summary*` popup: purpose, entry points, inputs
+and outputs, side effects, flow. Style, bugs and improvements are out of
+scope by directive. `C-u` uses `+ai-think-model` instead; `+ai-summarize-model`
+sets another default. A source over `+ai-flymake-max-lines` goes as an
+outline (top-level lines, `def`/`class` signatures at any depth, the docstring
+line after each) and the prompt says so; an outline still over the cap is
+refused, as is any file on `+ai-flymake-ignore-regexps`. `q` closes the popup.
 
 ## Implement at point
 
