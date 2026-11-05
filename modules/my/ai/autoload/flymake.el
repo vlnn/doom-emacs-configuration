@@ -69,6 +69,7 @@
 
 ;;;###autoload
 (defun +ai--flymake-claude ()
+  (require 'gptel-anthropic)
   (cons (or (+ai--flymake-known-backend +ai--flymake-claude-backend-name)
             (gptel-make-anthropic +ai--flymake-claude-backend-name :key #'+ai--anthropic-key))
         +ai-flymake-claude-model))
