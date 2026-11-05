@@ -32,7 +32,6 @@ jobs:
   doom:
     # the only check that sees map!, package recipes and init.el: a real doom sync
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: purcell/setup-emacs@v8.0
@@ -42,16 +41,21 @@ jobs:
         with:
           repository: doomemacs/doomemacs
           path: .doom
+      - id: doom
+        run: echo "sha=$(git -C .doom rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      # a .local built by another Doom commit is stale: keep its packages, never its layout
       - uses: actions/cache@v4
         with:
           path: .doom/.local
-          key: doom-${{ runner.os }}-${{ hashFiles('init.el', 'packages.el', 'modules/my/*/packages.el') }}
+          key: doom-${{ runner.os }}-${{ steps.doom.outputs.sha }}-${{ hashFiles('init.el', 'packages.el', 'modules/my/*/packages.el') }}
+          restore-keys: doom-${{ runner.os }}-${{ steps.doom.outputs.sha }}-
       - run: sudo apt-get update && sudo apt-get install -y ripgrep fd-find
       - run: .doom/bin/doom sync
         env:
           DOOMDIR: ${{ github.workspace }}
           EMACSDIR: ${{ github.workspace }}/.doom
-      - run: .doom/bin/doom doctor
+      # warnings (!) are about the runner; an error (x) is the config failing to load
+      - run: .doom/bin/doom doctor 2>&1 | tee doctor.log && ! grep -q '^  x ' doctor.log
         env:
           DOOMDIR: ${{ github.workspace }}
           EMACSDIR: ${{ github.workspace }}/.doom
