@@ -67,3 +67,15 @@
   (let ((+ai-flymake-max-lines 1))
     (ert-info ("an outline still over the cap should be refused")
       (should-error (+ai--summarize-source "x = 1\ny = 2") :type 'user-error))))
+
+(ert-deftest +ai--summarize-callback/streams-into-the-buffer ()
+  (with-temp-buffer
+    (insert "Summarizing...")
+    (let ((callback (+ai--summarize-callback (current-buffer))))
+      (funcall callback "# Purpose\n" nil)
+      (ert-info ("the first chunk should replace the placeholder")
+        (should (equal "# Purpose\n" (buffer-string))))
+      (funcall callback "Adds." nil)
+      (funcall callback t nil)
+      (ert-info ("later chunks should append and the end should change nothing")
+        (should (equal "# Purpose\nAdds." (buffer-string)))))))

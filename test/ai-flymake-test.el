@@ -524,33 +524,6 @@
 
 ;;; wrapping into free rows below
 
-(ert-deftest +ai--flymake-wrap/breaks-at-words-within-the-width ()
-  (ert-info ("text wider than the width should break between words")
-    (should (equal '("aaa bbb" "ccc") (+ai--flymake-wrap "aaa bbb ccc" 7))))
-  (ert-info ("text that fits should stay one line")
-    (should (equal '("aaa") (+ai--flymake-wrap "aaa" 7)))))
-
-(ert-deftest +ai--flymake-free-rows/counts-unannotated-lines-below ()
-  (let ((annotated '(1 3)))
-    (ert-info ("line 1 should have one free row before the annotated line 3")
-      (should (= 1 (+ai--flymake-free-rows 1 annotated 5))))
-    (ert-info ("line 3 should have the two remaining lines free")
-      (should (= 2 (+ai--flymake-free-rows 3 annotated 5))))
-    (ert-info ("the last line should have no free rows")
-      (should (= 0 (+ai--flymake-free-rows 5 annotated 5))))))
-
-(ert-deftest +ai--flymake-chunks/uses-free-rows-then-cuts-with-an-ellipsis ()
-  (let ((text (propertize "aaa bbb ccc ddd" 'face 'flymake-note-echo)))
-    (ert-info ("with enough free rows every chunk should appear")
-      (should (equal '("aaa bbb" "ccc ddd")
-                     (mapcar #'substring-no-properties (+ai--flymake-chunks text 7 3)))))
-    (ert-info ("with no free row the text should be cut on its own row with an ellipsis")
-      (should (equal '("aaa bb…")
-                     (mapcar #'substring-no-properties (+ai--flymake-chunks text 7 0)))))
-    (ert-info ("every chunk should keep the face of the summary")
-      (should (seq-every-p (lambda (c) (eq 'flymake-note-echo (get-text-property 0 'face c)))
-                           (+ai--flymake-chunks text 7 3))))))
-
 (ert-deftest +ai--flymake-render/column-wraps-into-free-rows-below ()
   (+ai-flymake-test--in-buffer "a\nb\nc\n"
     (let ((+ai-flymake-display 'column) (+ai-flymake-column 4) (+ai-flymake-wrap-width 7))

@@ -22,7 +22,7 @@ holds the variables you set, the hooks, the keys and the `after!` blocks.
 | `casual` | casual transient menus |
 | `lsp` | global lsp-mode settings, flycheck, jsonian |
 | `python` | uv REPL, pylsp, dape (`SPC d d` smart debug) |
-| `ai` | llama-server backend, gptel, `annotate.el`, `summarize.el` (`SPC e b`), `implement.el` (`SPC o l i`), `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
+| `ai` | llama-server backend, gptel, `overlay.el` (text beside code), `annotate.el` (`SPC e a`), `summarize.el` (`SPC e b`), `implement.el` (`SPC o l i`), `flymake.el` (AI review beside the code, `SPC o l r`), aider, ai-code, opencode, pilish (`SPC 3`) and hax (`SPC 4`) in `pi.el`, `trust.el`, `jail.el` + `agent.sb` |
 | `notes` | denote |
 | `tasks` | per-repo `tasks.org`: `agenda.el` (Board and views), `branches.el` (the block), `worktree.el`, `flow.el` (next, review, test, done, abort), `plan.el` (the plan gate), `menu.el`; capture, start and `+tasks/init` in `config.el` |
 | `apl`, `forth` | language setups mirroring Doom's cider wiring |
@@ -327,11 +327,25 @@ behind the plan gate; `docs/autopilot.md` the design of the stretch after it.
 See `llama-server/README.md`. `M-x +ai/refresh-llama-models` re-reads the
 served model list into gptel.
 
+## Explain beside the code
+
+`SPC e a` (`+ai/annotate`) sends the active region (else the current line;
+the defun with `C-u`) to `+ai-fast-model`, lines numbered, and shows one
+explanation per line beside the code, streamed in as each arrives: in a
+column past the longest line by default, or in the right margin or at the
+end of the line per `+ai-annotate-display`; the review's `+ai-flymake-column`,
+`+ai-flymake-wrap-width` and `+ai-flymake-margin-width` apply. The layer is
+transient: the next edit, `ESC` or `SPC e a` again clears it, and a reply
+that arrives after a clear is dropped. `SPC e A` (`+ai/annotate-popup`)
+shows the same explanations as comments over a copy of the code in a
+`*gptel-annotate*` popup instead, for when you want to take them away.
+Both the review and the annotations draw through `overlay.el`.
+
 ## Summarize a buffer
 
 `SPC e b` (`+ai/summarize`) sends the active region (else the whole
-buffer) to `+ai-fast-model` under `+ai-summarize-directive` and shows what
-the program does in a `*gptel-summary*` popup: purpose, entry points, inputs
+buffer) to `+ai-fast-model` under `+ai-summarize-directive` and streams what
+the program does into a `*gptel-summary*` popup: purpose, entry points, inputs
 and outputs, side effects, flow. Style, bugs and improvements are out of
 scope by directive. `C-u` uses `+ai-think-model` instead; `+ai-summarize-model`
 sets another default. A source over `+ai-flymake-max-lines` goes as an

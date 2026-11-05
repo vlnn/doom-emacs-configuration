@@ -52,13 +52,21 @@
 
 ;;; gptel
 
+(defun +ai--without-trailing-newlines (bounds)
+  (cons (car bounds)
+        (save-excursion (goto-char (cdr bounds)) (skip-chars-backward "\n" (car bounds)) (point))))
+
+(defun +ai--bounds-at-point (&optional whole-defun)
+  "(BEG . END) of the region when active, else the current line, or the defun when WHOLE-DEFUN."
+  (+ai--without-trailing-newlines
+   (cond ((use-region-p) (cons (region-beginning) (region-end)))
+         ((and whole-defun (bounds-of-thing-at-point 'defun)))
+         (t (cons (line-beginning-position) (line-end-position))))))
+
 (defun +ai--text-at-point (&optional whole-defun)
   "Region when active, else the current line, or the defun when WHOLE-DEFUN."
-  (string-trim-right
-   (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
-         (whole-defun (or (thing-at-point 'defun t) (thing-at-point 'line t)))
-         (t (thing-at-point 'line t)))
-   "\n"))
+  (pcase-let ((`(,beg . ,end) (+ai--bounds-at-point whole-defun)))
+    (buffer-substring-no-properties beg end)))
 
 (after! gptel
   (setq gptel-model +ai-fast-model
@@ -90,6 +98,7 @@
       (:prefix ("e" . "explain")
        :desc "Line, quickly"   "e" #'+ai/quick
        :desc "Line by line"    "a" #'+ai/annotate
+       :desc "Line by line, popup" "A" #'+ai/annotate-popup
        :desc "What buffer does" "b" #'+ai/summarize))
 
 
@@ -156,7 +165,13 @@ so the line can be edited with nothing glued to its end.")
 (defvar +ai-pi-model-networks '(("local" . "local"))
   "Jail network for each tasks.org :MODEL: value; other models get \"open\".")
 
-;;; annotated explanation — SPC e a
+;;; annotated explanation — SPC e a, beside the code; SPC e A in a popup
+
+(defvar +ai-annotate-display 'column
+  "Where annotations show: `column', `margin' or `eol', as for the review; the review's
+column, wrap and margin widths apply.")
+
+(add-hook 'doom-escape-hook #'+ai--annotate-clear)
 
 (set-popup-rule! "^\\*gptel-annotate\\*$"
   :side 'right :size 0.5 :select t :quit t :ttl nil)

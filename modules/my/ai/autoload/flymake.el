@@ -199,7 +199,7 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
     (flymake-log :error "%s" text)
     (message "%s" text)))
 
-;;; where findings show: the right margin, or the end of the line
+;;; where findings show: a column past the code, the right margin, or the end of the line (overlay.el draws)
 
 (defconst +ai--flymake-echo-faces
   '((:error . flymake-error-echo) (:warning . flymake-warning-echo)
@@ -229,7 +229,7 @@ Every reviewed buffer is reviewed again; when nothing is reviewed yet, reviewing
 
 ;;;###autoload
 (defun +ai--flymake-fit (text)
-  (truncate-string-to-width text +ai-flymake-margin-width nil nil "…"))
+  (+ai--overlay-fit text +ai-flymake-margin-width))
 
 ;;;###autoload
 (defun +ai--flymake-group (pairs)
@@ -285,117 +285,21 @@ With no free row that group is left out; the rest keep their lines."
           others)))))
 
 ;;;###autoload
-(defun +ai--flymake-line-bounds (line)
-  (save-excursion
-    (goto-char (point-min))
-    (forward-line (1- line))
-    (cons (point) (line-end-position))))
-
-;;;###autoload
-(defun +ai--flymake-longest-line ()
-  (let ((longest 0))
-    (save-excursion
-      (goto-char (point-min))
-      (while (not (eobp))
-        (end-of-line)
-        (setq longest (max longest (current-column)))
-        (forward-line 1)))
-    longest))
-
-;;;###autoload
 (defun +ai--flymake-column ()
-  (or +ai-flymake-column (+ 2 (max fill-column (+ai--flymake-longest-line)))))
-
-;;;###autoload
-(defun +ai--flymake-overlay (beg end)
-  (let ((overlay (make-overlay beg end nil t nil)))
-    (overlay-put overlay '+ai-flymake t)
-    overlay))
-
-;;;###autoload
-(defun +ai--flymake-eol-overlay (line diagnostics)
-  (let ((eol (cdr (+ai--flymake-line-bounds line))))
-    (overlay-put (+ai--flymake-overlay eol eol)
-                 'after-string (concat "  ⟵ " (+ai--flymake-summary diagnostics)))))
-
-;;;###autoload
-(defun +ai--flymake-stretch-to (column)
-  (propertize " " 'display `(space :align-to ,column)))
+  (+ai--overlay-column +ai-flymake-column))
 
 ;;;###autoload
 (defun +ai--flymake-wrap-width (column)
-  (or +ai-flymake-wrap-width
-      (max 16 (- (window-body-width (or (get-buffer-window) (selected-window))) column 2))))
+  (+ai--overlay-wrap-width +ai-flymake-wrap-width column))
 
 ;;;###autoload
-(defun +ai--flymake-wrap (text width)
-  (with-temp-buffer
-    (insert text)
-    (let ((fill-column width))
-      (fill-region (point-min) (point-max)))
-    (split-string (buffer-string) "\n" t)))
-
-;;;###autoload
-(defun +ai--flymake-free-rows (line annotated total)
-  "How many lines below LINE, up to TOTAL, have no finding of their own."
-  (let ((next (seq-min (cons (1+ total) (seq-filter (lambda (l) (> l line)) annotated)))))
-    (- next line 1)))
-
-;;;###autoload
-(defun +ai--flymake-cut (line width)
-  (concat (truncate-string-to-width line (1- width)) "…"))
-
-;;;###autoload
-(defun +ai--flymake-chunks (summary width rows)
-  "SUMMARY wrapped to WIDTH over its own row and ROWS below, cut with an ellipsis past that."
-  (let* ((face (get-text-property 0 'face summary))
-         (lines (+ai--flymake-wrap (substring-no-properties summary) width))
-         (kept (seq-take lines (1+ rows)))
-         (cut (< (length kept) (length lines))))
-    (mapcar (lambda (line) (propertize line 'face face))
-            (if cut
-                (append (butlast kept) (list (+ai--flymake-cut (car (last kept)) width)))
-              kept))))
-
-;;;###autoload
-(defun +ai--flymake-column-overlays (line chunks column)
-  (seq-map-indexed (lambda (chunk i)
-                     (let ((eol (cdr (+ai--flymake-line-bounds (+ line i)))))
-                       (overlay-put (+ai--flymake-overlay eol eol)
-                                    'after-string (concat (+ai--flymake-stretch-to column) " " chunk))))
-                   chunks))
-
-;;;###autoload
-(defun +ai--flymake-render-column (groups &optional blocked)
-  "Draw GROUPS at the column; no finding wraps onto an annotated line or onto BLOCKED."
-  (let* ((column (+ai--flymake-column))
-         (width (+ai--flymake-wrap-width column))
-         (annotated (delq nil (cons blocked (mapcar #'car groups))))
-         (total (count-lines (point-min) (point-max))))
-    (pcase-dolist (`(,line . ,diagnostics) groups)
-      (+ai--flymake-column-overlays
-       line (+ai--flymake-chunks (+ai--flymake-summary diagnostics) width
-                                 (+ai--flymake-free-rows line annotated total))
-       column))))
-
-;;;###autoload
-(defun +ai--flymake-margin-string (diagnostics)
-  (propertize " " 'display `((margin right-margin) ,(+ai--flymake-fit (+ai--flymake-summary diagnostics)))))
-
-;;;###autoload
-(defun +ai--flymake-margin-overlay (line diagnostics)
-  (let ((bol (car (+ai--flymake-line-bounds line))))
-    (overlay-put (+ai--flymake-overlay bol bol)
-                 'before-string (+ai--flymake-margin-string diagnostics))))
+(defun +ai--flymake-texts (groups)
+  "((LINE . SUMMARY) ...) from GROUPS of (LINE DIAGNOSTIC...)."
+  (mapcar (lambda (group) (cons (car group) (+ai--flymake-summary (cdr group)))) groups))
 
 ;;;###autoload
 (defun +ai--flymake-clear ()
-  (remove-overlays (point-min) (point-max) '+ai-flymake t))
-
-;;;###autoload
-(defun +ai--flymake-render-each (render groups)
-  (pcase-dolist (`(,line . ,group) groups)
-    (funcall render line group)))
+  (+ai--overlay-clear '+ai-flymake))
 
 ;;;###autoload
 (defun +ai--flymake-yielding-p ()
@@ -415,13 +319,12 @@ With no free row that group is left out; the rest keep their lines."
 
 ;;;###autoload
 (defun +ai--flymake-render-groups (groups)
-  (let ((groups (+ai--flymake-aside groups)))
-    (pcase +ai-flymake-display
-      ('column (+ai--flymake-render-column groups (+ai--flymake-cleared-line)))
-      ('margin (+ai--flymake-render-each #'+ai--flymake-margin-overlay groups))
-      ('eol (unless (+ai--flymake-native-eol-p)
-              (+ai--flymake-render-each #'+ai--flymake-eol-overlay groups)))
-      (_ (error "Unknown review display %S; expected one of %S" +ai-flymake-display +ai--flymake-displays)))))
+  (unless (and (eq +ai-flymake-display 'eol) (+ai--flymake-native-eol-p))
+    (let ((column (+ai--flymake-column)))
+      (+ai--overlay-render '+ai-flymake +ai-flymake-display
+                           (+ai--flymake-texts (+ai--flymake-aside groups))
+                           column (+ai--flymake-wrap-width column) +ai-flymake-margin-width
+                           (+ai--flymake-cleared-line)))))
 
 ;;;###autoload
 (defun +ai--flymake-render (diagnostics)

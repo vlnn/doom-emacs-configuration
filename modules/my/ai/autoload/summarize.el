@@ -11,6 +11,9 @@
 
 (defvar +ai-summarize-model)
 
+(defvar-local +ai--summarize-state 'waiting
+  "`waiting' for the first chunk, `streaming' while they arrive, `done' after.")
+
 (defconst +ai--summarize-signature-regexp
   "\\`\\s-*\\(async\\s-+\\)?\\(def\\|class\\|defn?\\|defmacro\\|function\\|fn\\|func\\)\\_>")
 
@@ -76,23 +79,31 @@
       (unless (derived-mode-p 'markdown-mode)
         (delay-mode-hooks (markdown-mode)))
       (insert "Summarizing...")
+      (setq +ai--summarize-state 'waiting)
       (read-only-mode 1)
       (evil-local-set-key 'normal (kbd "q") #'quit-window))
     (current-buffer)))
 
 ;;;###autoload
-(defun +ai--summarize-show (buffer text)
+(defun +ai--summarize-append (buffer chunk)
+  "Add CHUNK to BUFFER; the first one replaces the placeholder."
   (with-current-buffer buffer
     (let ((inhibit-read-only t))
-      (erase-buffer)
-      (insert (string-trim text)))))
+      (when (eq +ai--summarize-state 'waiting)
+        (erase-buffer)
+        (setq +ai--summarize-state 'streaming))
+      (save-excursion
+        (goto-char (point-max))
+        (insert chunk)))))
 
 ;;;###autoload
 (defun +ai--summarize-callback (buffer)
   (lambda (response info)
-    (pcase response
-      ((pred stringp) (+ai--summarize-show buffer response))
-      ('nil (message "Summarize failed: %s" (plist-get info :status))))))
+    (when (buffer-live-p buffer)
+      (pcase response
+        ((pred stringp) (+ai--summarize-append buffer response))
+        ('t (with-current-buffer buffer (setq +ai--summarize-state 'done)))
+        ('nil (message "Summarize failed: %s" (plist-get info :status)))))))
 
 ;;;###autoload
 (defun +ai/summarize (&optional think)
@@ -111,4 +122,5 @@ With THINK (\\[universal-argument]) use the reasoning model. A source over
       (when outlined (message "Over %d lines; sending an outline" +ai-flymake-max-lines))
       (gptel-request (+ai--summarize-prompt name major-mode source outlined)
         :system +ai-summarize-directive
+        :stream t
         :callback (+ai--summarize-callback buffer)))))
