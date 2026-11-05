@@ -1,5 +1,7 @@
 ;;; my/tasks/flow.el -*- lexical-binding: t; -*-
 
+(declare-function magit-diff-range "magit-diff")
+
 ;;; stages
 
 ;;;###autoload
@@ -253,6 +255,7 @@ on the current branch, or picked."
          (default-directory (+tasks--task-root task))
          (main (+tasks--default-branch))
          (branch (plist-get task :branch)))
+    (require 'magit)
     (magit-diff-range (+tasks--range main branch))
     (+tasks--set-state task "REVIEW")
     (message "%s" (+tasks--review-message (plist-get task :accept)

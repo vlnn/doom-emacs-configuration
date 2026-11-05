@@ -1149,11 +1149,26 @@
     (cl-letf (((symbol-function '+tasks--work-task) (let ((task (+tasks--task-plist))) (lambda () task)))
               ((symbol-function '+tasks--default-branch) (lambda () "main"))
               ((symbol-function '+tasks--changed-files) #'ignore)
+              ((symbol-function 'require) #'ignore)
               ((symbol-function 'magit-diff-range) #'ignore)
               ((symbol-function 'message) #'ignore))
       (+tasks/review))
     (ert-info ("opening the review diff should move the task to REVIEW")
       (should (equal "REVIEW" (car (+tasks-test--state-of (current-buffer) "Thing")))))))
+
+(ert-deftest +tasks/review/loads-magit-before-showing-the-diff ()
+  (+tasks-test--in-tasks-buffer "** GREEN Thing\n:PROPERTIES:\n:BRANCH: feat/thing\n:END:\n"
+    (+tasks-test--goto-heading "Thing")
+    (let (steps)
+      (cl-letf (((symbol-function '+tasks--work-task) (let ((task (+tasks--task-plist))) (lambda () task)))
+                ((symbol-function '+tasks--default-branch) (lambda () "main"))
+                ((symbol-function '+tasks--changed-files) #'ignore)
+                ((symbol-function 'require) (lambda (feature &rest _) (push feature steps)))
+                ((symbol-function 'magit-diff-range) (lambda (&rest _) (push 'shown steps)))
+                ((symbol-function 'message) #'ignore))
+        (+tasks/review))
+      (ert-info ("magit should be loaded before the diff is asked for, in case nothing opened it yet")
+        (should (equal '(magit shown) (reverse steps)))))))
 
 (ert-deftest +tasks/done/leaves-a-failing-branch-red ()
   (+tasks-test--in-git-repo
