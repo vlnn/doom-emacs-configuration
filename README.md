@@ -351,7 +351,14 @@ scope by directive. `C-u` uses `+ai-think-model` instead; `+ai-summarize-model`
 sets another default. A source over `+ai-flymake-max-lines` goes as an
 outline (top-level lines, `def`/`class` signatures at any depth, the docstring
 line after each) and the prompt says so; an outline still over the cap is
-refused, as is any file on `+ai-flymake-ignore-regexps`. `q` closes the popup.
+refused, as is any file on `+ai-flymake-ignore-regexps`. The popup is a
+gptel chat with the source as its context: type a question under the
+prompt prefix the summary ends with and `C-c RET` sends it, answered under
+`+ai-summarize-followup-directive`. `q` closes the popup.
+
+`SPC e d` (`+ai/explain-defun`) asks the same of just the defun at point,
+in at most 60 words, and shows the answer in a gptel-quick bubble at the
+function's head.
 
 ## Implement at point
 

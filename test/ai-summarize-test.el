@@ -1,5 +1,7 @@
 ;;; test/ai-summarize-test.el -*- lexical-binding: t; -*-
 
+(defvar gptel-prompt-prefix-alist)
+
 (ert-deftest +ai--summarize-prompt/names-file-and-mode ()
   (ert-info ("prompt should carry the file name and major mode before the source")
     (should (equal "File: app.py (python-mode)\n<source>\nx = 1\n</source>"
@@ -77,5 +79,49 @@
         (should (equal "# Purpose\n" (buffer-string))))
       (funcall callback "Adds." nil)
       (funcall callback t nil)
-      (ert-info ("later chunks should append and the end should change nothing")
-        (should (equal "# Purpose\nAdds." (buffer-string)))))))
+      (ert-info ("later chunks should append and the end should open the next turn")
+        (should (equal "# Purpose\nAdds.\n\n" (buffer-string)))))))
+
+;;; the defun bubble
+
+(ert-deftest +ai--defun-directive/asks-for-behaviour-at-the-count ()
+  (let ((directive (+ai--defun-directive 40)))
+    (ert-info ("the directive should carry the word budget")
+      (should (string-match-p "40 words" directive)))
+    (ert-info ("the directive should rule style and bugs out")
+      (should (string-match-p "never" directive)))))
+
+(ert-deftest +ai--defun-at-point/the-defun-and-where-it-starts ()
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert "(defun f ()\n  (+ 1 2))\n")
+    (goto-char 15)
+    (ert-info ("the defun at point should come back with its start")
+      (should (equal '("(defun f ()\n  (+ 1 2))" . 1) (+ai--defun-at-point))))))
+
+(ert-deftest +ai--defun-at-point/no-defun-is-a-user-error ()
+  (with-temp-buffer
+    (ert-info ("with no defun at point the command should say so")
+      (should-error (+ai--defun-at-point) :type 'user-error))))
+
+;;; the summary as a chat
+
+(ert-deftest +ai--summarize-append/marks-chunks-as-the-response ()
+  (with-temp-buffer
+    (insert "Summarizing...")
+    (+ai--summarize-append (current-buffer) "Adds.")
+    (ert-info ("streamed text should be marked as the model's turn, so follow-ups read as a chat")
+      (should (eq 'response (get-text-property 1 'gptel))))))
+
+(ert-deftest +ai--summarize-finish/opens-the-next-turn ()
+  (with-temp-buffer
+    (insert "Summarizing...")
+    (let ((gptel-prompt-prefix-alist '((fundamental-mode . "### "))))
+      (+ai--summarize-append (current-buffer) "Adds.")
+      (+ai--summarize-finish (current-buffer))
+      (ert-info ("the end of the summary should leave a prompt prefix to type after")
+        (should (equal "Adds.\n\n### " (buffer-string))))
+      (ert-info ("point should sit after the prefix, ready to type")
+        (should (= (point) (point-max))))
+      (ert-info ("the buffer should be done")
+        (should (eq 'done +ai--summarize-state))))))

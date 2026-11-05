@@ -99,7 +99,8 @@
        :desc "Line, quickly"   "e" #'+ai/quick
        :desc "Line by line"    "a" #'+ai/annotate
        :desc "Line by line, popup" "A" #'+ai/annotate-popup
-       :desc "What buffer does" "b" #'+ai/summarize))
+       :desc "What buffer does" "b" #'+ai/summarize
+       :desc "What defun does"  "d" #'+ai/explain-defun))
 
 
 
