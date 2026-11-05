@@ -1,5 +1,5 @@
 ;;; my/ai/summarize.el -*- lexical-binding: t; -*-
-;; SPC o l s: what the region (else the buffer) does, in a popup; C-u uses the reasoning model.
+;; SPC e b: what the region (else the buffer) does, in a popup; C-u uses the reasoning model.
 ;; A source over `+ai-flymake-max-lines' goes as an outline: top-level lines, signatures, docstrings.
 
 (defvar gptel-model)

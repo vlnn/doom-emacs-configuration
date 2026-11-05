@@ -1,5 +1,5 @@
 ;;; my/ai/annotate.el -*- lexical-binding: t; -*-
-;; SPC o l E: show the region (else line; defun with C-u) with a numbered explanation per line.
+;; SPC e a: show the region (else line; defun with C-u) with a numbered explanation per line.
 
 (defvar gptel-model)
 (declare-function gptel-request "gptel")

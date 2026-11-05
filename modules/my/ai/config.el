@@ -74,7 +74,7 @@
         (alist-get 'clojure gptel-directives)
         "You answer about idiomatic Clojure. Prefer threading macros, destructuring, and the seq library. Show minimal examples."))
 
-;;; gptel-quick — SPC o l e
+;;; gptel-quick — SPC e e
 
 (after! gptel
   (setq gptel-quick-model +ai-fast-model
@@ -86,7 +86,11 @@
   (interactive "P")
   (gptel-quick (+ai--text-at-point whole-defun)))
 
-(map! :leader :desc "Explain quickly" "o l e" #'+ai/quick)
+(map! :leader
+      (:prefix ("e" . "explain")
+       :desc "Line, quickly"   "e" #'+ai/quick
+       :desc "Line by line"    "a" #'+ai/annotate
+       :desc "What buffer does" "b" #'+ai/summarize))
 
 
 
@@ -133,7 +137,7 @@ and `SPC o l X' flip it for the session.")
 so the line can be edited with nothing glued to its end.")
 
 (defvar +ai-summarize-model nil
-  "Model `SPC o l s' summarizes with; nil means `+ai-fast-model', C-u means `+ai-think-model'.")
+  "Model `SPC e b' summarizes with; nil means `+ai-fast-model', C-u means `+ai-think-model'.")
 
 (defvar +ai-trust-store-file (expand-file-name "~/.pi/agent/trust.json"))
 
@@ -152,19 +156,17 @@ so the line can be edited with nothing glued to its end.")
 (defvar +ai-pi-model-networks '(("local" . "local"))
   "Jail network for each tasks.org :MODEL: value; other models get \"open\".")
 
-;;; annotated explanation — SPC o l E
+;;; annotated explanation — SPC e a
 
 (set-popup-rule! "^\\*gptel-annotate\\*$"
   :side 'right :size 0.5 :select t :quit t :ttl nil)
 
-(map! :leader :desc "Explain annotated" "o l E" #'+ai/annotate)
 
-;;; summary of a buffer — SPC o l s
+;;; summary of a buffer — SPC e b
 
 (set-popup-rule! "^\\*gptel-summary\\*$"
   :side 'right :size 0.4 :select t :quit t :ttl nil)
 
-(map! :leader :desc "Summarize buffer" "o l s" #'+ai/summarize)
 
 ;;; implement at point — SPC o l i
 
