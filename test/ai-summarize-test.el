@@ -38,31 +38,31 @@
       (should-not (+ai--summarize-too-long-p "a\nb")))))
 
 (ert-deftest +ai--summarize-outline/keeps-top-level-and-signatures ()
-  (ert-info ("outline should keep top-level lines, def/class lines at any depth and nothing else")
-    (should (equal "import os\nclass A:\n    def f(self):\n        def g():\nx = 1"
+  (ert-info ("outline should keep top-level lines, def/class lines at any depth, numbered as in the file")
+    (should (equal "1: import os\n2: class A:\n3:     def f(self):\n5:         def g():\n7: x = 1"
                    (+ai--summarize-outline
                     "import os\nclass A:\n    def f(self):\n        y = 2\n        def g():\n            return y\nx = 1")))))
 
 (ert-deftest +ai--summarize-outline/keeps-docstrings-after-signatures ()
   (ert-info ("outline should keep a docstring opening right after a signature")
-    (should (equal "def f():\n    \"\"\"Add one.\"\"\"\nasync def g():\n    'Doc'"
+    (should (equal "1: def f():\n2:     \"\"\"Add one.\"\"\"\n4: async def g():\n5:     'Doc'"
                    (+ai--summarize-outline
                     "def f():\n    \"\"\"Add one.\"\"\"\n    return 1\nasync def g():\n    'Doc'\n    pass")))))
 
 (ert-deftest +ai--summarize-outline/drops-blank-lines ()
   (ert-info ("outline should drop blank lines so the cap counts code only")
-    (should (equal "a = 1\nb = 2" (+ai--summarize-outline "a = 1\n\n\nb = 2\n")))))
+    (should (equal "1: a = 1\n4: b = 2" (+ai--summarize-outline "a = 1\n\n\nb = 2\n")))))
 
 (ert-deftest +ai--summarize-source/whole-source-when-short ()
   (let ((+ai-flymake-max-lines 5))
-    (ert-info ("a short source should go as it is, not outlined")
-      (should (equal '("x = 1\ny = 2" . nil)
+    (ert-info ("a short source should go whole, numbered, not outlined")
+      (should (equal '("1: x = 1\n2: y = 2" . nil)
                      (+ai--summarize-source "x = 1\ny = 2"))))))
 
 (ert-deftest +ai--summarize-source/outline-when-long ()
   (let ((+ai-flymake-max-lines 2))
     (ert-info ("a long source should be outlined and say so")
-      (should (equal '("def f():\nx = 1" . t)
+      (should (equal '("1: def f():\n4: x = 1" . t)
                      (+ai--summarize-source "def f():\n    return 1\n    pass\nx = 1"))))))
 
 (ert-deftest +ai--summarize-source/refuses-long-outline ()
@@ -125,3 +125,61 @@
         (should (= (point) (point-max))))
       (ert-info ("the buffer should be done")
         (should (eq 'done +ai--summarize-state))))))
+
+;;; entry points that jump
+
+(ert-deftest +ai--summarize-purpose/the-sentence-under-the-heading ()
+  (ert-info ("purpose should be the text under # Purpose, trimmed")
+    (should (equal "Adds numbers."
+                   (+ai--summarize-purpose "# Purpose\n\nAdds numbers.\n\n# Entry points\nmain (line 3)"))))
+  (ert-info ("no heading should give nil")
+    (should-not (+ai--summarize-purpose "nothing here"))))
+
+(ert-deftest +ai--summarize-link-lines/buttons-every-line-reference ()
+  (with-temp-buffer
+    (insert "main (line 3), helper (line 12)")
+    (+ai--summarize-link-lines (current-buffer))
+    (ert-info ("each (line N) should become a button carrying N")
+      (should (equal '(3 12)
+                     (mapcar (lambda (b) (button-get b 'line))
+                             (seq-filter #'identity (list (button-at 7) (button-at 25)))))))))
+
+(ert-deftest +ai--summarize-goto-line/shows-the-source-at-the-line ()
+  (let ((source (generate-new-buffer "src")))
+    (unwind-protect
+        (with-current-buffer source
+          (insert "a\nb\nc\n")
+          (+ai--summarize-goto-line source 3)
+          (ert-info ("point in the source should be on the line asked")
+            (should (= 3 (line-number-at-pos)))))
+      (kill-buffer source))))
+
+;;; the cache and the header-line
+
+(ert-deftest +ai--summarize-fresh/remembers-until-the-buffer-changes ()
+  (with-temp-buffer
+    (insert "x = 1")
+    (ert-info ("before any summary nothing should be fresh")
+      (should-not (+ai--summarize-fresh)))
+    (+ai--summarize-remember (current-buffer) "# Purpose\nSets x.")
+    (ert-info ("right after remembering the summary should be fresh")
+      (should (equal "# Purpose\nSets x." (+ai--summarize-fresh))))
+    (ert-info ("the header should show the purpose while fresh")
+      (should (equal " Sets x." (+ai--summarize-header))))
+    (insert "\ny = 2")
+    (ert-info ("an edit should make the summary stale")
+      (should-not (+ai--summarize-fresh)))
+    (ert-info ("the header should go with it")
+      (should-not (+ai--summarize-header)))))
+
+(ert-deftest +ai--summarize-finish/remembers-into-the-source ()
+  (let ((source (generate-new-buffer "src")))
+    (unwind-protect
+        (with-temp-buffer
+          (setq +ai--summarize-source source)
+          (insert "Summarizing...")
+          (+ai--summarize-append (current-buffer) "# Purpose\nAdds.")
+          (+ai--summarize-finish (current-buffer))
+          (ert-info ("finishing should leave the summary cached in the source buffer")
+            (should (equal "# Purpose\nAdds." (with-current-buffer source (+ai--summarize-fresh))))))
+      (kill-buffer source))))

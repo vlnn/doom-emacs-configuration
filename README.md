@@ -344,13 +344,19 @@ Both the review and the annotations draw through `overlay.el`.
 ## Summarize a buffer
 
 `SPC e b` (`+ai/summarize`) sends the active region (else the whole
-buffer) to `+ai-fast-model` under `+ai-summarize-directive` and streams what
-the program does into a `*gptel-summary*` popup: purpose, entry points, inputs
-and outputs, side effects, flow. Style, bugs and improvements are out of
-scope by directive. `C-u` uses `+ai-think-model` instead; `+ai-summarize-model`
-sets another default. A source over `+ai-flymake-max-lines` goes as an
-outline (top-level lines, `def`/`class` signatures at any depth, the docstring
-line after each) and the prompt says so; an outline still over the cap is
+buffer) to `+ai-fast-model` under `+ai-summarize-directive`, lines numbered
+as in the file, and streams what the program does into a `*gptel-summary*`
+popup: purpose, entry points, inputs and outputs, side effects, flow. Style,
+bugs and improvements are out of scope by directive. Each entry point is
+written as `name (line N)` and is a button that shows the source at that
+line. The summary is remembered against the buffer's modification tick: the
+one-sentence purpose sits in the header-line (when nothing else holds it)
+until the buffer changes, and `SPC e b` again shows the remembered summary
+without asking; `C-u` asks afresh, with `+ai-think-model`, and
+`+ai-summarize-model` sets another default. A source over
+`+ai-flymake-max-lines` goes as an outline (top-level lines, `def`/`class`
+signatures at any depth, the docstring line after each, still numbered as
+in the file) and the prompt says so; an outline still over the cap is
 refused, as is any file on `+ai-flymake-ignore-regexps`. The popup is a
 gptel chat with the source as its context: type a question under the
 prompt prefix the summary ends with and `C-c RET` sends it, answered under

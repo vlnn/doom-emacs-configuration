@@ -16,9 +16,10 @@
 (defvar gptel-model)
 (declare-function gptel-request "gptel")
 (declare-function markdown-mode "markdown-mode")
+(require 'button)
 
 (defconst +ai-summarize-directive
-  "You explain what a program does. You receive source between <source> tags with its file name. Describe behaviour only: never mention style, naming, structure, bugs, or improvements. Answer in Markdown with exactly these sections: `# Purpose` (one sentence), `# Entry points` (functions or the script body a caller or runtime starts from), `# Inputs → outputs` (arguments, stdin, files, env, return values, exit codes), `# Side effects` (files, network, processes, databases; `none` if none), `# Flow` (three to six bullets in execution order). Under 200 words. No code, no fences.")
+  "You explain what a program does. You receive source between <source> tags with its file name, each line prefixed by its number and a colon. Describe behaviour only: never mention style, naming, structure, bugs, or improvements. Answer in Markdown with exactly these sections: `# Purpose` (one sentence), `# Entry points` (functions or the script body a caller or runtime starts from, each written as `name (line N)` with N the line it starts on), `# Inputs → outputs` (arguments, stdin, files, env, return values, exit codes), `# Side effects` (files, network, processes, databases; `none` if none), `# Flow` (three to six bullets in execution order). Under 200 words. No code, no fences.")
 
 (defconst +ai-summarize-followup-directive
   "You answered about a program whose source is in your context. Answer follow-up questions about what it does, pointing at the lines concerned. Behaviour only: never style, bugs or improvements. Be brief.")
@@ -27,6 +28,12 @@
 
 (defvar-local +ai--summarize-state 'waiting
   "`waiting' for the first chunk, `streaming' while they arrive, `done' after.")
+
+(defvar-local +ai--summarize-source nil
+  "In the summary buffer, the buffer it summarizes.")
+
+(defvar-local +ai--summarize-cache nil
+  "In a summarized buffer, (TICK . TEXT): the summary and the modification tick it was made at.")
 
 (defconst +ai--summarize-signature-regexp
   "\\`\\s-*\\(async\\s-+\\)?\\(def\\|class\\|defn?\\|defmacro\\|function\\|fn\\|func\\)\\_>")
@@ -67,20 +74,34 @@
       (and after-signature (string-match-p +ai--summarize-docstring-regexp line))))
 
 ;;;###autoload
-(defun +ai--summarize-outline (source)
-  (let (kept after-signature)
-    (dolist (line (split-string source "\n"))
-      (when (+ai--summarize-outline-line-p line after-signature)
-        (push line kept))
-      (setq after-signature (and (+ai--summarize-signature-p line) t)))
-    (string-join (nreverse kept) "\n")))
+(defun +ai--summarize-numbered (source start)
+  "((N . LINE) ...) of SOURCE's lines, N counted from START."
+  (seq-map-indexed (lambda (line i) (cons (+ start i) line)) (split-string source "\n")))
 
 ;;;###autoload
-(defun +ai--summarize-source (source)
-  "SOURCE as it is, or outlined when over the cap: (text . outlined-p)."
+(defun +ai--summarize-join (numbered)
+  (mapconcat (lambda (pair) (format "%d: %s" (car pair) (cdr pair))) numbered "\n"))
+
+;;;###autoload
+(defun +ai--summarize-outline-pairs (numbered)
+  (let (kept after-signature)
+    (pcase-dolist (`(,n . ,line) numbered)
+      (when (+ai--summarize-outline-line-p line after-signature)
+        (push (cons n line) kept))
+      (setq after-signature (and (+ai--summarize-signature-p line) t)))
+    (nreverse kept)))
+
+;;;###autoload
+(defun +ai--summarize-outline (source &optional start)
+  "Top-level lines, signatures and their docstrings of SOURCE, numbered as in the file."
+  (+ai--summarize-join (+ai--summarize-outline-pairs (+ai--summarize-numbered source (or start 1)))))
+
+;;;###autoload
+(defun +ai--summarize-source (source &optional start)
+  "SOURCE numbered from START, outlined when over the cap: (text . outlined-p)."
   (if (not (+ai--summarize-too-long-p source))
-      (cons source nil)
-    (let ((outline (+ai--summarize-outline source)))
+      (cons (+ai--summarize-join (+ai--summarize-numbered source (or start 1))) nil)
+    (let ((outline (+ai--summarize-outline source start)))
       (if (+ai--summarize-too-long-p outline)
           (user-error "Even the outline is over %d lines; select a region" +ai-flymake-max-lines)
         (cons outline t)))))
@@ -103,7 +124,8 @@
       (unless (derived-mode-p 'markdown-mode)
         (delay-mode-hooks (markdown-mode)))
       (insert "Summarizing...")
-      (setq +ai--summarize-state 'waiting)
+      (setq +ai--summarize-state 'waiting
+            +ai--summarize-source source)
       (+ai--summarize-chat source)
       (evil-local-set-key 'normal (kbd "q") #'quit-window))
     (current-buffer)))
@@ -124,10 +146,67 @@
   (alist-get major-mode (bound-and-true-p gptel-prompt-prefix-alist) ""))
 
 ;;;###autoload
+(defun +ai--summarize-goto-line (source line)
+  (pop-to-buffer source)
+  (goto-char (point-min))
+  (forward-line (1- line)))
+
+;;;###autoload
+(defun +ai--summarize-follow (button)
+  (+ai--summarize-goto-line (button-get button 'source) (button-get button 'line)))
+
+;;;###autoload
+(defun +ai--summarize-link-lines (buffer)
+  "Turn every `(line N)' in BUFFER into a button that shows the source at that line."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "(line \\([0-9]+\\))" nil t)
+        (make-button (match-beginning 0) (match-end 0)
+                     'action #'+ai--summarize-follow 'follow-link t
+                     'source +ai--summarize-source 'line (string-to-number (match-string 1)))))))
+
+;;;###autoload
+(defun +ai--summarize-section (text heading)
+  "The lines under HEADING in TEXT, up to the next heading, joined and trimmed; nil without HEADING."
+  (when-let* ((lines (split-string text "\n"))
+              (below (cdr (member heading lines))))
+    (string-trim (string-join (seq-take-while (lambda (l) (not (string-prefix-p "# " l))) below) "\n"))))
+
+;;;###autoload
+(defun +ai--summarize-purpose (text)
+  "The sentence under `# Purpose' in TEXT, or nil."
+  (when-let* ((purpose (+ai--summarize-section text "# Purpose")))
+    (unless (string-empty-p purpose) purpose)))
+
+;;;###autoload
+(defun +ai--summarize-remember (source text)
+  "Keep TEXT as SOURCE's summary for as long as SOURCE stays as it is now."
+  (with-current-buffer source
+    (setq +ai--summarize-cache (cons (buffer-chars-modified-tick) text))
+    (unless header-line-format
+      (setq header-line-format '(:eval (+ai--summarize-header))))))
+
+;;;###autoload
+(defun +ai--summarize-fresh ()
+  "This buffer's summary when it has not changed since; else nil."
+  (when (and +ai--summarize-cache (= (car +ai--summarize-cache) (buffer-chars-modified-tick)))
+    (cdr +ai--summarize-cache)))
+
+;;;###autoload
+(defun +ai--summarize-header ()
+  (when-let* ((text (+ai--summarize-fresh))
+              (purpose (+ai--summarize-purpose text)))
+    (concat " " (propertize purpose 'face 'font-lock-doc-face))))
+
+;;;###autoload
 (defun +ai--summarize-finish (buffer)
-  "Close the model's turn in BUFFER and open the next one, ready to type a question."
+  "Close the model's turn in BUFFER, link its line references, remember it, open the next turn."
   (with-current-buffer buffer
     (setq +ai--summarize-state 'done)
+    (when (buffer-live-p +ai--summarize-source)
+      (+ai--summarize-remember +ai--summarize-source (buffer-substring-no-properties (point-min) (point-max))))
+    (+ai--summarize-link-lines buffer)
     (goto-char (point-max))
     (insert "\n\n" (+ai--summarize-prefix))))
 
@@ -141,16 +220,24 @@
         ('nil (message "Summarize failed: %s" (plist-get info :status)))))))
 
 ;;;###autoload
-(defun +ai/summarize (&optional think)
-  "Say what the region (else the buffer) does.
-With THINK (\\[universal-argument]) use the reasoning model. A source over
-`+ai-flymake-max-lines' goes as an outline of top-level code, signatures and docstrings."
-  (interactive "P")
-  (require 'gptel)
+(defun +ai--summarize-recall (source text)
+  "Show TEXT, SOURCE's cached summary, in the popup without asking again."
+  (let ((buffer (+ai--summarize-buffer source)))
+    (pop-to-buffer buffer)
+    (+ai--summarize-append buffer text)
+    (+ai--summarize-finish buffer)
+    (message "Cached summary; C-u asks again")))
+
+;;;###autoload
+(defun +ai--summarize-start-line ()
+  (if (use-region-p) (line-number-at-pos (region-beginning)) 1))
+
+;;;###autoload
+(defun +ai--summarize-request (think)
   (let ((name (file-name-nondirectory (or buffer-file-name (buffer-name)))))
     (when (+ai--summarize-secret-p name)
       (user-error "%s is on the secrets list; not sent" name))
-    (pcase-let ((`(,source . ,outlined) (+ai--summarize-source (+ai--implement-context)))
+    (pcase-let ((`(,source . ,outlined) (+ai--summarize-source (+ai--implement-context) (+ai--summarize-start-line)))
                 (gptel-model (+ai--summarize-model think))
                 (buffer (+ai--summarize-buffer (current-buffer))))
       (pop-to-buffer buffer)
@@ -159,6 +246,20 @@ With THINK (\\[universal-argument]) use the reasoning model. A source over
         :system +ai-summarize-directive
         :stream t
         :callback (+ai--summarize-callback buffer)))))
+
+;;;###autoload
+(defun +ai/summarize (&optional think)
+  "Say what the region (else the buffer) does.
+A summary made since the buffer last changed is shown again without asking.
+With THINK (\\[universal-argument]) ask again, with the reasoning model. A source
+over `+ai-flymake-max-lines' goes as an outline of top-level code, signatures
+and docstrings. Entry points in the summary jump to their line; the purpose
+sits in the header-line while the summary is current."
+  (interactive "P")
+  (require 'gptel)
+  (if-let* ((text (and (not think) (not (use-region-p)) (+ai--summarize-fresh))))
+      (+ai--summarize-recall (current-buffer) text)
+    (+ai--summarize-request think)))
 
 ;;; the defun at point, in a bubble
 
